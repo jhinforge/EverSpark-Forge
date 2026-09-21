@@ -32,10 +32,6 @@ Modules:
   webui         User-facing local interface
   logs          Managed log status, rotation, and retention
 
-Compatibility aliases:
-  comfy, comfyui -> image
-  ollama         -> concept
-
 Run directly from a clone, or use Launcher/install.sh to add `everspark` to
 your user PATH.
 EOF
@@ -76,10 +72,10 @@ case "${module,,}" in
   doctor)
     exec bash "${LAUNCHER_DIR}/doctor.sh" "$@"
     ;;
-  image|image-forge|imageforge|comfy|comfyui)
+  image|image-forge|imageforge)
     run_handler "Image Forge" "${REPO_ROOT}/ImageForge/cli.sh" "$@"
     ;;
-  concept|concept-forge|conceptforge|ollama)
+  concept|concept-forge|conceptforge)
     run_handler "Concept Forge" "${REPO_ROOT}/ConceptForge/cli.sh" "$@"
     ;;
   orchestrator|forge-orchestrator)

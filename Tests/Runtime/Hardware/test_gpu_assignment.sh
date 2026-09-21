@@ -41,7 +41,7 @@ core_gpu_assign_forge image
 [ "$CUDA_VISIBLE_DEVICES" = "0" ]
 [ "$EVERSPARK_ASSIGNED_GPU" = "0" ]
 
-core_gpu_assign_forge ollama
+core_gpu_assign_forge concept
 [ "$CUDA_VISIBLE_DEVICES" = "1" ]
 [ "$EVERSPARK_ASSIGNED_GPU" = "1" ]
 

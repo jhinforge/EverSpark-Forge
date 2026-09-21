@@ -40,11 +40,11 @@ core_gpu_assign_forge() {
   fi
 
   case "$forge_name" in
-    image|image-forge|imageforge|comfy|comfyui)
+    image|image-forge|imageforge)
       gpu_index="${IMAGE_FORGE_GPU_INDEX:-0}"
       forge_name="image-forge"
       ;;
-    concept|concept-forge|conceptforge|ollama)
+    concept|concept-forge|conceptforge)
       gpu_index="${CONCEPT_FORGE_GPU_INDEX:-1}"
       forge_name="concept-forge"
       ;;

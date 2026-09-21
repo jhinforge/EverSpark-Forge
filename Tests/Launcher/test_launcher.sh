@@ -8,7 +8,18 @@ trap 'rm -rf "$TEST_ROOT"' EXIT
 
 help_output="$(bash "${REPO_ROOT}/everspark" help)"
 grep -q './everspark image' <<< "$help_output"
-grep -q 'ollama.*-> concept' <<< "$help_output"
+if grep -Eq 'comfy|ollama' <<< "$help_output"; then
+  printf 'legacy backend alias leaked into CLI help\n' >&2
+  exit 1
+fi
+
+for legacy_alias in comfy comfyui ollama; do
+  if bash "${REPO_ROOT}/everspark" "$legacy_alias" >"${TEST_ROOT}/${legacy_alias}.out" 2>&1; then
+    printf 'legacy alias unexpectedly succeeded: %s\n' "$legacy_alias" >&2
+    exit 1
+  fi
+  grep -q "unknown module: ${legacy_alias}" "${TEST_ROOT}/${legacy_alias}.out"
+done
 
 logs_output="$(EVERSPARK_LOG_DIR="${TEST_ROOT}/logs" bash "${REPO_ROOT}/everspark" logs status)"
 grep -q '"ok": true' <<< "$logs_output"

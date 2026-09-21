@@ -47,6 +47,7 @@ full execution chain is migrated and covered by tests.
 | `core/cli/install.sh` | `Launcher/install.sh` |
 
 The new public CLI uses capability names (`image`, `concept`, `orchestrator`,
-and `webui`). Legacy backend names remain aliases. `init` creates local runtime
-directories, while `doctor` validates the base runtime and fails when an
-explicitly enabled rclone or Cloudflare backend is incomplete.
+and `webui`) without exposing legacy backend names as command aliases. `init`
+creates local runtime directories, while `doctor` validates the base runtime
+and fails when an explicitly enabled rclone or Cloudflare backend is
+incomplete.

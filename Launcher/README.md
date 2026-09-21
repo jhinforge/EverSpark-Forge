@@ -20,5 +20,5 @@ bash Launcher/install.sh
 ```
 
 Public module commands are `image`, `concept`, `orchestrator`, and `webui`.
-The source branch's `comfy`, `comfyui`, and `ollama` names remain compatibility
-aliases while scripts and documentation are migrated.
+Backend names such as ComfyUI and Ollama are configuration details rather than
+public module commands.
