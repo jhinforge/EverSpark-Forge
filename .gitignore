@@ -1,0 +1,41 @@
+# Secrets and user configuration
+.env
+.env.*
+!.env.example
+Configuration/user.yaml
+Configuration/user.yml
+Configuration/user.json
+Configuration/user.toml
+
+# Runtime state
+Data/*
+!Data/.gitkeep
+Logs/
+Outputs/
+MemoryData/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# JavaScript
+node_modules/
+dist/
+build/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local service state
+.cloudflared/
+cloudflared.log
+*.pid

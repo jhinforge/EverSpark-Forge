@@ -1,0 +1,45 @@
+application:
+  name: EverSpark Forge
+  environment: local
+
+runtime:
+  data_directory: ./Data
+  log_directory: ./Data/Logs
+  output_directory: ./Data/Outputs
+
+storage:
+  backend: local
+  local:
+    root_directory: ./Data
+  r2:
+    enabled: false
+    endpoint_env: R2_ENDPOINT
+    bucket_env: R2_BUCKET
+    access_key_env: R2_ACCESS_KEY_ID
+    secret_key_env: R2_SECRET_ACCESS_KEY
+
+network:
+  backend: local
+  local:
+    host: 127.0.0.1
+    port: 8000
+  cloudflare:
+    enabled: false
+    tunnel_token_env: CLOUDFLARE_TUNNEL_TOKEN
+
+providers:
+  concept:
+    backend: ollama
+    base_url_env: OLLAMA_BASE_URL
+  image:
+    backend: comfyui
+    base_url_env: COMFYUI_BASE_URL
+
+memory:
+  working:
+    enabled: true
+    max_turns: 12
+  episodic:
+    enabled: true
+  state:
+    enabled: true
