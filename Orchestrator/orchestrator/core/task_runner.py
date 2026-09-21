@@ -4,6 +4,7 @@ import secrets
 from typing import Any, Callable
 
 from concept_forge.providers.ollama import GenerationPlan, OllamaProvider
+from concept_forge.subjects import CompiledSubject
 from image_forge.adapters.comfyui import ComfyUIAdapter
 from image_forge.workflow.manager import WorkflowManager
 
@@ -38,6 +39,7 @@ class TaskRunner:
         user_text: str,
         history: list[dict[str, str]] | None = None,
         notify: Callable[[str], None] | None = None,
+        subject: CompiledSubject | None = None,
     ) -> dict[str, Any]:
         plan = self._get_valid_plan(
             user_text, history or [], notify or (lambda _message: None)
@@ -51,11 +53,18 @@ class TaskRunner:
                 f"Image count must be between 1 and {self.max_batch_size}: {plan.count}"
             )
 
+        positive_prompt = self._merge_prompts(
+            subject.positive_prompt if subject else "", plan.positive_prompt
+        )
+        negative_prompt = self._merge_prompts(
+            plan.negative_prompt, subject.negative_prompt if subject else ""
+        )
+
         items = []
         for index in range(1, plan.count + 1):
             seed = secrets.randbelow(2**63)
             workflow = self.workflow.build(
-                plan.positive_prompt, plan.negative_prompt, seed=seed
+                positive_prompt, negative_prompt, seed=seed
             )
             prompt_id = self.image.queue_prompt(workflow)
             items.append({"index": index, "prompt_id": prompt_id, "seed": seed})
@@ -63,11 +72,20 @@ class TaskRunner:
         return {
             "status": "queued",
             "model": plan.model,
-            "positive_prompt": plan.positive_prompt,
-            "negative_prompt": plan.negative_prompt,
+            "positive_prompt": positive_prompt,
+            "negative_prompt": negative_prompt,
             "count": plan.count,
             "items": items,
+            "subject": (
+                {"subject_id": subject.subject_id, "revision": subject.revision}
+                if subject
+                else None
+            ),
         }
+
+    @staticmethod
+    def _merge_prompts(*prompts: str) -> str:
+        return ", ".join(prompt.strip(" ,") for prompt in prompts if prompt.strip(" ,"))
 
     def _get_valid_plan(
         self,

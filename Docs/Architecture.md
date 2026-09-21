@@ -31,11 +31,18 @@ Turns discussion and user intent into validated structured state. It owns
 schemas, builders, validators, prompt compilation, and model providers. Ollama
 is the first provider, not the module identity.
 
+`Character Subject v1` is the first structured state contract. It keeps stable
+character identity separate from request-level scene, pose, camera, and
+background details.
+
 ### Memory
 
 Provides working memory, episodic memory, and structured state memory. The
 first state object will be a reusable character subject document produced by
 Concept Forge.
+
+Working Memory v0 and versioned Character Subject storage are implemented.
+Episodic retrieval and consolidation are not implemented yet.
 
 ### Image Forge
 

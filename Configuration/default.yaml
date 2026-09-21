@@ -54,7 +54,8 @@ memory:
   episodic:
     enabled: false
   state:
-    enabled: false
+    enabled: true
+    schema: ./ConceptForge/Schemas/character_subject.v1.schema.json
 
 workflow:
   template: ./ImageForge/Workflows/base_workflow_api.json

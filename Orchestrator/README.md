@@ -32,6 +32,17 @@ The service binds to `127.0.0.1:8765` by default and exposes:
 - `POST /tasks`
 - `GET /memory/history?session_id=...`
 - `POST /memory/clear`
+- `GET /subjects`
+- `GET /subjects?subject_id=...`
+- `GET /subjects/revisions?subject_id=...`
+- `POST /subjects`
+- `POST /subjects/generate`
+- `POST /subjects/update`
+- `POST /subjects/compile`
+
+Generation requests may include `subject_id`. Orchestrator loads that revision
+from Memory, asks Concept Forge to compile its stable traits, and merges them
+with the request-level scene prompt before sending the workflow to Image Forge.
 
 ## Configuration
 

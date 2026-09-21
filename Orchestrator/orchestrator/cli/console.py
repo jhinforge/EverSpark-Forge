@@ -40,12 +40,19 @@ def request_json(
 
 
 def submit(
-    base_url: str, text: str, timeout: int, session_id: str
+    base_url: str,
+    text: str,
+    timeout: int,
+    session_id: str,
+    subject_id: str = "",
 ) -> dict[str, Any]:
+    payload = {"text": normalize_unicode(text), "session_id": session_id}
+    if subject_id:
+        payload["subject_id"] = subject_id
     return request_json(
         f"{base_url}/tasks",
         timeout,
-        {"text": normalize_unicode(text), "session_id": session_id},
+        payload,
     )
 
 
@@ -59,9 +66,13 @@ def main() -> int:
     base_url = f"http://{settings['host']}:{settings['port']}"
     timeout = int(settings.get("request_timeout", 600))
     session_id = str(config["memory"].get("default_session_id", "main"))
+    subject_id = ""
     print("EverSpark Orchestrator Console")
     print(f"当前会话：{session_id}")
-    print("输入中文绘图需求并回车；/history 查看上下文；/clear 清空；/exit 退出。")
+    print(
+        "输入中文绘图需求并回车；/subject <id> 挂载角色主体；"
+        "/history 查看上下文；/clear 清空；/exit 退出。"
+    )
     while True:
         try:
             text = normalize_unicode(input("\nEverSpark > ")).strip()
@@ -88,6 +99,17 @@ def main() -> int:
                 label = "你" if message["role"] == "user" else "Concept Forge"
                 print(f"{label}: {message['content']}")
             continue
+        if text.lower() == "/subject":
+            print(f"当前角色主体：{subject_id or '未挂载'}")
+            continue
+        if text.lower() == "/subject clear":
+            subject_id = ""
+            print("已取消角色主体挂载。")
+            continue
+        if text.lower().startswith("/subject "):
+            subject_id = text.split(maxsplit=1)[1].strip()
+            print(f"已挂载角色主体：{subject_id}")
+            continue
         if text.lower() in {"/clear", "/new"}:
             response = request_json(
                 f"{base_url}/memory/clear",
@@ -100,7 +122,7 @@ def main() -> int:
                 print(f"[ERROR] {response.get('error', '未知错误')}")
             continue
 
-        response = submit(base_url, text, timeout, session_id)
+        response = submit(base_url, text, timeout, session_id, subject_id)
         for notice in response.get("notices", []):
             print(notice)
         if not response.get("ok"):

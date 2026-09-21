@@ -24,8 +24,10 @@ for module_directory in (
     sys.path.insert(0, str(REPO_ROOT / module_directory))
 
 from concept_forge.providers.ollama import GenerationPlan  # noqa: E402
+from concept_forge.subjects import CompiledSubject, new_subject  # noqa: E402
 from image_forge.workflow.manager import WorkflowError, WorkflowManager  # noqa: E402
 from orchestrator.config.config import load_config  # noqa: E402
+from orchestrator.core.orchestrator import Orchestrator  # noqa: E402
 from orchestrator.core.server import OrchestratorServer  # noqa: E402
 from orchestrator.core.task_runner import TaskRunner  # noqa: E402
 from orchestrator.core.text import normalize_unicode  # noqa: E402
@@ -135,11 +137,62 @@ class BatchTests(unittest.TestCase):
         seeds = {item["seed"] for item in result["items"]}
         self.assertEqual(len(seeds), 3)
 
+        subject = CompiledSubject(
+            "subject-a", 2, "silver hair, amber eyes", "different eye color"
+        )
+        result_with_subject = runner.run("森林场景", subject=subject)
+        self.assertTrue(
+            result_with_subject["positive_prompt"].startswith(
+                "silver hair, amber eyes"
+            )
+        )
+        self.assertTrue(
+            result_with_subject["negative_prompt"].endswith("different eye color")
+        )
+        self.assertEqual(
+            result_with_subject["subject"],
+            {"subject_id": "subject-a", "revision": 2},
+        )
+
+
+class SubjectIntegrationTests(unittest.TestCase):
+    def test_orchestrator_persists_updates_and_compiles_subjects(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = load_config()
+            config["memory"]["database"] = str(Path(directory) / "memory.db")
+            orchestrator = Orchestrator(config)
+            document = new_subject("subject-a", "Subject A")
+            document["appearance"]["hair"] = {
+                "color": "silver",
+                "length": "long",
+                "style": "straight hair",
+            }
+            orchestrator.save_subject(document)
+            updated = orchestrator.update_subject(
+                "subject-a", {"appearance": {"face": {"eye_color": "amber"}}}
+            )
+            self.assertEqual(updated["revision"], 2)
+            compiled = orchestrator.compile_subject("subject-a")
+            self.assertIn("silver", compiled["positive_prompt"])
+            self.assertIn("amber", compiled["positive_prompt"])
+            self.assertEqual(
+                [item["revision"] for item in orchestrator.get_subject_revisions("subject-a")],
+                [2, 1],
+            )
+            self.assertEqual(
+                [
+                    item["revision"]
+                    for item in orchestrator.get_subject_revisions("  subject-a  ")
+                ],
+                [2, 1],
+            )
+
 
 class APITests(unittest.TestCase):
     class FakeOrchestrator:
         def __init__(self):
             self.cleared = None
+            self.document = new_subject("subject-a", "Subject A")
 
         def get_history(self, session_id):
             return [{"role": "user", "content": session_id}]
@@ -147,8 +200,43 @@ class APITests(unittest.TestCase):
         def clear_memory(self, session_id):
             self.cleared = session_id
 
-        def submit(self, text, session_id):
-            return {"ok": True, "text": text, "session_id": session_id}
+        def submit(self, text, session_id, subject_id=""):
+            return {
+                "ok": True,
+                "text": text,
+                "session_id": session_id,
+                "subject_id": subject_id,
+            }
+
+        def save_subject(self, document):
+            self.document = document
+            return document
+
+        def generate_subject(self, subject_id, _text):
+            self.document = new_subject(subject_id, "Generated Subject")
+            return self.document
+
+        def update_subject(self, _subject_id, changes):
+            self.document["identity"].update(changes.get("identity", {}))
+            self.document["revision"] += 1
+            return self.document
+
+        def compile_subject(self, subject_id):
+            return {
+                "subject_id": subject_id,
+                "revision": self.document["revision"],
+                "positive_prompt": "subject prompt",
+                "negative_prompt": "subject negative",
+            }
+
+        def get_subject(self, _subject_id):
+            return self.document
+
+        def list_subjects(self):
+            return [{"subject_id": self.document["subject_id"]}]
+
+        def get_subject_revisions(self, _subject_id):
+            return [{"revision": self.document["revision"]}]
 
     def setUp(self) -> None:
         self.fake = self.FakeOrchestrator()
@@ -188,6 +276,44 @@ class APITests(unittest.TestCase):
         with self.assertRaises(HTTPError) as caught:
             self._request(f"/context/history?{query}")
         self.assertEqual(caught.exception.code, 404)
+
+    def test_subject_create_update_compile_and_read_routes(self) -> None:
+        document = new_subject("subject-a", "Subject A")
+        status, created = self._request("/subjects", {"document": document})
+        self.assertEqual(status, 201)
+        self.assertEqual(created["document"]["subject_id"], "subject-a")
+
+        status, listed = self._request("/subjects")
+        self.assertEqual(status, 200)
+        self.assertEqual(listed["subjects"][0]["subject_id"], "subject-a")
+
+        query = urlencode({"subject_id": "subject-a"})
+        status, fetched = self._request(f"/subjects?{query}")
+        self.assertEqual(status, 200)
+        self.assertEqual(fetched["document"]["identity"]["display_name"], "Subject A")
+
+        status, updated = self._request(
+            "/subjects/update",
+            {
+                "subject_id": "subject-a",
+                "changes": {"identity": {"display_name": "Updated Subject"}},
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(updated["document"]["revision"], 2)
+
+        status, compiled = self._request(
+            "/subjects/compile", {"subject_id": "subject-a"}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(compiled["positive_prompt"], "subject prompt")
+
+        status, generated = self._request(
+            "/subjects/generate",
+            {"subject_id": "generated-a", "text": "Create a character"},
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(generated["document"]["subject_id"], "generated-a")
 
 
 if __name__ == "__main__":

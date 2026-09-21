@@ -8,10 +8,12 @@ It currently owns:
 - bounded conversation history;
 - successful generation task records;
 - per-session clearing.
+- current Character Subject documents;
+- immutable subject revision history.
 
 The default database is `Data/Memory/everspark.db`, which is ignored by Git.
 No personal history is bundled with the repository.
 
-This is deliberately described as **Working Memory v0**, not the final Memory
-architecture. Episodic recall, structured state memory, the reusable character
-subject document, consolidation, and forgetting policies remain future work.
+Working Memory v0 and the first structured state object are now implemented.
+Episodic recall, consolidation, relevance scoring, and forgetting policies
+remain future work.

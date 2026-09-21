@@ -88,9 +88,10 @@ the selected Ollama model, ComfyUI environment, and an API Format workflow.
 - [x] Configuration, logging, storage, and network foundation migrated
 - [x] Launcher foundation, initialization, and diagnostics implemented
 - [x] Existing v0.1 execution chain migrated across module boundaries
-- [ ] Concept Forge schema implemented
+- [x] Concept Forge Character Subject v1 schema implemented
 - [x] Working Memory v0 persistence migrated
-- [ ] Episodic and structured state memory implemented
+- [x] Character Subject structured state and revision history implemented
+- [ ] Episodic memory implemented
 - [ ] WebUI conversation workflow implemented
 - [ ] First public release
 

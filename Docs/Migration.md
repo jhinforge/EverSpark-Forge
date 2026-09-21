@@ -67,3 +67,19 @@ personal workflow JSON was not copied because it referenced private runtime
 assets and custom nodes. `ImageForge/Workflows/base_workflow_api.json` is a
 tracked empty placeholder and fails with an actionable message until the user
 selects a workflow.
+
+## Fourth development batch
+
+This batch adds the first new architecture built on top of the migrated v0.1
+chain rather than copying another source directory:
+
+- `ConceptForge/Schemas/character_subject.v1.schema.json` defines the fixed,
+  versioned role-subject contract.
+- `ConceptForge/concept_forge/subjects` validates, updates, and compiles it.
+- Memory stores the current subject plus every immutable revision.
+- Orchestrator exposes subject CRUD-style routes and accepts `subject_id` on
+  generation tasks.
+
+Persistent subjects contain reusable character identity only. Request-level
+scene details are merged at execution time and are not written back into the
+subject document.

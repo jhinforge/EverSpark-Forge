@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:everspark:schema:character-subject:1.0",
+  "title": "EverSpark Character Subject v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "subject_id",
+    "revision",
+    "identity",
+    "appearance",
+    "wardrobe",
+    "prompt_contract",
+    "metadata"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "document_type": {"const": "character_subject"},
+    "subject_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "revision": {"type": "integer", "minimum": 1},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "display_name",
+        "aliases",
+        "species",
+        "age_descriptor",
+        "gender_presentation"
+      ],
+      "properties": {
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "aliases": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "species": {"type": "string"},
+        "age_descriptor": {"type": "string"},
+        "gender_presentation": {"type": "string"}
+      }
+    },
+    "appearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["body", "face", "hair", "distinguishing_features"],
+      "properties": {
+        "body": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["build", "height_descriptor", "skin_tone"],
+          "properties": {
+            "build": {"type": "string"},
+            "height_descriptor": {"type": "string"},
+            "skin_tone": {"type": "string"}
+          }
+        },
+        "face": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["shape", "eye_color", "eye_style"],
+          "properties": {
+            "shape": {"type": "string"},
+            "eye_color": {"type": "string"},
+            "eye_style": {"type": "string"}
+          }
+        },
+        "hair": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["color", "length", "style"],
+          "properties": {
+            "color": {"type": "string"},
+            "length": {"type": "string"},
+            "style": {"type": "string"}
+          }
+        },
+        "distinguishing_features": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "wardrobe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default_outfit", "items", "accessories"],
+      "properties": {
+        "default_outfit": {"type": "string"},
+        "items": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "accessories": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "prompt_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "positive_terms",
+        "negative_terms",
+        "locked_traits",
+        "flexible_traits"
+      ],
+      "properties": {
+        "positive_terms": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "negative_terms": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "locked_traits": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "flexible_traits": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tags", "notes"],
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "notes": {"type": "string"}
+      }
+    }
+  }
+}

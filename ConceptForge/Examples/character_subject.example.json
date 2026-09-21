@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "document_type": "character_subject",
+  "subject_id": "ember-keeper",
+  "revision": 1,
+  "identity": {
+    "display_name": "Ember Keeper",
+    "aliases": [],
+    "species": "human",
+    "age_descriptor": "young adult",
+    "gender_presentation": "woman"
+  },
+  "appearance": {
+    "body": {
+      "build": "athletic build",
+      "height_descriptor": "tall",
+      "skin_tone": "warm skin tone"
+    },
+    "face": {
+      "shape": "oval face",
+      "eye_color": "amber",
+      "eye_style": "sharp eyes"
+    },
+    "hair": {
+      "color": "black",
+      "length": "waist-length",
+      "style": "straight hair"
+    },
+    "distinguishing_features": ["small flame-shaped birthmark below the left eye"]
+  },
+  "wardrobe": {
+    "default_outfit": "black high-collar coat with copper trim",
+    "items": ["dark fitted trousers", "leather boots"],
+    "accessories": ["copper pendant"]
+  },
+  "prompt_contract": {
+    "positive_terms": ["solo", "character focus"],
+    "negative_terms": ["different hair color", "different eye color"],
+    "locked_traits": ["amber eyes", "black waist-length hair"],
+    "flexible_traits": ["expression", "pose", "lighting"]
+  },
+  "metadata": {
+    "tags": ["example", "original-character"],
+    "notes": "Public example data; not tied to a private runtime or model."
+  }
+}

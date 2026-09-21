@@ -9,3 +9,5 @@ Unit, integration, startup, and migration verification.
 - `Orchestrator` verifies configuration, Unicode handling, batching, workflows,
   and the local HTTP API.
 - `Memory` verifies SQLite persistence, history limits, and clearing.
+- `ConceptForge` verifies Character Subject schema validation, protected
+  updates, compilation, provider output, and CLI commands.

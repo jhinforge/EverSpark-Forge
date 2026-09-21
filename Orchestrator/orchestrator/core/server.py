@@ -8,8 +8,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from concept_forge.subjects import SubjectValidationError
+from everspark_memory import SubjectRevisionConflictError
+
 from ..config.config import ConfigError, load_config
-from .orchestrator import BusyError, Orchestrator
+from .orchestrator import BusyError, Orchestrator, SubjectNotFoundError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "Runtime" / "Logging"))
@@ -62,30 +65,118 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "messages": self.server.orchestrator.get_history(session_id),
                 },
             )
+        elif parsed.path == "/subjects":
+            subject_id = parse_qs(parsed.query).get("subject_id", [""])[0]
+            if subject_id:
+                try:
+                    document = self.server.orchestrator.get_subject(subject_id)
+                except SubjectNotFoundError as exc:
+                    self._send(404, {"ok": False, "error": str(exc)})
+                    return
+                self._send(
+                    200,
+                    {
+                        "ok": True,
+                        "document": document,
+                    },
+                )
+            else:
+                self._send(
+                    200,
+                    {
+                        "ok": True,
+                        "subjects": self.server.orchestrator.list_subjects(),
+                    },
+                )
+        elif parsed.path == "/subjects/revisions":
+            subject_id = parse_qs(parsed.query).get("subject_id", [""])[0]
+            if not subject_id:
+                self._send(400, {"ok": False, "error": "subject_id is required"})
+                return
+            try:
+                revisions = self.server.orchestrator.get_subject_revisions(subject_id)
+            except SubjectNotFoundError as exc:
+                self._send(404, {"ok": False, "error": str(exc)})
+                return
+            self._send(
+                200,
+                {
+                    "ok": True,
+                    "subject_id": subject_id,
+                    "revisions": revisions,
+                },
+            )
         else:
             self._send(404, {"ok": False, "error": "Not found"})
 
     def do_POST(self) -> None:
-        if self.path not in {"/tasks", "/memory/clear"}:
+        request_path = urlparse(self.path).path
+        if request_path not in {
+            "/tasks",
+            "/memory/clear",
+            "/subjects",
+            "/subjects/generate",
+            "/subjects/update",
+            "/subjects/compile",
+        }:
             self._send(404, {"ok": False, "error": "Not found"})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            if self.path == "/tasks":
+            if not isinstance(payload, dict):
+                raise ValueError("Request body must be a JSON object")
+            if request_path == "/tasks":
                 result = self.server.orchestrator.submit(
                     str(payload.get("text", "")),
                     str(payload.get("session_id", "")),
+                    str(payload.get("subject_id", "")),
                 )
                 self._send(200, result)
-            else:
+            elif request_path == "/memory/clear":
                 session_id = str(payload.get("session_id", ""))
                 self.server.orchestrator.clear_memory(session_id)
                 self._send(200, {"ok": True, "session_id": session_id})
+            elif request_path == "/subjects":
+                document = payload.get("document")
+                if not isinstance(document, dict):
+                    raise ValueError("document must be a JSON object")
+                saved = self.server.orchestrator.save_subject(document)
+                self._send(201, {"ok": True, "document": saved})
+            elif request_path == "/subjects/generate":
+                subject_id = str(payload.get("subject_id", ""))
+                text = str(payload.get("text", ""))
+                generated = self.server.orchestrator.generate_subject(subject_id, text)
+                self._send(201, {"ok": True, "document": generated})
+            elif request_path == "/subjects/update":
+                subject_id = str(payload.get("subject_id", ""))
+                changes = payload.get("changes")
+                if not isinstance(changes, dict):
+                    raise ValueError("changes must be a JSON object")
+                updated = self.server.orchestrator.update_subject(subject_id, changes)
+                self._send(200, {"ok": True, "document": updated})
+            else:
+                subject_id = str(payload.get("subject_id", ""))
+                compiled = self.server.orchestrator.compile_subject(subject_id)
+                self._send(200, {"ok": True, **compiled})
         except BusyError as exc:
-            self._log("warning", "task.busy", "Task submission rejected because the service is busy")
+            self._log(
+                "warning",
+                "task.busy",
+                "Task submission rejected because the service is busy",
+            )
             self._send(409, {"ok": False, "error": str(exc)})
-        except (ValueError, json.JSONDecodeError) as exc:
+        except SubjectRevisionConflictError as exc:
+            self._log(
+                "warning",
+                "subject.revision.conflict",
+                "Subject revision conflict",
+                error=str(exc),
+            )
+            self._send(409, {"ok": False, "error": str(exc)})
+        except SubjectNotFoundError as exc:
+            self._send(404, {"ok": False, "error": str(exc)})
+        except (ValueError, SubjectValidationError, json.JSONDecodeError) as exc:
             self._log(
                 "warning",
                 "request.invalid",
