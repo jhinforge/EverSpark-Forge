@@ -49,6 +49,14 @@ Episodic retrieval and consolidation are not implemented yet.
 Executes image workflows from validated input. ComfyUI is the first adapter,
 not the module identity.
 
+### EverSpark WebUI
+
+Owns browser interaction and same-origin service proxying. It presents
+Character Subjects, request-level scene direction, exact task results, recent
+outputs, and runtime readiness. It does not persist subjects or compile
+prompts; those responsibilities remain in Memory and Concept Forge behind
+Orchestrator.
+
 ### Runtime
 
 Owns health checks, process state, hardware discovery, and logs exposed to the

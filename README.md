@@ -76,9 +76,10 @@ cd EverSpark-Forge
 ./everspark doctor
 ```
 
-No `.env` file is needed for the default local mode. The migrated Orchestrator
-can be started with `./everspark orchestrator start`; generation also requires
-the selected Ollama model, ComfyUI environment, and an API Format workflow.
+No `.env` file is needed for the default local mode. Start Orchestrator with
+`./everspark orchestrator start`, then open the local interface with
+`./everspark webui start`. Generation also requires the selected Concept Forge
+model, Image Forge adapter, and an API Format workflow.
 
 ## Repository status
 
@@ -92,7 +93,7 @@ the selected Ollama model, ComfyUI environment, and an API Format workflow.
 - [x] Working Memory v0 persistence migrated
 - [x] Character Subject structured state and revision history implemented
 - [ ] Episodic memory implemented
-- [ ] WebUI conversation workflow implemented
+- [x] WebUI subject, generation, gallery, and runtime workflow implemented
 - [ ] First public release
 
 ## License

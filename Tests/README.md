@@ -11,3 +11,5 @@ Unit, integration, startup, and migration verification.
 - `Memory` verifies SQLite persistence, history limits, and clearing.
 - `ConceptForge` verifies Character Subject schema validation, protected
   updates, compilation, provider output, and CLI commands.
+- `WebUI` verifies static delivery, subject proxy routes, subject-aware task
+  submission, exact result polling, image proxy safety, and runtime status.

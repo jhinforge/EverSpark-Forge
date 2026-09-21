@@ -48,6 +48,9 @@ grep -q 'EverSpark Forge CLI' <<< "$installed_help"
 orchestrator_help="$(bash "${REPO_ROOT}/everspark" orchestrator help)"
 grep -q 'everspark orchestrator start' <<< "$orchestrator_help"
 
+webui_help="$(bash "${REPO_ROOT}/everspark" webui help)"
+grep -q 'everspark webui start' <<< "$webui_help"
+
 if EVERSPARK_STORAGE_BACKEND=rclone EVERSPARK_NETWORK_BACKEND=local \
   RCLONE_CONFIG= IMAGE_FORGE_RCLONE_REMOTE= CONCEPT_FORGE_RCLONE_REMOTE= \
   bash "${REPO_ROOT}/everspark" doctor >"${TEST_ROOT}/doctor.out" 2>&1; then

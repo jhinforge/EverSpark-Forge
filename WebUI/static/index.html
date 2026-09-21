@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>EverSpark Forge</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><span></span></div>
+          <div>
+            <p class="brand-name">EverSpark</p>
+            <p class="brand-subtitle">Forge Console</p>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Workspace navigation">
+          <button class="nav-item active" data-view="forge" type="button">
+            <span class="nav-icon">◇</span>
+            Forge
+          </button>
+          <button class="nav-item" data-view="subjects" type="button">
+            <span class="nav-icon">◎</span>
+            Subjects
+            <span class="nav-count" id="subjectCount">0</span>
+          </button>
+          <button class="nav-item" data-view="history" type="button">
+            <span class="nav-icon">↺</span>
+            Gallery
+          </button>
+          <button class="nav-item" data-view="runtime" type="button">
+            <span class="nav-icon">⌁</span>
+            Runtime
+          </button>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <div class="service-summary">
+            <div class="pulse-dot" id="globalHealthDot"></div>
+            <div>
+              <strong id="globalHealthTitle">Checking runtime</strong>
+              <span id="globalHealthDetail">Connecting to local services</span>
+            </div>
+          </div>
+          <p class="version-label">LOCAL-FIRST · V0.1</p>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="viewEyebrow">WORKSPACE / FORGE</p>
+            <h1 id="viewTitle">Turn an idea into an image.</h1>
+          </div>
+          <div class="top-actions">
+            <button class="ghost-button" id="refreshButton" type="button">Refresh</button>
+            <button class="primary-button compact" id="newSubjectButton" type="button">
+              <span>＋</span> New subject
+            </button>
+          </div>
+        </header>
+
+        <div class="notice hidden" id="notice" role="status">
+          <span class="notice-icon">!</span>
+          <span id="noticeText"></span>
+          <button id="dismissNotice" type="button" aria-label="Dismiss">×</button>
+        </div>
+
+        <section class="view active" id="forgeView" data-view-panel="forge">
+          <div class="forge-layout">
+            <section class="panel subject-rail">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">CHARACTER SUBJECT</p>
+                  <h2>Identity anchor</h2>
+                </div>
+                <button class="icon-button" id="editSubjectButton" type="button" title="Update selected subject">✦</button>
+              </div>
+
+              <div id="selectedSubjectEmpty" class="subject-empty">
+                <div class="subject-orbit"><span>＋</span></div>
+                <h3>No subject selected</h3>
+                <p>Generate without a persistent character, or create one to keep visual traits stable.</p>
+                <button class="secondary-button" id="emptyNewSubjectButton" type="button">Create subject</button>
+              </div>
+
+              <div id="selectedSubjectCard" class="selected-subject hidden">
+                <div class="subject-avatar" id="subjectAvatar">ES</div>
+                <div class="subject-title-row">
+                  <div>
+                    <h3 id="selectedSubjectName">—</h3>
+                    <p id="selectedSubjectId">—</p>
+                  </div>
+                  <span class="revision-badge" id="selectedSubjectRevision">R1</span>
+                </div>
+                <div class="trait-list" id="selectedSubjectTraits"></div>
+                <button class="text-button" id="viewRevisionsButton" type="button">View revision history →</button>
+              </div>
+
+              <label class="field-label" for="subjectSelect">Active subject</label>
+              <div class="select-wrap">
+                <select id="subjectSelect">
+                  <option value="">No subject · scene only</option>
+                </select>
+              </div>
+              <p class="field-help">Subject traits persist. The scene below does not.</p>
+            </section>
+
+            <section class="panel canvas-panel">
+              <div class="canvas-toolbar">
+                <div>
+                  <p class="section-kicker">IMAGE FORGE</p>
+                  <h2>Generation canvas</h2>
+                </div>
+                <span class="state-chip" id="generationState" data-state="idle">
+                  <span></span> Ready
+                </span>
+              </div>
+
+              <div class="result-stage" id="resultStage">
+                <div class="stage-empty">
+                  <div class="spark-glyph" aria-hidden="true">✦</div>
+                  <h3>Your next frame starts here</h3>
+                  <p>Select a subject, describe only the scene, then send it through the Forge.</p>
+                </div>
+              </div>
+
+              <div class="composer">
+                <div class="composer-header">
+                  <label for="scenePrompt">Scene direction</label>
+                  <span>Ctrl + Enter</span>
+                </div>
+                <textarea id="scenePrompt" rows="4" placeholder="A quiet rooftop at blue hour, soft wind, cinematic rim light..."></textarea>
+                <div class="composer-footer">
+                  <div class="subject-context" id="composerSubjectContext">
+                    <span class="mini-avatar">—</span>
+                    <span>No persistent subject</span>
+                  </div>
+                  <button class="forge-button" id="generateButton" type="button">
+                    <span>Forge image</span>
+                    <span class="button-arrow">→</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="subjectsView" data-view-panel="subjects">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">STRUCTURED STATE</p>
+              <h2>Character subjects</h2>
+              <p class="section-copy">Reusable identity documents with strict fields and immutable revisions.</p>
+            </div>
+            <button class="primary-button" id="subjectsNewButton" type="button">＋ Create subject</button>
+          </div>
+          <div class="subject-grid" id="subjectGrid"></div>
+        </section>
+
+        <section class="view" id="historyView" data-view-panel="history">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">IMAGE FORGE OUTPUT</p>
+              <h2>Recent gallery</h2>
+              <p class="section-copy">Recent images reported by the configured image execution adapter.</p>
+            </div>
+            <button class="ghost-button" id="refreshHistoryButton" type="button">Refresh gallery</button>
+          </div>
+          <div class="gallery-grid" id="galleryGrid"></div>
+        </section>
+
+        <section class="view" id="runtimeView" data-view-panel="runtime">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">LOCAL RUNTIME</p>
+              <h2>Service readiness</h2>
+              <p class="section-copy">Local mode requires no Cloudflare or R2 configuration.</p>
+            </div>
+            <button class="ghost-button" id="refreshRuntimeButton" type="button">Run checks</button>
+          </div>
+          <div class="runtime-grid" id="runtimeGrid"></div>
+          <div class="setup-panel">
+            <div>
+              <p class="section-kicker">FIRST RUN</p>
+              <h3>Bring each layer online</h3>
+            </div>
+            <ol class="setup-steps">
+              <li><span>1</span><div><strong>Initialize local data</strong><code>./everspark init</code></div></li>
+              <li><span>2</span><div><strong>Start Orchestrator</strong><code>./everspark orchestrator start</code></div></li>
+              <li><span>3</span><div><strong>Start WebUI</strong><code>./everspark webui start</code></div></li>
+            </ol>
+            <p class="setup-note">Image generation also needs a configured Image Forge adapter and workflow. Optional remote storage and Cloudflare networking remain disabled until explicitly enabled.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="modal" id="subjectModal">
+      <form method="dialog" class="modal-shell" id="subjectForm">
+        <div class="modal-heading">
+          <div>
+            <p class="section-kicker" id="subjectModalKicker">NEW STRUCTURED IDENTITY</p>
+            <h2 id="subjectModalTitle">Create a subject</h2>
+          </div>
+          <button class="modal-close" value="cancel" type="submit" aria-label="Close">×</button>
+        </div>
+        <p class="modal-copy" id="subjectModalCopy">Describe stable visual identity only. Scene, pose, camera and background belong in the Forge prompt.</p>
+        <div class="form-row" id="subjectIdRow">
+          <label for="subjectIdInput">Subject ID</label>
+          <input id="subjectIdInput" type="text" pattern="[a-z0-9][a-z0-9-]*" maxlength="64" placeholder="ember-keeper" autocomplete="off">
+          <small>Lowercase letters, numbers and hyphens.</small>
+        </div>
+        <div class="form-row">
+          <label for="subjectDescriptionInput" id="subjectDescriptionLabel">Identity description</label>
+          <textarea id="subjectDescriptionInput" rows="8" placeholder="A young woman with waist-length black hair, sharp amber eyes, a black high-collar coat..."></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-button" value="cancel" type="submit">Cancel</button>
+          <button class="primary-button" id="saveSubjectButton" value="default" type="submit">Build subject</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide" id="revisionModal">
+      <div class="modal-shell">
+        <div class="modal-heading">
+          <div>
+            <p class="section-kicker">IMMUTABLE HISTORY</p>
+            <h2>Subject revisions</h2>
+          </div>
+          <button class="modal-close" id="closeRevisionModal" type="button" aria-label="Close">×</button>
+        </div>
+        <div class="revision-list" id="revisionList"></div>
+      </div>
+    </dialog>
+
+    <dialog class="image-viewer" id="imageViewer">
+      <button id="closeImageViewer" type="button" aria-label="Close">×</button>
+      <img id="viewerImage" alt="Generated image">
+    </dialog>
+  </body>
+</html>

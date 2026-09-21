@@ -83,3 +83,21 @@ chain rather than copying another source directory:
 Persistent subjects contain reusable character identity only. Request-level
 scene details are merged at execution time and are not written back into the
 subject document.
+
+## Fifth development batch
+
+The old `everspark-webui` behavior was used as a reference for result polling,
+image proxying, and local service health checks. The interface itself was
+rebuilt around the new module boundaries:
+
+- `WebUI/app.py` provides a standard-library same-origin proxy.
+- `WebUI/static` contains the new responsive Forge workspace.
+- Character Subject creation, natural-language revision, selection, and
+  immutable history are available in the interface.
+- Scene generation references `subject_id` without writing scene details into
+  structured identity.
+- Runtime guidance assumes local mode and treats remote storage and Cloudflare
+  as optional integrations.
+
+The public WebUI contains no personal domain, workflow, model asset, or remote
+storage configuration.
