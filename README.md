@@ -85,9 +85,8 @@ model, Image Forge adapter, and an API Format workflow.
 The managed model foundation currently selects Qwen3 4B GGUF Q4_K_M for
 Concept Forge and Illustrious XL v1.0 for Image Forge. Inspect the download
 plan with `./everspark setup --plan`; run `./everspark setup` only when you are
-ready to download both models (roughly 9.5 GB total). The API Format workflow
-is intentionally left as an empty placeholder until the public base workflow
-is added.
+ready to download both models (roughly 9.5 GB total). A public, LoRA-free
+Illustrious API Format workflow is included for the initial generation path.
 
 ## Repository status
 

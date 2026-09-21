@@ -51,9 +51,9 @@ The component runtime defaults are in
 the Orchestrator address, provider/adapter endpoints, Memory database, and
 workflow template without modifying tracked files.
 
-The bundled Image Forge workflow is intentionally an empty placeholder. The
-old source workflow referenced personal checkpoints, LoRAs, and custom nodes,
-so it is not suitable for a public repository.
+The bundled Image Forge workflow is a minimal 1024 x 1536 Illustrious workflow
+made entirely from standard ComfyUI nodes. It contains no LoRAs, personal
+paths, or custom-node dependencies.
 
 When the replacement API Format workflow contains a
 `CheckpointLoaderSimple` node, Orchestrator asks Image Forge for the currently

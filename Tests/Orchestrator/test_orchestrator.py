@@ -25,7 +25,7 @@ for module_directory in (
 
 from concept_forge.providers.ollama import GenerationPlan  # noqa: E402
 from concept_forge.subjects import CompiledSubject, new_subject  # noqa: E402
-from image_forge.workflow.manager import WorkflowError, WorkflowManager  # noqa: E402
+from image_forge.workflow.manager import WorkflowManager  # noqa: E402
 from image_forge.models.resolver import (  # noqa: E402
     CheckpointResolutionError,
     resolve_checkpoint,
@@ -128,11 +128,17 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(CheckpointResolutionError):
             resolve_checkpoint("missing.safetensors", ["readme.txt"])
 
-    def test_public_workflow_is_an_unconfigured_placeholder(self) -> None:
+    def test_public_workflow_builds_with_managed_default_checkpoint(self) -> None:
         config = load_config()
         manager = WorkflowManager(config["workflow"])
-        with self.assertRaisesRegex(WorkflowError, "empty placeholder"):
-            manager.build("positive", "negative", seed=1)
+        workflow = manager.build("positive", "negative", seed=1)
+        self.assertEqual(workflow["34"]["inputs"]["text"], "positive")
+        self.assertEqual(workflow["7"]["inputs"]["text"], "negative")
+        self.assertEqual(workflow["31"]["inputs"]["seed"], 1)
+        self.assertEqual(
+            workflow["4"]["inputs"]["ckpt_name"],
+            "Illustrious-XL-v1.0.safetensors",
+        )
 
 
 class BatchTests(unittest.TestCase):

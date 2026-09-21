@@ -60,7 +60,7 @@ memory:
 
 workflow:
   template: ./ImageForge/Workflows/base_workflow_api.json
-  positive_prompt_node: "12"
+  positive_prompt_node: "34"
   negative_prompt_node: "7"
   seed_node: "31"
   managed_default_checkpoint: Illustrious-XL-v1.0.safetensors
