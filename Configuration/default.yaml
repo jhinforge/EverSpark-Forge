@@ -6,6 +6,9 @@ runtime:
   data_directory: ./Data
   log_directory: ./Data/Logs
   output_directory: ./Data/Outputs
+  gpu_assignment:
+    image_forge: 0
+    concept_forge: 1
 
 storage:
   backend: local

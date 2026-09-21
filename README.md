@@ -7,8 +7,8 @@ execution backend.
 
 > [!IMPORTANT]
 > This repository is currently being initialized. The one-command launcher is
-> not available yet, and the repository should not be treated as a finished
-> release.
+> available for initialization and diagnostics, but the execution modules are
+> still being migrated and this is not yet a finished release.
 
 ## Product goal
 
@@ -67,13 +67,26 @@ Configuration precedence will be:
 
 Copy `.env.example` to `.env` only when optional integrations are needed.
 
+## Current launcher
+
+```bash
+git clone https://github.com/jhinforge/EverSpark-Forge.git
+cd EverSpark-Forge
+./everspark init
+./everspark doctor
+```
+
+No `.env` file is needed for the default local mode. Business-module startup
+commands will become active as Image Forge, Concept Forge, Orchestrator, and
+WebUI are migrated in the next batches.
+
 ## Repository status
 
 - [x] Public repository created
 - [x] Initial names and module boundaries defined
 - [x] Local-first configuration contract added
 - [x] Configuration, logging, storage, and network foundation migrated
-- [ ] Launcher implemented
+- [x] Launcher foundation, initialization, and diagnostics implemented
 - [ ] Existing execution chain migrated
 - [ ] Concept Forge schema implemented
 - [ ] Memory module implemented

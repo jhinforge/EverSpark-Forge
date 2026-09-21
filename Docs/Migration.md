@@ -36,3 +36,17 @@ The first batch intentionally preserves the existing `core_*` shell function
 names as a compatibility boundary. Public commands and module names use the
 new EverSpark naming scheme; internal function renaming can happen after the
 full execution chain is migrated and covered by tests.
+
+## Second foundation batch
+
+| Source | Destination |
+| --- | --- |
+| `core/hardware` | `Runtime/Hardware` |
+| `core/system` | `Runtime/System` |
+| `core/cli/everspark` | `Launcher/everspark` and repository-root `everspark` |
+| `core/cli/install.sh` | `Launcher/install.sh` |
+
+The new public CLI uses capability names (`image`, `concept`, `orchestrator`,
+and `webui`). Legacy backend names remain aliases. `init` creates local runtime
+directories, while `doctor` validates the base runtime and fails when an
+explicitly enabled rclone or Cloudflare backend is incomplete.

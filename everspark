@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+if command -v realpath >/dev/null 2>&1; then
+  SOURCE="$(realpath "$SOURCE")"
+else
+  SOURCE="$(readlink -f "$SOURCE")"
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+exec bash "${SCRIPT_DIR}/Launcher/everspark" "$@"

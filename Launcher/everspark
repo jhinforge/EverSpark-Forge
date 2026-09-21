@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+if command -v realpath >/dev/null 2>&1; then
+  SOURCE="$(realpath "$SOURCE")"
+else
+  SOURCE="$(readlink -f "$SOURCE")"
+fi
+
+LAUNCHER_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+REPO_ROOT="$(cd "${LAUNCHER_DIR}/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+EverSpark Forge CLI
+
+Usage:
+  ./everspark help
+  ./everspark init
+  ./everspark doctor
+  ./everspark image <command>
+  ./everspark concept <command>
+  ./everspark orchestrator <command>
+  ./everspark webui <command>
+  ./everspark logs <command>
+
+Modules:
+  image         Image Forge execution through adapters such as ComfyUI
+  concept       Concept Forge intent and prompt services such as Ollama
+  orchestrator  Session coordination and task execution
+  webui         User-facing local interface
+  logs          Managed log status, rotation, and retention
+
+Compatibility aliases:
+  comfy, comfyui -> image
+  ollama         -> concept
+
+Run directly from a clone, or use Launcher/install.sh to add `everspark` to
+your user PATH.
+EOF
+}
+
+die() {
+  printf '[ERROR] %s\n\n' "$*" >&2
+  usage >&2
+  exit 1
+}
+
+run_handler() {
+  local module_name="$1"
+  local handler="$2"
+  shift 2
+
+  if [ ! -f "$handler" ]; then
+    printf '[ERROR] %s is not available in the current migration build.\n' "$module_name" >&2
+    printf '        Expected handler: %s\n' "$handler" >&2
+    return 2
+  fi
+
+  exec bash "$handler" "$@"
+}
+
+module="${1:-help}"
+if [ "$#" -gt 0 ]; then
+  shift
+fi
+
+case "${module,,}" in
+  help|-h|--help)
+    usage
+    ;;
+  init)
+    exec bash "${LAUNCHER_DIR}/init.sh" "$@"
+    ;;
+  doctor)
+    exec bash "${LAUNCHER_DIR}/doctor.sh" "$@"
+    ;;
+  image|image-forge|imageforge|comfy|comfyui)
+    run_handler "Image Forge" "${REPO_ROOT}/ImageForge/cli.sh" "$@"
+    ;;
+  concept|concept-forge|conceptforge|ollama)
+    run_handler "Concept Forge" "${REPO_ROOT}/ConceptForge/cli.sh" "$@"
+    ;;
+  orchestrator|forge-orchestrator)
+    run_handler "Orchestrator" "${REPO_ROOT}/Orchestrator/cli.sh" "$@"
+    ;;
+  webui|web)
+    run_handler "WebUI" "${REPO_ROOT}/WebUI/cli.sh" "$@"
+    ;;
+  logs|logging)
+    run_handler "Runtime Logging" "${REPO_ROOT}/Runtime/Logging/cli.sh" "$@"
+    ;;
+  *)
+    die "unknown module: $module"
+    ;;
+esac
