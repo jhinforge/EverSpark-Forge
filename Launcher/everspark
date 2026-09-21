@@ -19,6 +19,10 @@ Usage:
   ./everspark help
   ./everspark init
   ./everspark setup [--plan] [--models all|concept|image]
+  ./everspark start [all|concept|image|orchestrator|webui]
+  ./everspark stop [all|concept|image|orchestrator|webui]
+  ./everspark restart [all|concept|image|orchestrator|webui]
+  ./everspark status [all|concept|image|orchestrator|webui]
   ./everspark models <plan|status|download|import-concept>
   ./everspark doctor
   ./everspark image <command>
@@ -79,6 +83,10 @@ case "${module,,}" in
     ;;
   models)
     exec python3 "${REPO_ROOT}/Runtime/Models/model_manager.py" "$@"
+    ;;
+  start|stop|restart|status)
+    exec python3 "${REPO_ROOT}/Runtime/Managed/runtime_manager.py" \
+      "${module,,}" "${1:-all}"
     ;;
   image)
     run_handler "Image Forge" "${REPO_ROOT}/ImageForge/cli.sh" "$@"

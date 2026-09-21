@@ -8,6 +8,7 @@ trap 'rm -rf "$TEST_ROOT"' EXIT
 
 help_output="$(bash "${REPO_ROOT}/everspark" help)"
 grep -q './everspark image' <<< "$help_output"
+grep -q './everspark start' <<< "$help_output"
 if grep -Eq 'comfy|ollama' <<< "$help_output"; then
   printf 'legacy backend alias leaked into CLI help\n' >&2
   exit 1
@@ -27,11 +28,16 @@ done
 logs_output="$(EVERSPARK_LOG_DIR="${TEST_ROOT}/logs" bash "${REPO_ROOT}/everspark" logs status)"
 grep -q '"ok": true' <<< "$logs_output"
 
-if bash "${REPO_ROOT}/everspark" image status >"${TEST_ROOT}/missing.out" 2>&1; then
-  printf 'unmigrated Image Forge handler unexpectedly succeeded\n' >&2
-  exit 1
-fi
-grep -q 'not available in the current migration build' "${TEST_ROOT}/missing.out"
+image_status="$(bash "${REPO_ROOT}/everspark" image status)"
+grep -q '"service": "image"' <<< "$image_status"
+
+runtime_status="$(bash "${REPO_ROOT}/everspark" status)"
+grep -q '"service": "concept"' <<< "$runtime_status"
+grep -q '"service": "webui"' <<< "$runtime_status"
+
+setup_plan="$(bash "${REPO_ROOT}/everspark" setup --plan --skip-models)"
+grep -q 'ComfyUI: v0.37.0' <<< "$setup_plan"
+grep -q 'Ollama: 0.34.2' <<< "$setup_plan"
 
 EVERSPARK_LOG_DIR="${TEST_ROOT}/logs" bash "${REPO_ROOT}/everspark" init >/dev/null
 grep -q 'No .env file found; local defaults remain active' "${TEST_ROOT}/logs/launcher.log"

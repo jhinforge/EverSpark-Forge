@@ -3,6 +3,7 @@
 Unit, integration, startup, and migration verification.
 
 - `Runtime/Logging` verifies structured logs and retention.
+- `Runtime/Managed` verifies safe PID identity and managed process lifecycle.
 - `Runtime/Hardware` and `Runtime/System` verify host discovery.
 - `Infrastructure` verifies local-mode defaults.
 - `Launcher` verifies routing, initialization, diagnostics, and installation.

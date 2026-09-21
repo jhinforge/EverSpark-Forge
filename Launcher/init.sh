@@ -17,6 +17,9 @@ directories=(
   "${REPO_ROOT}/Data/Outputs"
   "${REPO_ROOT}/Data/Memory"
   "${REPO_ROOT}/Data/Runtime"
+  "${REPO_ROOT}/Data/Runtime/Services"
+  "${REPO_ROOT}/Data/Models/ConceptForge"
+  "${REPO_ROOT}/Data/Models/ImageForge/checkpoints"
 )
 
 for directory in "${directories[@]}"; do

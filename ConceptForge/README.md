@@ -2,6 +2,10 @@
 
 Discussion, structured intent, schema validation, and prompt compilation.
 
+The managed default is Qwen3 4B GGUF Q4_K_M imported into Ollama as
+`everspark-concept`. On single-GPU systems the managed Ollama service unloads
+the model after each request to hand memory back to Image Forge.
+
 The current implementation contains:
 
 - the Ollama provider used by the v0.1 generation chain;

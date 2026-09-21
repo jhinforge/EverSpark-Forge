@@ -72,15 +72,19 @@ Copy `.env.example` to `.env` only when optional integrations are needed.
 ```bash
 git clone https://github.com/jhinforge/EverSpark-Forge.git
 cd EverSpark-Forge
-./everspark init
-./everspark doctor
 ./everspark setup --plan
+./everspark setup
+./everspark start
 ```
 
-No `.env` file is needed for the default local mode. Start Orchestrator with
-`./everspark orchestrator start`, then open the local interface with
-`./everspark webui start`. Generation also requires the selected Concept Forge
-model, Image Forge adapter, and an API Format workflow.
+No `.env` file is needed for the default local mode. `setup` installs pinned
+ComfyUI and Ollama runtimes, downloads the default models, imports Concept
+Forge, and connects the managed Image Forge model directory. `start` launches
+Concept Forge, Image Forge, Orchestrator, and WebUI in dependency order.
+
+Open `http://127.0.0.1:8780` locally. On a remote Pod, keep the default
+localhost binding and use an SSH/Jupyter port forward, or explicitly set the
+WebUI host in `.env` when public exposure is intentional.
 
 The managed model foundation currently selects Qwen3 4B GGUF Q4_K_M for
 Concept Forge and Illustrious XL v1.0 for Image Forge. Inspect the download
@@ -100,6 +104,7 @@ Illustrious API Format workflow is included for the initial generation path.
 - [x] Working Memory v0 persistence migrated
 - [x] Managed default model catalog and installer implemented
 - [x] Image checkpoint discovery and deterministic fallback implemented
+- [x] Managed ComfyUI/Ollama installation and service lifecycle implemented
 - [x] Character Subject structured state and revision history implemented
 - [ ] Episodic memory implemented
 - [x] WebUI subject, generation, gallery, and runtime workflow implemented

@@ -45,7 +45,7 @@ def write_manifest(path: Path) -> None:
 class ManifestTests(unittest.TestCase):
     def test_bundled_manifest_is_valid(self) -> None:
         manifest = load_manifest(LOGGING_DIR / "log_manifest.json")
-        self.assertEqual(len(manifest["logs"]), 15)
+        self.assertEqual(len(manifest["logs"]), 18)
 
     def test_rejects_path_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

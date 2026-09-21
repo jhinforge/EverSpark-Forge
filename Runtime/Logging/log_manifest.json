@@ -71,16 +71,34 @@
       }
     },
     {
+      "id": "runtime-install",
+      "label": "Managed runtime installation",
+      "filename": "runtime-install.log",
+      "kind": "structured"
+    },
+    {
       "id": "orchestrator",
       "label": "Orchestrator",
       "filename": "orchestrator.log",
       "kind": "structured"
     },
     {
+      "id": "orchestrator-service",
+      "label": "Orchestrator process",
+      "filename": "orchestrator-service.log",
+      "kind": "raw"
+    },
+    {
       "id": "webui",
       "label": "EverSpark WebUI",
       "filename": "webui.log",
       "kind": "structured"
+    },
+    {
+      "id": "webui-service",
+      "label": "WebUI process",
+      "filename": "webui-service.log",
+      "kind": "raw"
     },
     {
       "id": "tunnel",
