@@ -54,3 +54,10 @@ workflow template without modifying tracked files.
 The bundled Image Forge workflow is intentionally an empty placeholder. The
 old source workflow referenced personal checkpoints, LoRAs, and custom nodes,
 so it is not suitable for a public repository.
+
+When the replacement API Format workflow contains a
+`CheckpointLoaderSimple` node, Orchestrator asks Image Forge for the currently
+available checkpoints. It keeps the workflow's requested name when present,
+otherwise selects the managed Illustrious default, then falls back to the
+first compatible checkpoint in stable alphabetical order. Every fallback is
+reported to the caller.

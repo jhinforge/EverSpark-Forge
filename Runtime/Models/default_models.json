@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "id": "concept-default",
+      "component": "concept_forge",
+      "source": "huggingface",
+      "repo_id": "Qwen/Qwen3-4B-GGUF",
+      "filename": "Qwen3-4B-Q4_K_M.gguf",
+      "revision": "main",
+      "target": "Data/Models/ConceptForge/Qwen3-4B-Q4_K_M.gguf",
+      "license": "Apache-2.0",
+      "runtime_name": "everspark-concept",
+      "prompt_mode": "no_think"
+    },
+    {
+      "id": "image-default",
+      "component": "image_forge",
+      "source": "huggingface",
+      "repo_id": "OnomaAIResearch/Illustrious-XL-v1.0",
+      "filename": "Illustrious-XL-v1.0.safetensors",
+      "revision": "main",
+      "target": "Data/Models/ImageForge/checkpoints/Illustrious-XL-v1.0.safetensors",
+      "license": "SDXL License",
+      "architecture": "illustrious-sdxl"
+    }
+  ]
+}

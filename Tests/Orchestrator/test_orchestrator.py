@@ -26,6 +26,10 @@ for module_directory in (
 from concept_forge.providers.ollama import GenerationPlan  # noqa: E402
 from concept_forge.subjects import CompiledSubject, new_subject  # noqa: E402
 from image_forge.workflow.manager import WorkflowError, WorkflowManager  # noqa: E402
+from image_forge.models.resolver import (  # noqa: E402
+    CheckpointResolutionError,
+    resolve_checkpoint,
+)
 from orchestrator.config.config import load_config  # noqa: E402
 from orchestrator.core.orchestrator import Orchestrator  # noqa: E402
 from orchestrator.core.server import OrchestratorServer  # noqa: E402
@@ -90,6 +94,40 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(workflow["7"]["inputs"]["text"], "bad quality")
             self.assertEqual(workflow["31"]["inputs"]["seed"], 12345)
 
+    def test_checkpoint_binding_prefers_managed_default_and_warns(self) -> None:
+        manager = WorkflowManager(
+            {
+                "template": "unused.json",
+                "managed_default_checkpoint": "Illustrious-XL-v1.0.safetensors",
+            }
+        )
+        workflow = {
+            "4": {
+                "class_type": "CheckpointLoaderSimple",
+                "inputs": {"ckpt_name": "private-model.safetensors"},
+            }
+        }
+        notices = []
+        manager.bind_checkpoint(
+            workflow,
+            ["z-last.ckpt", "Illustrious-XL-v1.0.safetensors"],
+            notices.append,
+        )
+        self.assertEqual(
+            workflow["4"]["inputs"]["ckpt_name"],
+            "Illustrious-XL-v1.0.safetensors",
+        )
+        self.assertIn("managed default", notices[0])
+
+    def test_checkpoint_resolution_uses_sorted_first_available(self) -> None:
+        resolution = resolve_checkpoint(
+            "missing.safetensors", ["Z.ckpt", "a.safetensors", "ignore.txt"]
+        )
+        self.assertEqual(resolution.name, "a.safetensors")
+        self.assertEqual(resolution.source, "first_available")
+        with self.assertRaises(CheckpointResolutionError):
+            resolve_checkpoint("missing.safetensors", ["readme.txt"])
+
     def test_public_workflow_is_an_unconfigured_placeholder(self) -> None:
         config = load_config()
         manager = WorkflowManager(config["workflow"])
@@ -112,9 +150,15 @@ class BatchTests(unittest.TestCase):
             def build(self, positive, negative, seed):
                 return {"positive": positive, "negative": negative, "seed": seed}
 
+            def bind_checkpoint(self, _workflow, _available, _notify):
+                return None
+
         class FakeImageForge:
             def __init__(self):
                 self.workflows = []
+
+            def list_checkpoints(self):
+                return ["test.safetensors"]
 
             def queue_prompt(self, workflow):
                 self.workflows.append(workflow)

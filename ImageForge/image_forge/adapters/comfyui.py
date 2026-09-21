@@ -33,3 +33,26 @@ class ComfyUIAdapter:
         if not isinstance(prompt_id, str) or not prompt_id:
             raise ComfyUIError("ComfyUI response did not include prompt_id")
         return prompt_id
+
+    def list_checkpoints(self) -> list[str]:
+        request = Request(f"{self.base_url}/object_info/CheckpointLoaderSimple")
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise ComfyUIError(f"ComfyUI HTTP {exc.code}: {detail}") from exc
+        except URLError as exc:
+            raise ComfyUIError(
+                f"Cannot connect to ComfyUI at {self.base_url}: {exc.reason}"
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise ComfyUIError("ComfyUI returned invalid checkpoint metadata") from exc
+
+        try:
+            values = result["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][0]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ComfyUIError("ComfyUI checkpoint metadata has an unknown shape") from exc
+        if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+            raise ComfyUIError("ComfyUI checkpoint metadata did not contain a name list")
+        return values

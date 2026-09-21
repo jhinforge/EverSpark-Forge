@@ -61,10 +61,16 @@ class TaskRunner:
         )
 
         items = []
+        available_checkpoints: list[str] | None = None
         for index in range(1, plan.count + 1):
             seed = secrets.randbelow(2**63)
             workflow = self.workflow.build(
                 positive_prompt, negative_prompt, seed=seed
+            )
+            if available_checkpoints is None:
+                available_checkpoints = self.image.list_checkpoints()
+            self.workflow.bind_checkpoint(
+                workflow, available_checkpoints, notify or (lambda _message: None)
             )
             prompt_id = self.image.queue_prompt(workflow)
             items.append({"index": index, "prompt_id": prompt_id, "seed": seed})

@@ -41,7 +41,8 @@ services:
   concept_forge:
     provider: ollama
     base_url: http://127.0.0.1:11434
-    model: gemma3:4b
+    model: everspark-concept
+    prompt_mode: no_think
   image_forge:
     adapter: comfyui
     base_url: http://127.0.0.1:8188
@@ -62,3 +63,4 @@ workflow:
   positive_prompt_node: "12"
   negative_prompt_node: "7"
   seed_node: "31"
+  managed_default_checkpoint: Illustrious-XL-v1.0.safetensors

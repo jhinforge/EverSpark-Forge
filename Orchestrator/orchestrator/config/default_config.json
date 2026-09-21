@@ -12,7 +12,8 @@
     "providers": {
       "ollama": {
         "base_url": "http://127.0.0.1:11434",
-        "model": "gemma3:4b",
+        "model": "everspark-concept",
+        "prompt_mode": "no_think",
         "timeout": 180
       }
     }
@@ -35,6 +36,7 @@
     "template": "ImageForge/Workflows/base_workflow_api.json",
     "positive_prompt_node": "12",
     "negative_prompt_node": "7",
-    "seed_node": "31"
+    "seed_node": "31",
+    "managed_default_checkpoint": "Illustrious-XL-v1.0.safetensors"
   }
 }

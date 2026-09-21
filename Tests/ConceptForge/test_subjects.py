@@ -98,6 +98,35 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not allowed"):
                 provider.generate_subject("Create", "ember-keeper")
 
+    def test_no_think_mode_is_added_to_system_prompt(self) -> None:
+        provider = OllamaProvider(
+            {
+                "base_url": "http://127.0.0.1:11434",
+                "model": "everspark-concept",
+                "prompt_mode": "no_think",
+            }
+        )
+        with patch.object(
+            provider,
+            "_post_json",
+            return_value={
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "model": "illustrious",
+                            "positive_prompt": "portrait",
+                            "negative_prompt": "low quality",
+                            "count": 1,
+                            "status": "over",
+                        }
+                    )
+                }
+            },
+        ) as post:
+            provider.generate_prompt("draw")
+        system_prompt = post.call_args.args[1]["messages"][0]["content"]
+        self.assertTrue(system_prompt.rstrip().endswith("/no_think"))
+
 
 if __name__ == "__main__":
     unittest.main()

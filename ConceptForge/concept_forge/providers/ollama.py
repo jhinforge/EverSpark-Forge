@@ -48,11 +48,17 @@ class OllamaProvider:
         self.base_url = str(config["base_url"]).rstrip("/")
         self.model = str(config["model"])
         self.timeout = int(config.get("timeout", 180))
+        self.prompt_mode = str(config.get("prompt_mode", "")).strip().lower()
+
+    def _system_prompt(self, prompt: str) -> str:
+        if self.prompt_mode == "no_think":
+            return prompt.rstrip() + "\n/no_think\n"
+        return prompt
 
     def generate_prompt(
         self, user_text: str, history: list[dict[str, str]] | None = None
     ) -> GenerationPlan:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": self._system_prompt(SYSTEM_PROMPT)}]
         messages.extend(history or [])
         messages.append({"role": "user", "content": user_text})
         payload = {
@@ -102,14 +108,17 @@ class OllamaProvider:
             )
         target = json.loads(json.dumps(target, ensure_ascii=False))
         target["revision"] = expected_revision
+        subject_prompt = (
+            SUBJECT_SYSTEM_PROMPT
+            + "\n"
+            + context
+            + "\nThe required output template/current document is:\n"
+            + json.dumps(target, ensure_ascii=False)
+        )
         messages = [
             {
                 "role": "system",
-                "content": SUBJECT_SYSTEM_PROMPT
-                + "\n"
-                + context
-                + "\nThe required output template/current document is:\n"
-                + json.dumps(target, ensure_ascii=False),
+                "content": self._system_prompt(subject_prompt),
             },
             {"role": "user", "content": user_text},
         ]

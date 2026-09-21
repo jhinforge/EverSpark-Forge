@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ..models.resolver import CheckpointResolutionError, resolve_checkpoint
+
 
 class WorkflowError(RuntimeError):
     pass
@@ -16,6 +18,9 @@ class WorkflowManager:
         self.positive_node = str(config.get("positive_prompt_node", "")).strip()
         self.negative_node = str(config.get("negative_prompt_node", "")).strip()
         self.seed_node = str(config.get("seed_node", "")).strip()
+        self.managed_default_checkpoint = str(
+            config.get("managed_default_checkpoint", "")
+        ).strip()
 
     def build(
         self, positive_prompt: str, negative_prompt: str, seed: int | None = None
@@ -26,6 +31,35 @@ class WorkflowManager:
         if seed is not None:
             self._replace_seed(workflow, seed)
         return workflow
+
+    def bind_checkpoint(
+        self,
+        workflow: dict[str, Any],
+        available: list[str],
+        notify: Any = None,
+    ) -> None:
+        checkpoint_nodes = [
+            node
+            for node in workflow.values()
+            if isinstance(node, dict)
+            and node.get("class_type") == "CheckpointLoaderSimple"
+        ]
+        if not checkpoint_nodes:
+            return
+        for node in checkpoint_nodes:
+            inputs = node.get("inputs")
+            if not isinstance(inputs, dict):
+                raise WorkflowError("CheckpointLoaderSimple node has no inputs object")
+            requested = str(inputs.get("ckpt_name", ""))
+            try:
+                resolution = resolve_checkpoint(
+                    requested, available, self.managed_default_checkpoint
+                )
+            except CheckpointResolutionError as exc:
+                raise WorkflowError(str(exc)) from exc
+            inputs["ckpt_name"] = resolution.name
+            if resolution.warning and notify is not None:
+                notify(resolution.warning)
 
     def _load_template(self) -> dict[str, Any]:
         try:

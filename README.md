@@ -74,12 +74,20 @@ git clone https://github.com/jhinforge/EverSpark-Forge.git
 cd EverSpark-Forge
 ./everspark init
 ./everspark doctor
+./everspark setup --plan
 ```
 
 No `.env` file is needed for the default local mode. Start Orchestrator with
 `./everspark orchestrator start`, then open the local interface with
 `./everspark webui start`. Generation also requires the selected Concept Forge
 model, Image Forge adapter, and an API Format workflow.
+
+The managed model foundation currently selects Qwen3 4B GGUF Q4_K_M for
+Concept Forge and Illustrious XL v1.0 for Image Forge. Inspect the download
+plan with `./everspark setup --plan`; run `./everspark setup` only when you are
+ready to download both models (roughly 9.5 GB total). The API Format workflow
+is intentionally left as an empty placeholder until the public base workflow
+is added.
 
 ## Repository status
 
@@ -91,6 +99,8 @@ model, Image Forge adapter, and an API Format workflow.
 - [x] Existing v0.1 execution chain migrated across module boundaries
 - [x] Concept Forge Character Subject v1 schema implemented
 - [x] Working Memory v0 persistence migrated
+- [x] Managed default model catalog and installer implemented
+- [x] Image checkpoint discovery and deterministic fallback implemented
 - [x] Character Subject structured state and revision history implemented
 - [ ] Episodic memory implemented
 - [x] WebUI subject, generation, gallery, and runtime workflow implemented

@@ -18,6 +18,8 @@ EverSpark Forge CLI
 Usage:
   ./everspark help
   ./everspark init
+  ./everspark setup [--plan] [--models all|concept|image]
+  ./everspark models <plan|status|download|import-concept>
   ./everspark doctor
   ./everspark image <command>
   ./everspark concept <command>
@@ -71,6 +73,12 @@ case "${module,,}" in
     ;;
   doctor)
     exec bash "${LAUNCHER_DIR}/doctor.sh" "$@"
+    ;;
+  setup)
+    exec bash "${LAUNCHER_DIR}/setup.sh" "$@"
+    ;;
+  models)
+    exec python3 "${REPO_ROOT}/Runtime/Models/model_manager.py" "$@"
     ;;
   image)
     run_handler "Image Forge" "${REPO_ROOT}/ImageForge/cli.sh" "$@"
