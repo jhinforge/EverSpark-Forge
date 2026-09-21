@@ -57,3 +57,10 @@ networking are defaults. R2 and Cloudflare are opt-in integrations.
 No user configuration means local mode. Explicitly enabling an optional
 backend makes all of its required values mandatory. Validation failures must
 stop startup and identify the missing or invalid setting.
+
+## Migration baseline
+
+All migrated implementation code uses
+`gpu-bootstrap@feature/everspark-webui-v1` commit `606640c` as its sole source
+baseline. Other branches remain historical references and are not mixed into
+the new repository.

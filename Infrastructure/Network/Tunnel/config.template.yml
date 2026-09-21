@@ -1,0 +1,7 @@
+tunnel: __CF_TUNNEL_UUID__
+credentials-file: __CF_CREDENTIAL_FILE__
+
+ingress:
+  - hostname: __CF_HOSTNAME__
+    service: http://127.0.0.1:__CF_LOCAL_PORT__
+  - service: http_status:404

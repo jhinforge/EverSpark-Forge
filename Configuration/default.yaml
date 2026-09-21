@@ -11,29 +11,36 @@ storage:
   backend: local
   local:
     root_directory: ./Data
-  r2:
+  rclone:
     enabled: false
-    endpoint_env: R2_ENDPOINT
-    bucket_env: R2_BUCKET
-    access_key_env: R2_ACCESS_KEY_ID
-    secret_key_env: R2_SECRET_ACCESS_KEY
+    config_file: null
+    image_remote: null
+    concept_remote: null
 
 network:
   backend: local
   local:
     host: 127.0.0.1
-    port: 8000
   cloudflare:
     enabled: false
-    tunnel_token_env: CLOUDFLARE_TUNNEL_TOKEN
+    tunnel_uuid: null
+    tunnel_name: null
+    hostname: null
+    credential_source: null
 
-providers:
-  concept:
-    backend: ollama
-    base_url_env: OLLAMA_BASE_URL
-  image:
-    backend: comfyui
-    base_url_env: COMFYUI_BASE_URL
+services:
+  webui:
+    host: 127.0.0.1
+    port: 8780
+  orchestrator:
+    host: 127.0.0.1
+    port: 8765
+  concept_forge:
+    provider: ollama
+    base_url: http://127.0.0.1:11434
+  image_forge:
+    adapter: comfyui
+    base_url: http://127.0.0.1:8188
 
 memory:
   working:

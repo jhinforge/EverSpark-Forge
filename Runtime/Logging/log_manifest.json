@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "defaults": {
+    "max_bytes": 52428800,
+    "keep_files": 5,
+    "max_age_days": 14
+  },
+  "logs": [
+    {
+      "id": "recovery",
+      "label": "Recovery",
+      "filename": "recovery.log",
+      "kind": "structured"
+    },
+    {
+      "id": "bootstrap",
+      "label": "Bootstrap",
+      "filename": "bootstrap.log",
+      "kind": "structured"
+    },
+    {
+      "id": "start-all",
+      "label": "ComfyUI lifecycle",
+      "filename": "start_all.log",
+      "kind": "structured"
+    },
+    {
+      "id": "comfyui",
+      "label": "ComfyUI process",
+      "filename": "comfyui.log",
+      "kind": "raw",
+      "rotation": {
+        "max_bytes": 209715200,
+        "keep_files": 3,
+        "max_age_days": 7
+      }
+    },
+    {
+      "id": "boot-repair",
+      "label": "ComfyUI boot repair",
+      "filename": "boot_repair.log",
+      "kind": "structured"
+    },
+    {
+      "id": "boot-repair-runner",
+      "label": "ComfyUI boot repair runner",
+      "filename": "boot_repair.nohup.log",
+      "kind": "raw"
+    },
+    {
+      "id": "auto-deps",
+      "label": "Dependency repair",
+      "filename": "auto_deps.log",
+      "kind": "structured"
+    },
+    {
+      "id": "ollama",
+      "label": "Ollama lifecycle",
+      "filename": "ollama.log",
+      "kind": "structured"
+    },
+    {
+      "id": "ollama-service",
+      "label": "Ollama process",
+      "filename": "ollama-service.log",
+      "kind": "raw",
+      "rotation": {
+        "max_bytes": 209715200,
+        "keep_files": 3,
+        "max_age_days": 7
+      }
+    },
+    {
+      "id": "orchestrator",
+      "label": "Orchestrator",
+      "filename": "orchestrator.log",
+      "kind": "structured"
+    },
+    {
+      "id": "webui",
+      "label": "EverSpark WebUI",
+      "filename": "webui.log",
+      "kind": "structured"
+    },
+    {
+      "id": "tunnel",
+      "label": "Tunnel lifecycle",
+      "filename": "tunnel.log",
+      "kind": "structured"
+    },
+    {
+      "id": "cloudflared",
+      "label": "Cloudflared process",
+      "filename": "cloudflared.log",
+      "kind": "raw"
+    },
+    {
+      "id": "r2",
+      "label": "R2 lifecycle",
+      "filename": "r2.log",
+      "kind": "structured"
+    },
+    {
+      "id": "rclone",
+      "label": "Rclone process",
+      "filename": "rclone.log",
+      "kind": "raw",
+      "rotation": {
+        "max_bytes": 104857600,
+        "keep_files": 3,
+        "max_age_days": 7
+      }
+    }
+  ]
+}

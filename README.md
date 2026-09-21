@@ -72,6 +72,7 @@ Copy `.env.example` to `.env` only when optional integrations are needed.
 - [x] Public repository created
 - [x] Initial names and module boundaries defined
 - [x] Local-first configuration contract added
+- [x] Configuration, logging, storage, and network foundation migrated
 - [ ] Launcher implemented
 - [ ] Existing execution chain migrated
 - [ ] Concept Forge schema implemented
