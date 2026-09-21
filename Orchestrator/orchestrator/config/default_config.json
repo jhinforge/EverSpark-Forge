@@ -1,0 +1,40 @@
+{
+  "orchestrator": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "request_timeout": 600,
+    "max_batch_size": 20
+  },
+  "concept_forge": {
+    "provider": "ollama",
+    "supported_models": ["illustrious"],
+    "max_model_retries": 3,
+    "providers": {
+      "ollama": {
+        "base_url": "http://127.0.0.1:11434",
+        "model": "gemma3:4b",
+        "timeout": 180
+      }
+    }
+  },
+  "image_forge": {
+    "adapter": "comfyui",
+    "adapters": {
+      "comfyui": {
+        "base_url": "http://127.0.0.1:8188",
+        "timeout": 60
+      }
+    }
+  },
+  "memory": {
+    "database": "Data/Memory/everspark.db",
+    "default_session_id": "main",
+    "max_history_messages": 20
+  },
+  "workflow": {
+    "template": "ImageForge/Workflows/base_workflow_api.json",
+    "positive_prompt_node": "12",
+    "negative_prompt_node": "7",
+    "seed_node": "31"
+  }
+}

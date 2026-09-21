@@ -41,15 +41,23 @@ services:
   concept_forge:
     provider: ollama
     base_url: http://127.0.0.1:11434
+    model: gemma3:4b
   image_forge:
     adapter: comfyui
     base_url: http://127.0.0.1:8188
 
 memory:
+  database: ./Data/Memory/everspark.db
   working:
     enabled: true
-    max_turns: 12
+    max_history_messages: 20
   episodic:
-    enabled: true
+    enabled: false
   state:
-    enabled: true
+    enabled: false
+
+workflow:
+  template: ./ImageForge/Workflows/base_workflow_api.json
+  positive_prompt_node: "12"
+  negative_prompt_node: "7"
+  seed_node: "31"

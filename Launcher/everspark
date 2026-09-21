@@ -72,19 +72,19 @@ case "${module,,}" in
   doctor)
     exec bash "${LAUNCHER_DIR}/doctor.sh" "$@"
     ;;
-  image|image-forge|imageforge)
+  image)
     run_handler "Image Forge" "${REPO_ROOT}/ImageForge/cli.sh" "$@"
     ;;
-  concept|concept-forge|conceptforge)
+  concept)
     run_handler "Concept Forge" "${REPO_ROOT}/ConceptForge/cli.sh" "$@"
     ;;
-  orchestrator|forge-orchestrator)
+  orchestrator)
     run_handler "Orchestrator" "${REPO_ROOT}/Orchestrator/cli.sh" "$@"
     ;;
-  webui|web)
+  webui)
     run_handler "WebUI" "${REPO_ROOT}/WebUI/cli.sh" "$@"
     ;;
-  logs|logging)
+  logs)
     run_handler "Runtime Logging" "${REPO_ROOT}/Runtime/Logging/cli.sh" "$@"
     ;;
   *)

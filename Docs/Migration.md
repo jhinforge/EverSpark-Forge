@@ -51,3 +51,19 @@ and `webui`) without exposing legacy backend names as command aliases. `init`
 creates local runtime directories, while `doctor` validates the base runtime
 and fails when an explicitly enabled rclone or Cloudflare backend is
 incomplete.
+
+## Third migration batch
+
+| Source | Destination |
+| --- | --- |
+| `forge-orchestrator/forge_orchestrator/core` | `Orchestrator/orchestrator/core` |
+| `forge-orchestrator/forge_orchestrator/core/context_store.py` | `Memory/everspark_memory/store.py` |
+| `clients/ollama_client.py` | `ConceptForge/concept_forge/providers/ollama.py` |
+| `clients/comfyui_client.py` | `ImageForge/image_forge/adapters/comfyui.py` |
+| `workflow/workflow_manager.py` | `ImageForge/image_forge/workflow/manager.py` |
+
+The HTTP context routes are now `/memory/history` and `/memory/clear`. The old
+personal workflow JSON was not copied because it referenced private runtime
+assets and custom nodes. `ImageForge/Workflows/base_workflow_api.json` is a
+tracked empty placeholder and fails with an actionable message until the user
+selects a workflow.

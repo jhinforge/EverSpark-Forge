@@ -13,7 +13,10 @@ if grep -Eq 'comfy|ollama' <<< "$help_output"; then
   exit 1
 fi
 
-for legacy_alias in comfy comfyui ollama; do
+for legacy_alias in \
+  comfy comfyui ollama \
+  image-forge imageforge concept-forge conceptforge \
+  forge-orchestrator web logging; do
   if bash "${REPO_ROOT}/everspark" "$legacy_alias" >"${TEST_ROOT}/${legacy_alias}.out" 2>&1; then
     printf 'legacy alias unexpectedly succeeded: %s\n' "$legacy_alias" >&2
     exit 1
@@ -41,6 +44,9 @@ install_root="${TEST_ROOT}/install"
 EVERSPARK_CLI_PATH="${install_root}/everspark" bash "${REPO_ROOT}/Launcher/install.sh" >/dev/null
 installed_help="$(bash "${install_root}/everspark" help)"
 grep -q 'EverSpark Forge CLI' <<< "$installed_help"
+
+orchestrator_help="$(bash "${REPO_ROOT}/everspark" orchestrator help)"
+grep -q 'everspark orchestrator start' <<< "$orchestrator_help"
 
 if EVERSPARK_STORAGE_BACKEND=rclone EVERSPARK_NETWORK_BACKEND=local \
   RCLONE_CONFIG= IMAGE_FORGE_RCLONE_REMOTE= CONCEPT_FORGE_RCLONE_REMOTE= \

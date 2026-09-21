@@ -7,8 +7,8 @@ execution backend.
 
 > [!IMPORTANT]
 > This repository is currently being initialized. The one-command launcher is
-> available for initialization and diagnostics, but the execution modules are
-> still being migrated and this is not yet a finished release.
+> available for initialization, diagnostics, and the migrated Orchestrator,
+> but this is not yet a finished release.
 
 ## Product goal
 
@@ -76,9 +76,9 @@ cd EverSpark-Forge
 ./everspark doctor
 ```
 
-No `.env` file is needed for the default local mode. Business-module startup
-commands will become active as Image Forge, Concept Forge, Orchestrator, and
-WebUI are migrated in the next batches.
+No `.env` file is needed for the default local mode. The migrated Orchestrator
+can be started with `./everspark orchestrator start`; generation also requires
+the selected Ollama model, ComfyUI environment, and an API Format workflow.
 
 ## Repository status
 
@@ -87,9 +87,10 @@ WebUI are migrated in the next batches.
 - [x] Local-first configuration contract added
 - [x] Configuration, logging, storage, and network foundation migrated
 - [x] Launcher foundation, initialization, and diagnostics implemented
-- [ ] Existing execution chain migrated
+- [x] Existing v0.1 execution chain migrated across module boundaries
 - [ ] Concept Forge schema implemented
-- [ ] Memory module implemented
+- [x] Working Memory v0 persistence migrated
+- [ ] Episodic and structured state memory implemented
 - [ ] WebUI conversation workflow implemented
 - [ ] First public release
 
