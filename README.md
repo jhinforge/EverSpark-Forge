@@ -82,9 +82,11 @@ ComfyUI and Ollama runtimes, downloads the default models, imports Concept
 Forge, and connects the managed Image Forge model directory. `start` launches
 Concept Forge, Image Forge, Orchestrator, and WebUI in dependency order.
 
-Open `http://127.0.0.1:8780` locally. On a remote Pod, keep the default
-localhost binding and use an SSH/Jupyter port forward, or explicitly set the
-WebUI host in `.env` when public exposure is intentional.
+Open `http://127.0.0.1:8780` locally. On a Vast.ai Pod, `start` reads the
+platform-provided public IP and mapped SSH port and prints the complete tunnel
+command to run on your local computer. Use `./everspark access` to print it
+again. On other Pod platforms, set `EVERSPARK_SSH_HOST` and
+`EVERSPARK_SSH_PORT`; the WebUI stays bound to localhost by default.
 
 The managed model foundation currently selects Qwen3 4B GGUF Q4_K_M for
 Concept Forge and Illustrious XL v1.0 for Image Forge. Inspect the download

@@ -18,3 +18,8 @@ On a single GPU, Concept Forge sets `OLLAMA_KEEP_ALIVE=0`. Qwen is unloaded
 after its response so Image Forge can reclaim GPU memory before diffusion. On
 two or more GPUs, the existing assignment policy defaults Image Forge to GPU 0
 and Concept Forge to GPU 1.
+
+`access_info.py` converts the platform's connection metadata into a safe SSH
+forwarding command. It recognizes Vast.ai's `PUBLIC_IPADDR` and
+`VAST_TCP_PORT_22`, supports explicit cross-platform overrides, and never
+guesses missing public connection details.

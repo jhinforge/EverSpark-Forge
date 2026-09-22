@@ -38,6 +38,18 @@ Managed services share one lifecycle entry point:
 ./everspark stop
 ```
 
+After all services (or WebUI alone) start, the launcher prints local access
+instructions. On Vast.ai it uses `PUBLIC_IPADDR` and `VAST_TCP_PORT_22` to
+build the SSH tunnel command automatically. Print the instructions again with:
+
+```bash
+./everspark access
+```
+
+Other platforms can provide `EVERSPARK_SSH_HOST` and `EVERSPARK_SSH_PORT`.
+The browser-side port defaults to 8080 and can be changed with
+`EVERSPARK_LOCAL_WEBUI_PORT`.
+
 EverSpark does not stop a healthy external service that it did not start.
 Managed PID files include the Linux process start time so stale/reused PIDs are
 not terminated accidentally.

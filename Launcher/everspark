@@ -23,6 +23,7 @@ Usage:
   ./everspark stop [all|concept|image|orchestrator|webui]
   ./everspark restart [all|concept|image|orchestrator|webui]
   ./everspark status [all|concept|image|orchestrator|webui]
+  ./everspark access [--json]
   ./everspark models <plan|status|download|import-concept>
   ./everspark doctor
   ./everspark image <command>
@@ -84,9 +85,19 @@ case "${module,,}" in
   models)
     exec python3 "${REPO_ROOT}/Runtime/Models/model_manager.py" "$@"
     ;;
-  start|stop|restart|status)
+  start|restart)
+    target="${1:-all}"
+    python3 "${REPO_ROOT}/Runtime/Managed/runtime_manager.py" "${module,,}" "$target"
+    if [ "$target" = "all" ] || [ "$target" = "webui" ]; then
+      python3 "${REPO_ROOT}/Runtime/Managed/access_info.py"
+    fi
+    ;;
+  stop|status)
     exec python3 "${REPO_ROOT}/Runtime/Managed/runtime_manager.py" \
       "${module,,}" "${1:-all}"
+    ;;
+  access)
+    exec python3 "${REPO_ROOT}/Runtime/Managed/access_info.py" "$@"
     ;;
   image)
     run_handler "Image Forge" "${REPO_ROOT}/ImageForge/cli.sh" "$@"

@@ -9,6 +9,7 @@ trap 'rm -rf "$TEST_ROOT"' EXIT
 help_output="$(bash "${REPO_ROOT}/everspark" help)"
 grep -q './everspark image' <<< "$help_output"
 grep -q './everspark start' <<< "$help_output"
+grep -q './everspark access' <<< "$help_output"
 if grep -Eq 'comfy|ollama' <<< "$help_output"; then
   printf 'legacy backend alias leaked into CLI help\n' >&2
   exit 1
@@ -34,6 +35,10 @@ grep -q '"service": "image"' <<< "$image_status"
 runtime_status="$(bash "${REPO_ROOT}/everspark" status)"
 grep -q '"service": "concept"' <<< "$runtime_status"
 grep -q '"service": "webui"' <<< "$runtime_status"
+
+access_output="$(PUBLIC_IPADDR=180.189.55.38 VAST_TCP_PORT_22=40061 \
+  bash "${REPO_ROOT}/everspark" access)"
+grep -q 'ssh -p 40061 -L 8080:127.0.0.1:8780 root@180.189.55.38' <<< "$access_output"
 
 setup_plan="$(bash "${REPO_ROOT}/everspark" setup --plan --skip-models)"
 grep -q 'ComfyUI: v0.37.0' <<< "$setup_plan"
