@@ -207,6 +207,39 @@
             <button class="ghost-button" id="refreshRuntimeButton" type="button">Run checks</button>
           </div>
           <div class="runtime-grid" id="runtimeGrid"></div>
+          <div class="storage-panel">
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">OPTIONAL R2 STORAGE</p>
+                <h3>Remote model library</h3>
+                <p class="section-copy" id="storageSummary">Remote storage is disabled in local mode.</p>
+              </div>
+              <button class="ghost-button" id="refreshStorageButton" type="button">Scan R2</button>
+            </div>
+            <div class="storage-resource-grid" id="storageResourceGrid">
+              <div class="storage-resource">
+                <span>Checkpoint</span>
+                <span class="select-wrap"><select id="remoteCheckpointSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="checkpoint">Download</button>
+              </div>
+              <div class="storage-resource">
+                <span>Diffusion model</span>
+                <span class="select-wrap"><select id="remoteDiffusionSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="diffusion_model">Download</button>
+              </div>
+              <div class="storage-resource">
+                <span>LoRA</span>
+                <span class="select-wrap"><select id="remoteLoraSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="lora">Download</button>
+              </div>
+              <div class="storage-resource">
+                <span>Concept LLM</span>
+                <span class="select-wrap"><select id="remoteConceptSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="concept_model">Download</button>
+              </div>
+            </div>
+            <p class="storage-job" id="storageJobStatus"></p>
+          </div>
           <div class="setup-panel">
             <div>
               <p class="section-kicker">FIRST RUN</p>

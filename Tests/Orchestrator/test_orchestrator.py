@@ -471,6 +471,20 @@ class APITests(unittest.TestCase):
                 "defaults": {},
             }
 
+        def storage_resources(self):
+            return {
+                "enabled": True,
+                "backend": "rclone",
+                "image": {"checkpoint": [], "diffusion_model": [], "lora": []},
+                "concept": {"models": []},
+            }
+
+        def start_storage_pull(self, kind, name):
+            return {"job_id": "job-1", "kind": kind, "name": name, "status": "queued"}
+
+        def storage_job(self, job_id=""):
+            return {"job_id": job_id or "job-1", "status": "completed"}
+
         def save_subject(self, document):
             self.document = document
             return document
@@ -551,6 +565,19 @@ class APITests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         self.assertEqual(current["document"]["subject_id"], "subject-a")
+
+    def test_storage_routes_use_the_infrastructure_boundary(self) -> None:
+        status, resources = self._request("/storage/resources")
+        self.assertEqual(status, 200)
+        self.assertTrue(resources["enabled"])
+        status, started = self._request(
+            "/storage/pull", {"kind": "lora", "name": "style.safetensors"}
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(started["job"]["kind"], "lora")
+        status, job = self._request("/storage/jobs?job_id=job-1")
+        self.assertEqual(status, 200)
+        self.assertEqual(job["job"]["status"], "completed")
 
     def test_subject_create_update_compile_and_read_routes(self) -> None:
         document = new_subject("subject-a", "Subject A")

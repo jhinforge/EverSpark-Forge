@@ -14,6 +14,9 @@ from everspark_memory import SubjectRevisionConflictError
 from ..config.config import ConfigError, load_config
 from .orchestrator import BusyError, Orchestrator, SubjectNotFoundError
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "Infrastructure" / "Storage"))
+from r2_manager import StorageError  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "Runtime" / "Logging"))
 
@@ -56,6 +59,20 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send(
                 200,
                 {"ok": True, **self.server.orchestrator.resources()},
+            )
+        elif parsed.path == "/storage/resources":
+            try:
+                self._send(
+                    200,
+                    {"ok": True, **self.server.orchestrator.storage_resources()},
+                )
+            except StorageError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/storage/jobs":
+            job_id = parse_qs(parsed.query).get("job_id", [""])[0]
+            self._send(
+                200,
+                {"ok": True, "job": self.server.orchestrator.storage_job(job_id)},
             )
         elif parsed.path == "/memory/history":
             session_id = parse_qs(parsed.query).get("session_id", [""])[0]
@@ -137,6 +154,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/subjects/generate",
             "/subjects/update",
             "/subjects/compile",
+            "/storage/pull",
         }:
             self._send(404, {"ok": False, "error": "Not found"})
             return
@@ -181,6 +199,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                     raise ValueError("changes must be a JSON object")
                 updated = self.server.orchestrator.update_subject(subject_id, changes)
                 self._send(200, {"ok": True, "document": updated})
+            elif request_path == "/storage/pull":
+                job = self.server.orchestrator.start_storage_pull(
+                    str(payload.get("kind", "")), str(payload.get("name", ""))
+                )
+                self._send(202, {"ok": True, "job": job})
             else:
                 subject_id = str(payload.get("subject_id", ""))
                 compiled = self.server.orchestrator.compile_subject(subject_id)
@@ -202,6 +225,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send(409, {"ok": False, "error": str(exc)})
         except SubjectNotFoundError as exc:
             self._send(404, {"ok": False, "error": str(exc)})
+        except StorageError as exc:
+            self._send(400, {"ok": False, "error": str(exc)})
         except (ValueError, SubjectValidationError, json.JSONDecodeError) as exc:
             self._log(
                 "warning",

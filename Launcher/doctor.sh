@@ -72,6 +72,22 @@ case "$storage_backend" in
       core_error doctor.storage.config "rclone config file does not exist" "path=$RCLONE_CONFIG"
       errors=$((errors + 1))
     fi
+    if core_command_exists rclone && [ -f "${RCLONE_CONFIG:-}" ]; then
+      for remote_variable in IMAGE_FORGE_RCLONE_REMOTE CONCEPT_FORGE_RCLONE_REMOTE; do
+        remote_path="${!remote_variable:-}"
+        if [ -z "$remote_path" ]; then
+          continue
+        fi
+        if rclone lsf "$remote_path" --max-depth 1 --config "$RCLONE_CONFIG" >/dev/null 2>&1; then
+          core_ok doctor.storage.remote "Remote model root is accessible" \
+            "variable=$remote_variable" "remote=$remote_path"
+        else
+          core_error doctor.storage.remote "Remote model root is not accessible" \
+            "variable=$remote_variable" "remote=$remote_path"
+          errors=$((errors + 1))
+        fi
+      done
+    fi
     ;;
   *)
     core_error doctor.storage.backend "Unknown storage backend" "backend=$storage_backend"

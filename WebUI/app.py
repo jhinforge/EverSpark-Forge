@@ -160,6 +160,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/resources": lambda: self._proxy_orchestrator_get(
                 "/resources", parsed.query
             ),
+            "/api/storage/resources": lambda: self._proxy_orchestrator_get(
+                "/storage/resources", parsed.query
+            ),
+            "/api/storage/jobs": lambda: self._proxy_orchestrator_get(
+                "/storage/jobs", parsed.query
+            ),
             "/api/subjects": lambda: self._proxy_orchestrator_get(
                 "/subjects", parsed.query
             ),
@@ -200,6 +206,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._conversation(payload)
             elif path == "/api/conversation/clear":
                 self._proxy_orchestrator_post("/memory/clear", payload)
+            elif path == "/api/storage/pull":
+                self._proxy_orchestrator_post("/storage/pull", payload)
             elif path in upstream_paths:
                 self._proxy_orchestrator_post(upstream_paths[path], payload)
             else:

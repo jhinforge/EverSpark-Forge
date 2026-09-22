@@ -3,6 +3,7 @@ const state = {
   selectedSubject: null,
   mode: "discuss",
   resources: { workflows: [], checkpoints: [], loras: [], llms: [], defaults: {} },
+  remoteStorage: null,
   selectedLoras: [],
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
@@ -47,6 +48,12 @@ const elements = {
   loraSelect: $("#loraSelect"),
   addLoraButton: $("#addLoraButton"),
   selectedLoras: $("#selectedLoras"),
+  storageSummary: $("#storageSummary"),
+  storageJobStatus: $("#storageJobStatus"),
+  remoteCheckpointSelect: $("#remoteCheckpointSelect"),
+  remoteDiffusionSelect: $("#remoteDiffusionSelect"),
+  remoteLoraSelect: $("#remoteLoraSelect"),
+  remoteConceptSelect: $("#remoteConceptSelect"),
 };
 
 const viewCopy = {
@@ -217,13 +224,107 @@ async function loadResources() {
   }
 }
 
+function fillRemoteSelect(select, items) {
+  select.replaceChildren();
+  if (!items.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No remote models found";
+    select.appendChild(option);
+    select.disabled = true;
+    return;
+  }
+  for (const item of items) {
+    const option = document.createElement("option");
+    option.value = item.name;
+    option.textContent = `${item.name}${item.installed ? " · installed" : ""}`;
+    option.dataset.installed = item.installed ? "true" : "false";
+    select.appendChild(option);
+  }
+  select.disabled = false;
+}
+
+function storageSelect(kind) {
+  return {
+    checkpoint: elements.remoteCheckpointSelect,
+    diffusion_model: elements.remoteDiffusionSelect,
+    lora: elements.remoteLoraSelect,
+    concept_model: elements.remoteConceptSelect,
+  }[kind];
+}
+
+function updateStorageButtons() {
+  $$(".storage-pull-button").forEach((button) => {
+    const selected = storageSelect(button.dataset.kind)?.selectedOptions?.[0];
+    const installed = selected?.dataset.installed === "true";
+    button.disabled = !state.remoteStorage?.enabled || !selected?.value || installed;
+    button.textContent = installed ? "Installed" : "Download";
+  });
+}
+
+async function loadRemoteStorage() {
+  try {
+    const data = await api("/api/storage/resources");
+    state.remoteStorage = data;
+    const image = data.image || {};
+    fillRemoteSelect(elements.remoteCheckpointSelect, image.checkpoint || []);
+    fillRemoteSelect(elements.remoteDiffusionSelect, image.diffusion_model || []);
+    fillRemoteSelect(elements.remoteLoraSelect, image.lora || []);
+    fillRemoteSelect(elements.remoteConceptSelect, data.concept?.models || []);
+    elements.storageSummary.textContent = data.enabled
+      ? "R2 is connected. Downloads are selective and never restore the legacy ComfyUI runtime."
+      : "Remote storage is disabled in local mode. Configure the rclone backend to enable it.";
+    updateStorageButtons();
+  } catch (error) {
+    state.remoteStorage = null;
+    elements.storageSummary.textContent = error.message;
+    $$(".storage-pull-button").forEach((button) => { button.disabled = true; });
+  }
+}
+
+async function pollStorageJob(jobId) {
+  while (true) {
+    const data = await api(`/api/storage/jobs?job_id=${encodeURIComponent(jobId)}`);
+    const job = data.job;
+    if (!job) throw new Error("Remote download job disappeared");
+    const progress = job.progress || {};
+    elements.storageJobStatus.textContent = `${job.name}: ${job.status} ${progress.completed || 0}/${progress.total || 0}`;
+    if (job.status === "completed") {
+      await Promise.all([loadRemoteStorage(), loadResources()]);
+      return;
+    }
+    if (job.status === "failed") throw new Error(job.error || "Remote download failed");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
+async function pullRemoteResource(button) {
+  const kind = button.dataset.kind;
+  const name = storageSelect(kind)?.value;
+  if (!name) return;
+  $$(".storage-pull-button").forEach((item) => { item.disabled = true; });
+  elements.storageJobStatus.textContent = `${name}: queued`;
+  try {
+    const data = await api("/api/storage/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, name }),
+    });
+    await pollStorageJob(data.job.job_id);
+  } catch (error) {
+    elements.storageJobStatus.textContent = error.message;
+    showNotice(error.message);
+    updateStorageButtons();
+  }
+}
+
 function setView(name) {
   $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
   $$("[data-view-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.viewPanel === name));
   $("#viewEyebrow").textContent = viewCopy[name][0];
   $("#viewTitle").textContent = viewCopy[name][1];
   if (name === "history") loadHistory();
-  if (name === "runtime") loadRuntime();
+  if (name === "runtime") Promise.all([loadRuntime(), loadRemoteStorage()]);
 }
 
 function traitValues(document) {
@@ -702,10 +803,14 @@ function bindEvents() {
   });
   $("#refreshButton").addEventListener("click", async () => {
     hideNotice();
-    await Promise.all([loadSubjects(), loadRuntime(), loadResources()]);
+    await Promise.all([loadSubjects(), loadRuntime(), loadResources(), loadRemoteStorage()]);
   });
   $("#refreshHistoryButton").addEventListener("click", loadHistory);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);
+  $("#refreshStorageButton").addEventListener("click", loadRemoteStorage);
+  $$(".storage-pull-button").forEach((button) => button.addEventListener("click", () => pullRemoteResource(button)));
+  [elements.remoteCheckpointSelect, elements.remoteDiffusionSelect, elements.remoteLoraSelect, elements.remoteConceptSelect]
+    .forEach((select) => select.addEventListener("change", updateStorageButtons));
   $("#dismissNotice").addEventListener("click", hideNotice);
   $("#closeImageViewer").addEventListener("click", () => elements.imageViewer.close());
   elements.imageViewer.addEventListener("click", (event) => {
@@ -717,7 +822,7 @@ async function initialize() {
   bindEvents();
   setMode("discuss");
   renderSelectedSubject();
-  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadResources()]);
+  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadResources(), loadRemoteStorage()]);
   setInterval(loadRuntime, 20000);
 }
 

@@ -134,6 +134,8 @@ cat >"${COMFY_ROOT}/extra_model_paths.yaml" <<EOF
 everspark:
   base_path: ${REPO_ROOT}/Data/Models/ImageForge
   checkpoints: checkpoints
+  diffusion_models: diffusion_models
+  loras: loras
 EOF
 
 core_ok runtime.comfy.ready "Managed ComfyUI runtime is ready" \

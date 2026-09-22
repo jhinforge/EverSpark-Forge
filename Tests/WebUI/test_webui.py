@@ -110,6 +110,34 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+        elif parsed.path == "/storage/resources":
+            self._json(
+                200,
+                {
+                    "ok": True,
+                    "enabled": True,
+                    "backend": "rclone",
+                    "image": {
+                        "checkpoint": [{"name": "remote.safetensors", "installed": False}],
+                        "diffusion_model": [],
+                        "lora": [],
+                    },
+                    "concept": {"models": [{"name": "gemma3test:latest", "installed": False}]},
+                },
+            )
+        elif parsed.path == "/storage/jobs":
+            self._json(
+                200,
+                {
+                    "ok": True,
+                    "job": {
+                        "job_id": query.get("job_id", [""])[0],
+                        "name": "remote.safetensors",
+                        "status": "completed",
+                        "progress": {"completed": 1, "total": 1},
+                    },
+                },
+            )
         elif parsed.path == "/subjects" and query.get("subject_id"):
             self._json(200, {"ok": True, "document": self.subject()})
         elif parsed.path == "/subjects":
@@ -220,6 +248,19 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
         elif self.path == "/subjects/generate":
             type(self).revision += 1
             self._json(201, {"ok": True, "document": self.subject()})
+        elif self.path == "/storage/pull":
+            self._json(
+                202,
+                {
+                    "ok": True,
+                    "job": {
+                        "job_id": "storage-job-1",
+                        "kind": payload.get("kind"),
+                        "name": payload.get("name"),
+                        "status": "queued",
+                    },
+                },
+            )
         else:
             self._json(404, {"ok": False, "error": "Not found"})
 
@@ -340,6 +381,17 @@ class WebUIIntegrationTests(unittest.TestCase):
             },
         )
         self.assertEqual(MockUpstreamHandler.received_task["selection"], selection)
+
+    def test_remote_storage_routes_are_proxied(self) -> None:
+        status, resources = self.request_json("/api/storage/resources")
+        self.assertEqual(status, 200)
+        self.assertEqual(resources["image"]["checkpoint"][0]["name"], "remote.safetensors")
+        status, started = self.request_json(
+            "/api/storage/pull",
+            {"kind": "checkpoint", "name": "remote.safetensors"},
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(started["job"]["job_id"], "storage-job-1")
 
     def test_discussion_and_current_subject_follow_the_session(self) -> None:
         _, discussed = self.request_json(

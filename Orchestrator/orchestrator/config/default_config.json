@@ -27,6 +27,16 @@
       }
     }
   },
+  "storage": {
+    "backend": "local",
+    "rclone": {
+      "enabled": false,
+      "config_file": "",
+      "image_remote": "",
+      "concept_remote": "",
+      "timeout": 60
+    }
+  },
   "memory": {
     "database": "Data/Memory/everspark.db",
     "default_session_id": "main",

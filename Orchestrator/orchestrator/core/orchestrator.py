@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import threading
+import sys
+from pathlib import Path
 from typing import Any
 
 from concept_forge.subjects import compile_subject, update_subject, validate_subject
@@ -8,6 +10,10 @@ from everspark_memory import SQLiteMemoryStore
 
 from .task_runner import TaskRunner
 from .text import normalize_unicode
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Storage"))
+from r2_manager import R2StorageManager  # noqa: E402
 
 
 class BusyError(RuntimeError):
@@ -21,6 +27,7 @@ class SubjectNotFoundError(LookupError):
 class Orchestrator:
     def __init__(self, config: dict[str, Any]):
         self.runner = TaskRunner(config)
+        self.storage = R2StorageManager(config)
         memory_config = config["memory"]
         self.memory = SQLiteMemoryStore(
             memory_config["database"],
@@ -190,6 +197,15 @@ class Orchestrator:
 
     def resources(self) -> dict[str, Any]:
         return self.runner.resources()
+
+    def storage_resources(self) -> dict[str, Any]:
+        return self.storage.resources()
+
+    def start_storage_pull(self, kind: str, name: str) -> dict[str, Any]:
+        return self.storage.start_pull(kind, name)
+
+    def storage_job(self, job_id: str = "") -> dict[str, Any] | None:
+        return self.storage.job(job_id)
 
     @staticmethod
     def _normalize_selection(

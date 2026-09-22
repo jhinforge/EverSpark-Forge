@@ -38,6 +38,18 @@ the tunnel port must match the EverSpark WebUI port (8780 by default). If
 `rclone.conf` is present, it is validated and staged but does not enable a
 remote storage policy automatically.
 
+To enable selective remote model downloads after import, add the following to
+the private environment file using paths from the user's own rclone remote:
+
+```text
+EVERSPARK_STORAGE_BACKEND=rclone
+IMAGE_FORGE_RCLONE_REMOTE=remote:path/models_cold
+CONCEPT_FORGE_RCLONE_REMOTE=remote:path/.ollama/models
+```
+
+The Runtime page then scans Checkpoints, diffusion models, LoRAs, and Ollama
+manifests. Ollama identity files outside `models/` are deliberately ignored.
+
 Private files are normalized to ignored runtime locations:
 
 | Input | Private destination |

@@ -97,6 +97,13 @@ The input files remain untouched. Cloudflare joins the managed lifecycle only
 when its backend is enabled; an imported rclone connection is staged without
 activating an as-yet-unselected remote synchronization policy.
 
+When rclone storage is enabled, the Runtime page can scan and selectively
+download remote Checkpoints, diffusion models, LoRAs, and Ollama models. Image
+resources are written only into `Data/Models/ImageForge`; Concept resources are
+restored from Ollama manifests and content-addressed blobs into
+`Data/Models/ConceptForge/Ollama`. Legacy ComfyUI program files and Ollama
+identity keys are never restored.
+
 Open `http://127.0.0.1:8780` locally. On a Vast.ai Pod, `start` reads the
 platform-provided public IP and mapped SSH port and prints the complete tunnel
 command to run on your local computer. Use `./everspark access` to print it

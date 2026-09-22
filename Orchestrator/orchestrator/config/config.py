@@ -66,6 +66,7 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         "orchestrator",
         "concept_forge",
         "image_forge",
+        "storage",
         "memory",
         "workflow",
     ):
@@ -105,6 +106,22 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         ("image_forge", "adapters", "comfyui", "base_url"),
     )
     _environment_override(
+        config, "EVERSPARK_STORAGE_BACKEND", ("storage", "backend")
+    )
+    _environment_override(
+        config, "RCLONE_CONFIG", ("storage", "rclone", "config_file")
+    )
+    _environment_override(
+        config,
+        "IMAGE_FORGE_RCLONE_REMOTE",
+        ("storage", "rclone", "image_remote"),
+    )
+    _environment_override(
+        config,
+        "CONCEPT_FORGE_RCLONE_REMOTE",
+        ("storage", "rclone", "concept_remote"),
+    )
+    _environment_override(
         config, "EVERSPARK_MEMORY_DATABASE", ("memory", "database")
     )
     _environment_override(
@@ -125,5 +142,10 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     if not workflow_directory.is_absolute():
         workflow_directory = REPO_ROOT / workflow_directory
     config["workflow"]["directory"] = str(workflow_directory.resolve())
+    storage_backend = str(config["storage"].get("backend", "local")).lower()
+    if storage_backend not in {"local", "rclone"}:
+        raise ConfigError(f"Unsupported storage backend: {storage_backend}")
+    config["storage"]["backend"] = storage_backend
+    config["storage"]["rclone"]["enabled"] = storage_backend == "rclone"
     config["_config_path"] = str(selected)
     return config

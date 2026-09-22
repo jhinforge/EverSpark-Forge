@@ -31,6 +31,8 @@ configuration file.
 - Display current results and recent Image Forge history.
 - Show local Orchestrator, Image Forge, and logging readiness.
 - Explain missing first-run services without requiring R2 or Cloudflare.
+- Scan optional R2 model roots and start selective background downloads without
+  blocking generation requests.
 
 ## Boundaries
 

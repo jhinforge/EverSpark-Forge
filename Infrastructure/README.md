@@ -10,9 +10,24 @@ EverSpark session.
 branch. Image Forge and Concept Forge own their remote paths and transfer
 policies; Infrastructure only provides connection and transfer primitives.
 
+`Storage/r2_manager.py` adds the managed resource layer used by Orchestrator
+and WebUI. It scans flat Image Forge model directories, parses Ollama manifests,
+and downloads only the selected model. It never restores a complete legacy
+ComfyUI directory or copies Ollama identity keys.
+
 R2 is enabled by selecting an rclone-backed storage mode and supplying an
 existing rclone configuration. Missing or invalid remote configuration is a
 startup error after the backend has been explicitly enabled.
+
+The two remote values point to resource roots, not buckets in general:
+
+```text
+IMAGE_FORGE_RCLONE_REMOTE=remote:path/models_cold
+CONCEPT_FORGE_RCLONE_REMOTE=remote:path/.ollama/models
+```
+
+Image Forge expects `checkpoints`, `diffusion_models`, and `loras` below its
+root. Concept Forge expects standard Ollama `blobs` and `manifests` directories.
 
 ## Network
 
