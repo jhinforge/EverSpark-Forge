@@ -9,6 +9,13 @@ PLAN_ONLY=false
 SKIP_IMPORT=false
 SKIP_MODELS=false
 
+if [ -f "${REPO_ROOT}/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/.env"
+  set +a
+fi
+
 usage() {
   cat <<'EOF'
 Usage: ./everspark setup [--plan] [--models all|concept|image]
@@ -48,6 +55,13 @@ if [ "$PLAN_ONLY" = true ]; then
 fi
 
 bash "${LAUNCHER_DIR}/init.sh"
+
+if [ "${EVERSPARK_NETWORK_BACKEND:-local}" = "cloudflare" ]; then
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/Infrastructure/Network/cloudflared.sh"
+  core_cloudflared_install
+fi
+
 bash "${REPO_ROOT}/Runtime/Managed/install_runtime.sh"
 
 if [ "$SKIP_MODELS" = true ]; then

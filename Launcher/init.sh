@@ -9,6 +9,13 @@ source "${REPO_ROOT}/Runtime/Logging/log.sh"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/Shared/Shell/common.sh"
 
+if [ -f "${REPO_ROOT}/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/.env"
+  set +a
+fi
+
 LOG_DIR="${EVERSPARK_LOG_DIR:-${REPO_ROOT}/Data/Logs}"
 core_log_init launcher.init "${LOG_DIR}/launcher.log"
 
@@ -18,6 +25,9 @@ directories=(
   "${REPO_ROOT}/Data/Memory"
   "${REPO_ROOT}/Data/Runtime"
   "${REPO_ROOT}/Data/Runtime/Services"
+  "${REPO_ROOT}/Data/Configuration/cloudflare"
+  "${REPO_ROOT}/Data/Configuration/rclone"
+  "${REPO_ROOT}/Data/Cloudflare"
   "${REPO_ROOT}/Data/Models/ConceptForge"
   "${REPO_ROOT}/Data/Models/ImageForge/checkpoints"
 )

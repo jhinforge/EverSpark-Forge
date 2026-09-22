@@ -5,7 +5,8 @@ Unit, integration, startup, and migration verification.
 - `Runtime/Logging` verifies structured logs and retention.
 - `Runtime/Managed` verifies safe PID identity and managed process lifecycle.
 - `Runtime/Hardware` and `Runtime/System` verify host discovery.
-- `Infrastructure` verifies local-mode defaults.
+- `Infrastructure` verifies local defaults and the managed Cloudflare lifecycle.
+- `Configuration` verifies private configuration import, validation, and normalization.
 - `Launcher` verifies routing, initialization, diagnostics, and installation.
 - `Orchestrator` verifies configuration, Unicode handling, batching, workflows,
   and the local HTTP API.

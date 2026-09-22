@@ -18,7 +18,11 @@ source "${REPO_ROOT}/Shared/Shell/common.sh"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/Runtime/System/apt.sh"
 
-core_log_init runtime.install "${REPO_ROOT}/Data/Logs/runtime-install.log"
+LOG_DIR="${EVERSPARK_LOG_DIR:-${REPO_ROOT}/Data/Logs}"
+if [[ "$LOG_DIR" != /* ]]; then
+  LOG_DIR="${REPO_ROOT}/${LOG_DIR#./}"
+fi
+core_log_init runtime.install "${LOG_DIR}/runtime-install.log"
 
 if ! [[ "$COMFY_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   core_die runtime.version.invalid "Invalid EVERSPARK_COMFYUI_VERSION" \

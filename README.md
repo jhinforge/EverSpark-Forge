@@ -82,6 +82,21 @@ ComfyUI and Ollama runtimes, downloads the default models, imports Concept
 Forge, and connects the managed Image Forge model directory. `start` launches
 Concept Forge, Image Forge, Orchestrator, and WebUI in dependency order.
 
+Users with existing private configuration can upload `.env` or `env.txt`, a
+Cloudflare `<UUID>.json` credential, and an optional `rclone.conf` to one
+directory, then normalize and validate them before setup:
+
+```bash
+./everspark configure --from /root
+./everspark setup
+./everspark doctor
+./everspark start
+```
+
+The input files remain untouched. Cloudflare joins the managed lifecycle only
+when its backend is enabled; an imported rclone connection is staged without
+activating an as-yet-unselected remote synchronization policy.
+
 Open `http://127.0.0.1:8780` locally. On a Vast.ai Pod, `start` reads the
 platform-provided public IP and mapped SSH port and prints the complete tunnel
 command to run on your local computer. Use `./everspark access` to print it
@@ -100,6 +115,7 @@ Illustrious API Format workflow is included for the initial generation path.
 - [x] Initial names and module boundaries defined
 - [x] Local-first configuration contract added
 - [x] Configuration, logging, storage, and network foundation migrated
+- [x] Portable private configuration import and Tunnel lifecycle implemented
 - [x] Launcher foundation, initialization, and diagnostics implemented
 - [x] Existing v0.1 execution chain migrated across module boundaries
 - [x] Concept Forge Character Subject v1 schema implemented

@@ -18,6 +18,7 @@ EverSpark Forge CLI
 Usage:
   ./everspark help
   ./everspark init
+  ./everspark configure --from <directory> [--env <file>]
   ./everspark setup [--plan] [--models all|concept|image]
   ./everspark start [all|concept|image|orchestrator|webui]
   ./everspark stop [all|concept|image|orchestrator|webui]
@@ -76,6 +77,9 @@ case "${module,,}" in
   init)
     exec bash "${LAUNCHER_DIR}/init.sh" "$@"
     ;;
+  configure)
+    exec python3 "${REPO_ROOT}/Configuration/import_config.py" "$@"
+    ;;
   doctor)
     exec bash "${LAUNCHER_DIR}/doctor.sh" "$@"
     ;;
@@ -89,12 +93,23 @@ case "${module,,}" in
     target="${1:-all}"
     python3 "${REPO_ROOT}/Runtime/Managed/runtime_manager.py" "${module,,}" "$target"
     if [ "$target" = "all" ] || [ "$target" = "webui" ]; then
+      bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/start_tunnel.sh"
       python3 "${REPO_ROOT}/Runtime/Managed/access_info.py"
     fi
     ;;
-  stop|status)
-    exec python3 "${REPO_ROOT}/Runtime/Managed/runtime_manager.py" \
-      "${module,,}" "${1:-all}"
+  stop)
+    target="${1:-all}"
+    if [ "$target" = "all" ] || [ "$target" = "webui" ]; then
+      bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/stop_tunnel.sh"
+    fi
+    exec python3 "${REPO_ROOT}/Runtime/Managed/runtime_manager.py" stop "$target"
+    ;;
+  status)
+    target="${1:-all}"
+    python3 "${REPO_ROOT}/Runtime/Managed/runtime_manager.py" status "$target"
+    if [ "$target" = "all" ] || [ "$target" = "webui" ]; then
+      bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/check_tunnel.sh"
+    fi
     ;;
   access)
     exec python3 "${REPO_ROOT}/Runtime/Managed/access_info.py" "$@"

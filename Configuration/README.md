@@ -17,3 +17,35 @@ Configuration precedence is intended to be:
 Optional integrations must be explicitly enabled. Once enabled, incomplete
 R2/rclone or Cloudflare settings are treated as errors rather than silently
 falling back to local behavior.
+
+## Private configuration import
+
+EverSpark accepts both `.env` and `env.txt`. The latter is a portable alias for
+Windows file management and Pod upload workflows; both use the same `KEY=VALUE`
+format. Import a directory containing either name with:
+
+```bash
+./everspark configure --from /root
+```
+
+When both names are present, their parsed settings must be identical. An
+explicit file can be selected with `--env`. The importer never executes the
+input as shell code and never moves or deletes the source files.
+
+For a configured Cloudflare backend, the source directory must also contain
+`<CF_TUNNEL_UUID>.json`. Its required fields and `TunnelID` are validated, and
+the tunnel port must match the EverSpark WebUI port (8780 by default). If
+`rclone.conf` is present, it is validated and staged but does not enable a
+remote storage policy automatically.
+
+Private files are normalized to ignored runtime locations:
+
+| Input | Private destination |
+| --- | --- |
+| `.env` or `env.txt` | `<repository>/.env` |
+| `<UUID>.json` | `Data/Configuration/cloudflare/<UUID>.json` |
+| `rclone.conf` | `Data/Configuration/rclone/rclone.conf` |
+
+All imported files receive mode `0600`. Cloudflare is inferred only when the
+environment contains complete tunnel settings; local mode remains the default
+when no private configuration is supplied.

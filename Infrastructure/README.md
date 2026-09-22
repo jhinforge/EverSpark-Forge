@@ -20,3 +20,8 @@ startup error after the backend has been explicitly enabled.
 tunnel UUID, hostname, local port, and credential JSON. The scripts exit
 successfully without starting cloudflared while
 `EVERSPARK_NETWORK_BACKEND=local`.
+
+The public launcher starts the Tunnel only after WebUI is healthy, checks it as
+part of `./everspark status`, and stops it before WebUI shutdown. The private
+configuration importer requires the Tunnel ingress port to equal the WebUI
+port so Image Forge is not exposed directly.

@@ -17,13 +17,13 @@ import access_info  # noqa: E402
 class AccessInfoTests(unittest.TestCase):
     def test_vast_environment_builds_complete_tunnel(self) -> None:
         info = access_info.build_access_info(
-            {"PUBLIC_IPADDR": "180.189.55.38", "VAST_TCP_PORT_22": "40061"}
+            {"PUBLIC_IPADDR": "203.0.113.10", "VAST_TCP_PORT_22": "40222"}
         )
         self.assertTrue(info["ready"])
         self.assertEqual(info["provider"], "vast")
         self.assertEqual(
             info["command"],
-            "ssh -p 40061 -L 8080:127.0.0.1:8780 root@180.189.55.38",
+            "ssh -p 40222 -L 8080:127.0.0.1:8780 root@203.0.113.10",
         )
         self.assertEqual(info["local_url"], "http://127.0.0.1:8080")
 
@@ -53,7 +53,7 @@ class AccessInfoTests(unittest.TestCase):
     def test_invalid_port_is_rejected(self) -> None:
         with self.assertRaisesRegex(access_info.AccessInfoError, "between 1 and 65535"):
             access_info.build_access_info(
-                {"PUBLIC_IPADDR": "180.189.55.38", "VAST_TCP_PORT_22": "70000"}
+                {"PUBLIC_IPADDR": "203.0.113.10", "VAST_TCP_PORT_22": "70000"}
             )
 
     def test_process_environment_overrides_files(self) -> None:
@@ -77,8 +77,8 @@ class AccessInfoTests(unittest.TestCase):
             ],
             env={
                 "PATH": str(Path(sys.executable).parent),
-                "PUBLIC_IPADDR": "180.189.55.38",
-                "VAST_TCP_PORT_22": "40061",
+                "PUBLIC_IPADDR": "203.0.113.10",
+                "VAST_TCP_PORT_22": "40222",
             },
             check=True,
             capture_output=True,

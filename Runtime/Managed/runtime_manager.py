@@ -16,7 +16,6 @@ from urllib.request import urlopen
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATE_DIR = REPO_ROOT / "Data" / "Runtime" / "Services"
-LOG_DIR = REPO_ROOT / "Data" / "Logs"
 
 
 class RuntimeManagerError(RuntimeError):
@@ -53,6 +52,15 @@ def _load_dotenv(path: Path) -> dict[str, str]:
         if key and key.replace("_", "").isalnum():
             values[key] = value.strip().strip("\"'")
     return values
+
+
+def _configured_log_dir() -> Path:
+    values = {**_load_dotenv(REPO_ROOT / ".env"), **os.environ}
+    selected = Path(values.get("EVERSPARK_LOG_DIR", "Data/Logs")).expanduser()
+    return selected if selected.is_absolute() else (REPO_ROOT / selected).resolve()
+
+
+LOG_DIR = _configured_log_dir()
 
 
 def service_definitions() -> dict[str, ServiceDefinition]:

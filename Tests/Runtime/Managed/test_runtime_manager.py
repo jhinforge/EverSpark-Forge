@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import socket
 import subprocess
 import sys
@@ -23,6 +24,20 @@ def free_port() -> int:
 
 
 class RuntimeManagerTests(unittest.TestCase):
+    def test_configured_log_directory_is_resolved_from_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".env").write_text(
+                "EVERSPARK_LOG_DIR=./private/logs\n", encoding="utf-8"
+            )
+            with (
+                patch.object(runtime_manager, "REPO_ROOT", root),
+                patch.dict(os.environ, {}, clear=True),
+            ):
+                self.assertEqual(
+                    runtime_manager._configured_log_dir(), root / "private" / "logs"
+                )
+
     def test_external_healthy_process_is_never_claimed_or_stopped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

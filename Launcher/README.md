@@ -14,6 +14,18 @@ Run from a fresh clone:
 personal configuration file. Local storage and localhost networking therefore
 remain active automatically.
 
+Existing Pod configuration can be imported before setup:
+
+```bash
+./everspark configure --from /root
+./everspark setup
+./everspark doctor
+```
+
+Both `.env` and the Windows-friendly `env.txt` alias are accepted. Cloudflare
+credentials and `rclone.conf` are copied into ignored private runtime
+directories; source files are preserved.
+
 `setup --plan` prints pinned runtime versions, official Hugging Face sources,
 and local destinations without changing the machine. `setup` installs the
 managed runtimes, creates isolated Python environments, downloads the selected
@@ -53,6 +65,9 @@ The browser-side port defaults to 8080 and can be changed with
 EverSpark does not stop a healthy external service that it did not start.
 Managed PID files include the Linux process start time so stale/reused PIDs are
 not terminated accidentally.
+
+When `EVERSPARK_NETWORK_BACKEND=cloudflare`, the same lifecycle commands also
+start, check, restart, and stop the configured Tunnel after the WebUI service.
 
 To make the command available through the user PATH without root access:
 
