@@ -18,7 +18,7 @@ EverSpark Forge CLI
 Usage:
   ./everspark help
   ./everspark init
-  ./everspark configure --from <directory> [--env <file>]
+  ./everspark configure [--from <directory>] [--env <file>]
   ./everspark setup [--plan] [--models all|concept|image]
   ./everspark start [all|concept|image|orchestrator|webui]
   ./everspark stop [all|concept|image|orchestrator|webui]

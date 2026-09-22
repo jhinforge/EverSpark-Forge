@@ -22,11 +22,15 @@ falling back to local behavior.
 
 EverSpark accepts both `.env` and `env.txt`. The latter is a portable alias for
 Windows file management and Pod upload workflows; both use the same `KEY=VALUE`
-format. Import a directory containing either name with:
+format. The repository includes `Configuration/Import/` as the standard private
+upload inbox. Put all configuration files there and run:
 
 ```bash
-./everspark configure --from /root
+./everspark configure
 ```
+
+The inbox contents are ignored by Git. `--from <directory>` remains available
+when an external source directory is preferred.
 
 When both names are present, their parsed settings must be identical. An
 explicit file can be selected with `--env`. The importer never executes the

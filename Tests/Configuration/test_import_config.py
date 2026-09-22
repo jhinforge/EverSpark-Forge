@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +40,22 @@ def write_tunnel_files(source: Path, env_name: str = "env.txt") -> None:
 
 
 class ConfigurationImportTests(unittest.TestCase):
+    def test_cli_defaults_to_repository_import_inbox(self) -> None:
+        expected = REPO_ROOT / "Configuration" / "Import"
+        imported = {
+            "environment_file": str(REPO_ROOT / ".env"),
+            "network_backend": "local",
+            "cloudflare_credential": None,
+            "rclone_config": None,
+            "rclone_remotes": [],
+            "storage_backend": "local",
+        }
+        with mock.patch.object(sys, "argv", ["import_config.py"]), mock.patch.object(
+            import_config, "import_configuration", return_value=imported
+        ) as importer:
+            self.assertEqual(import_config.main(), 0)
+        importer.assert_called_once_with(str(expected), explicit_env=None)
+
     def test_env_txt_and_private_files_are_imported_without_moving_sources(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

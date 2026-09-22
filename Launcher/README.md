@@ -17,7 +17,10 @@ remain active automatically.
 Existing Pod configuration can be imported before setup:
 
 ```bash
-./everspark configure --from /root
+cp /path/to/env.txt Configuration/Import/
+cp /path/to/rclone.conf Configuration/Import/
+cp /path/to/<UUID>.json Configuration/Import/
+./everspark configure
 ./everspark setup
 ./everspark doctor
 ```

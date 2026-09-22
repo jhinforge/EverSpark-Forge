@@ -25,6 +25,7 @@ directories=(
   "${REPO_ROOT}/Data/Memory"
   "${REPO_ROOT}/Data/Runtime"
   "${REPO_ROOT}/Data/Runtime/Services"
+  "${REPO_ROOT}/Configuration/Import"
   "${REPO_ROOT}/Data/Configuration/cloudflare"
   "${REPO_ROOT}/Data/Configuration/rclone"
   "${REPO_ROOT}/Data/Cloudflare"

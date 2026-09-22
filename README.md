@@ -83,15 +83,18 @@ Forge, and connects the managed Image Forge model directory. `start` launches
 Concept Forge, Image Forge, Orchestrator, and WebUI in dependency order.
 
 Users with existing private configuration can upload `.env` or `env.txt`, a
-Cloudflare `<UUID>.json` credential, and an optional `rclone.conf` to one
-directory, then normalize and validate them before setup:
+Cloudflare `<UUID>.json` credential, and an optional `rclone.conf` into the
+tracked but ignored `Configuration/Import/` inbox, then normalize and validate
+them before setup:
 
 ```bash
-./everspark configure --from /root
+./everspark configure
 ./everspark setup
 ./everspark doctor
 ./everspark start
 ```
+
+`--from <directory>` remains available for advanced or external upload paths.
 
 The input files remain untouched. Cloudflare joins the managed lifecycle only
 when its backend is enabled. When the rclone storage backend is explicitly

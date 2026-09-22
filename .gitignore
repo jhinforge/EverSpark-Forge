@@ -6,6 +6,8 @@ Configuration/user.yaml
 Configuration/user.yml
 Configuration/user.json
 Configuration/user.toml
+Configuration/Import/*
+!Configuration/Import/README.md
 
 # Runtime state
 Data/*

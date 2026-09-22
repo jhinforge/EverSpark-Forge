@@ -12,6 +12,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_IMPORT_DIRECTORY = REPO_ROOT / "Configuration" / "Import"
 _KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _TUNNEL_ID = re.compile(r"^[A-Za-z0-9-]{16,64}$")
 _HOSTNAME = re.compile(
@@ -300,7 +301,15 @@ def _render_result(result: dict[str, Any]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Import private EverSpark configuration")
-    parser.add_argument("--from", dest="source", required=True, help="configuration directory")
+    parser.add_argument(
+        "--from",
+        dest="source",
+        default=str(DEFAULT_IMPORT_DIRECTORY),
+        help=(
+            "configuration directory "
+            "(default: <repository>/Configuration/Import)"
+        ),
+    )
     parser.add_argument("--env", dest="environment", help="explicit .env or env.txt path")
     parser.add_argument("--json", action="store_true", help="print machine-readable output")
     args = parser.parse_args()
