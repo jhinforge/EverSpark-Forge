@@ -40,9 +40,28 @@ class TaskRunner:
         history: list[dict[str, str]] | None = None,
         notify: Callable[[str], None] | None = None,
         subject: CompiledSubject | None = None,
+        selection: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        selected = selection or {}
+        workflow_id = self.workflow.selected_workflow_id(
+            str(selected.get("workflow", ""))
+        )
+        checkpoint = str(selected.get("checkpoint", "")).strip()
+        llm_model = str(selected.get("llm", "")).strip()
+        loras = selected.get("loras", [])
+        if not isinstance(loras, list):
+            raise TaskError("selection.loras must be a list")
+        if llm_model:
+            available_llms = self.concept.list_models()
+            resolved_llm = self._resolve_ollama_model(llm_model, available_llms)
+            if not resolved_llm:
+                raise TaskError(f"Selected LLM is unavailable: {llm_model}")
+            llm_model = resolved_llm
         plan = self._get_valid_plan(
-            user_text, history or [], notify or (lambda _message: None)
+            user_text,
+            history or [],
+            notify or (lambda _message: None),
+            llm_model,
         )
         if plan.status != "over":
             raise TaskError(
@@ -62,16 +81,34 @@ class TaskRunner:
 
         items = []
         available_checkpoints: list[str] | None = None
+        available_loras: list[str] | None = None
+        selected_checkpoint = ""
+        selected_loras: list[dict[str, Any]] = []
         for index in range(1, plan.count + 1):
             seed = secrets.randbelow(2**63)
             workflow = self.workflow.build(
-                positive_prompt, negative_prompt, seed=seed
+                positive_prompt,
+                negative_prompt,
+                seed=seed,
+                workflow_id=workflow_id,
             )
             if available_checkpoints is None:
                 available_checkpoints = self.image.list_checkpoints()
-            self.workflow.bind_checkpoint(
-                workflow, available_checkpoints, notify or (lambda _message: None)
+            selected_checkpoint = self.workflow.bind_checkpoint(
+                workflow,
+                available_checkpoints,
+                notify or (lambda _message: None),
+                requested=checkpoint,
             )
+            if loras:
+                if available_loras is None:
+                    available_loras = self.image.list_loras()
+                selected_loras = self.workflow.inject_loras(
+                    workflow,
+                    loras,
+                    available_loras,
+                    workflow_id=workflow_id,
+                )
             prompt_id = self.image.queue_prompt(workflow)
             items.append({"index": index, "prompt_id": prompt_id, "seed": seed})
 
@@ -81,6 +118,12 @@ class TaskRunner:
             "positive_prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "count": plan.count,
+            "selection": {
+                "workflow": workflow_id,
+                "checkpoint": selected_checkpoint,
+                "llm": llm_model or str(getattr(self.concept, "model", "")),
+                "loras": selected_loras,
+            },
             "items": items,
             "subject": (
                 {"subject_id": subject.subject_id, "revision": subject.revision}
@@ -88,6 +131,32 @@ class TaskRunner:
                 else None
             ),
         }
+
+    def resources(self) -> dict[str, Any]:
+        llms = self.concept.list_models()
+        default_llm = self._resolve_ollama_model(self.concept.model, llms)
+        return {
+            "workflows": self.workflow.list_workflows(),
+            "checkpoints": self.image.list_checkpoints(),
+            "loras": self.image.list_loras(),
+            "llms": llms,
+            "defaults": {
+                "workflow": self.workflow.default_workflow_id,
+                "llm": default_llm or self.concept.model,
+                "checkpoint": self.workflow.managed_default_checkpoint,
+            },
+        }
+
+    @staticmethod
+    def _resolve_ollama_model(requested: str, available: list[str]) -> str:
+        normalized = requested.strip()
+        lookup = {name.casefold(): name for name in available}
+        exact = lookup.get(normalized.casefold())
+        if exact:
+            return exact
+        if normalized and ":" not in normalized:
+            return lookup.get(f"{normalized}:latest".casefold(), "")
+        return ""
 
     @staticmethod
     def _merge_prompts(*prompts: str) -> str:
@@ -98,10 +167,16 @@ class TaskRunner:
         user_text: str,
         history: list[dict[str, str]],
         notify: Callable[[str], None],
+        llm_model: str = "",
     ) -> GenerationPlan:
         attempts = self.max_model_retries + 1
         for attempt in range(attempts):
-            plan = self.concept.generate_prompt(user_text, history)
+            if llm_model:
+                plan = self.concept.generate_prompt(
+                    user_text, history, model=llm_model
+                )
+            else:
+                plan = self.concept.generate_prompt(user_text, history)
             if plan.model in self.supported_models:
                 return plan
             if attempt < attempts - 1:

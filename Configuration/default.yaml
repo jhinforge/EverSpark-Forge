@@ -65,6 +65,8 @@ memory:
     schema: ./ConceptForge/Schemas/character_subject.v1.schema.json
 
 workflow:
+  directory: ./ImageForge/Workflows
+  default_workflow: base-illustrious
   template: ./ImageForge/Workflows/base_workflow_api.json
   positive_prompt_node: "34"
   negative_prompt_node: "7"

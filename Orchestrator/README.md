@@ -29,6 +29,7 @@ Open the console in another terminal:
 The service binds to `127.0.0.1:8765` by default and exposes:
 
 - `GET /health`
+- `GET /resources`
 - `POST /tasks`
 - `POST /conversation`
 - `GET /memory/history?session_id=...`
@@ -69,3 +70,9 @@ available checkpoints. It keeps the workflow's requested name when present,
 otherwise selects the managed Illustrious default, then falls back to the
 first compatible checkpoint in stable alphabetical order. Every fallback is
 reported to the caller.
+
+`GET /resources` exposes the selectable workflow, Checkpoint, LoRA, and Ollama
+model inventories used by the WebUI. `POST /tasks` and `POST /conversation`
+accept an optional `selection` object. Workflow mutations are performed on an
+isolated task copy: explicit Checkpoint selection is validated against
+ComfyUI, and selected LoRAs are inserted as a standard `LoraLoader` chain.

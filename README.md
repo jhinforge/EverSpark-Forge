@@ -108,6 +108,9 @@ Concept Forge and Illustrious XL v1.0 for Image Forge. Inspect the download
 plan with `./everspark setup --plan`; run `./everspark setup` only when you are
 ready to download both models (roughly 9.5 GB total). A public, LoRA-free
 Illustrious API Format workflow is included for the initial generation path.
+The WebUI can select installed Ollama models, ComfyUI checkpoints, and
+registered API Format workflows. Standard SDXL/Illustrious workflows can add
+multiple LoRAs per request without modifying the bundled workflow file.
 
 ## Repository status
 
@@ -122,6 +125,7 @@ Illustrious API Format workflow is included for the initial generation path.
 - [x] Working Memory v0 persistence migrated
 - [x] Managed default model catalog and installer implemented
 - [x] Image checkpoint discovery and deterministic fallback implemented
+- [x] Manual workflow, Checkpoint, LLM, and standard LoRA selection implemented
 - [x] Managed ComfyUI/Ollama installation and service lifecycle implemented
 - [x] Character Subject structured state and revision history implemented
 - [x] Conversation-derived automatic current subject implemented

@@ -28,7 +28,12 @@ class Orchestrator:
         )
         self._task_lock = threading.Lock()
 
-    def submit(self, user_text: str, session_id: str) -> dict[str, Any]:
+    def submit(
+        self,
+        user_text: str,
+        session_id: str,
+        selection: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         text = normalize_unicode(user_text).strip()
         session = normalize_unicode(session_id).strip()
         if not text:
@@ -40,22 +45,34 @@ class Orchestrator:
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("The first-version Orchestrator is already running one task")
         notices: list[str] = []
+        selected = self._normalize_selection(selection)
         try:
             history = self.memory.get_history(session)
-            document = self._refresh_session_subject(session, text, history)
+            document = self._refresh_session_subject(
+                session,
+                text,
+                history,
+                llm_model=str(selected.get("llm", "")),
+            )
             compiled_subject = compile_subject(document)
             result = self.runner.run(
                 text,
                 history=history,
                 notify=notices.append,
                 subject=compiled_subject,
+                selection=selected,
             )
             self.memory.record_success(session, text, result)
             return {"ok": True, "notices": notices, "result": result}
         finally:
             self._task_lock.release()
 
-    def discuss(self, user_text: str, session_id: str) -> dict[str, Any]:
+    def discuss(
+        self,
+        user_text: str,
+        session_id: str,
+        selection: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         text = normalize_unicode(user_text).strip()
         session = normalize_unicode(session_id).strip()
         if not text:
@@ -66,11 +83,20 @@ class Orchestrator:
             raise ValueError("session_id is too long")
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("The first-version Orchestrator is already running one task")
+        selected = self._normalize_selection(selection)
+        llm_model = str(selected.get("llm", ""))
         try:
             history = self.memory.get_history(session)
-            reply = self.runner.concept.discuss(text, history)
+            if llm_model:
+                reply = self.runner.concept.discuss(text, history, model=llm_model)
+            else:
+                reply = self.runner.concept.discuss(text, history)
             document = self._refresh_session_subject(
-                session, text, history, assistant_reply=reply
+                session,
+                text,
+                history,
+                assistant_reply=reply,
+                llm_model=llm_model,
             )
             self.memory.record_conversation(session, text, reply)
             return {"ok": True, "reply": reply, "subject": document}
@@ -83,15 +109,15 @@ class Orchestrator:
         user_text: str,
         history: list[dict[str, str]],
         assistant_reply: str = "",
+        llm_model: str = "",
     ) -> dict[str, Any]:
         subject_id = self.memory.get_or_create_session_subject_id(session_id)
         existing = self.memory.get_subject(subject_id)
+        kwargs = {"history": history, "assistant_reply": assistant_reply}
+        if llm_model:
+            kwargs["model"] = llm_model
         document = self.runner.concept.generate_subject(
-            user_text,
-            subject_id,
-            existing,
-            history=history,
-            assistant_reply=assistant_reply,
+            user_text, subject_id, existing, **kwargs
         )
         if existing is not None:
             comparable_existing = {**existing, "revision": document["revision"]}
@@ -161,3 +187,16 @@ class Orchestrator:
             "positive_prompt": compiled.positive_prompt,
             "negative_prompt": compiled.negative_prompt,
         }
+
+    def resources(self) -> dict[str, Any]:
+        return self.runner.resources()
+
+    @staticmethod
+    def _normalize_selection(
+        selection: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if selection is None:
+            return {}
+        if not isinstance(selection, dict):
+            raise ValueError("selection must be a JSON object")
+        return selection

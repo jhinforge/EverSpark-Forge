@@ -66,13 +66,16 @@ class OllamaProvider:
         return prompt
 
     def generate_prompt(
-        self, user_text: str, history: list[dict[str, str]] | None = None
+        self,
+        user_text: str,
+        history: list[dict[str, str]] | None = None,
+        model: str = "",
     ) -> GenerationPlan:
         messages = [{"role": "system", "content": self._system_prompt(SYSTEM_PROMPT)}]
         messages.extend(history or [])
         messages.append({"role": "user", "content": user_text})
         payload = {
-            "model": self.model,
+            "model": model.strip() or self.model,
             "stream": False,
             "format": "json",
             "messages": messages,
@@ -104,6 +107,7 @@ class OllamaProvider:
         existing: dict[str, Any] | None = None,
         history: list[dict[str, str]] | None = None,
         assistant_reply: str = "",
+        model: str = "",
     ) -> dict[str, Any]:
         if existing is None:
             target = new_subject(subject_id, subject_id)
@@ -148,7 +152,7 @@ class OllamaProvider:
         response = self._post_json(
             "/api/chat",
             {
-                "model": self.model,
+                "model": model.strip() or self.model,
                 "stream": False,
                 "format": "json",
                 "messages": messages,
@@ -172,7 +176,10 @@ class OllamaProvider:
         return document
 
     def discuss(
-        self, user_text: str, history: list[dict[str, str]] | None = None
+        self,
+        user_text: str,
+        history: list[dict[str, str]] | None = None,
+        model: str = "",
     ) -> str:
         messages = [
             {"role": "system", "content": self._system_prompt(DISCUSSION_SYSTEM_PROMPT)}
@@ -181,7 +188,11 @@ class OllamaProvider:
         messages.append({"role": "user", "content": user_text})
         response = self._post_json(
             "/api/chat",
-            {"model": self.model, "stream": False, "messages": messages},
+            {
+                "model": model.strip() or self.model,
+                "stream": False,
+                "messages": messages,
+            },
         )
         try:
             reply = str(response["message"]["content"]).strip()
@@ -190,6 +201,37 @@ class OllamaProvider:
         if not reply:
             raise OllamaError("Ollama returned an empty discussion response")
         return reply
+
+    def list_models(self) -> list[str]:
+        response = self._get_json("/api/tags")
+        models = response.get("models", [])
+        if not isinstance(models, list):
+            raise OllamaError("Ollama model list has an invalid shape")
+        names = []
+        for item in models:
+            if isinstance(item, dict) and isinstance(item.get("name"), str):
+                name = item["name"].strip()
+                if name:
+                    names.append(name)
+        return sorted(set(names), key=lambda item: (item.casefold(), item))
+
+    def _get_json(self, path: str) -> dict[str, Any]:
+        request = Request(f"{self.base_url}{path}", method="GET")
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise OllamaError(f"Ollama HTTP {exc.code}: {detail}") from exc
+        except URLError as exc:
+            raise OllamaError(
+                f"Cannot connect to Ollama at {self.base_url}: {exc.reason}"
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise OllamaError("Ollama returned invalid HTTP JSON") from exc
+        if not isinstance(result, dict):
+            raise OllamaError("Ollama returned an invalid JSON object")
+        return result
 
     def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         request = Request(f"{self.base_url}{path}", data=json.dumps(payload, ensure_ascii=True).encode("utf-8"), headers={"Content-Type": "application/json; charset=utf-8"}, method="POST")

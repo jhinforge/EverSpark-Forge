@@ -1,0 +1,15 @@
+{
+  "id": "base-illustrious",
+  "name": "Base Illustrious",
+  "api": "base_workflow_api.json",
+  "model_family": "sdxl",
+  "nodes": {
+    "positive_prompt": "34",
+    "negative_prompt": "7",
+    "seed": "31"
+  },
+  "supports": {
+    "checkpoint_override": true,
+    "lora_injection": true
+  }
+}

@@ -140,6 +140,44 @@ class WorkflowTests(unittest.TestCase):
             "Illustrious-XL-v1.0.safetensors",
         )
 
+    def test_registry_and_standard_lora_injection_are_task_local(self) -> None:
+        config = load_config()
+        manager = WorkflowManager(config["workflow"])
+        registered = manager.list_workflows()
+        self.assertEqual(registered[0]["id"], "base-illustrious")
+        self.assertTrue(registered[0]["supports"]["lora_injection"])
+
+        workflow = manager.build(
+            "positive", "negative", seed=9, workflow_id="base-illustrious"
+        )
+        selected = manager.inject_loras(
+            workflow,
+            [
+                {
+                    "name": "Characters/Hero.safetensors",
+                    "strength_model": 0.8,
+                    "strength_clip": 0.6,
+                },
+                {"name": "Style.safetensors"},
+            ],
+            ["characters/hero.safetensors", "Style.safetensors"],
+            workflow_id="base-illustrious",
+        )
+
+        self.assertEqual(selected[0]["name"], "characters/hero.safetensors")
+        self.assertEqual(workflow["35"]["inputs"]["model"], ["4", 0])
+        self.assertEqual(workflow["36"]["inputs"]["model"], ["35", 0])
+        self.assertEqual(workflow["31"]["inputs"]["model"], ["36", 0])
+        self.assertEqual(workflow["34"]["inputs"]["clip"], ["36", 1])
+        self.assertEqual(workflow["7"]["inputs"]["clip"], ["36", 1])
+        self.assertEqual(workflow["8"]["inputs"]["vae"], ["4", 2])
+
+        clean = manager.build(
+            "next", "next negative", seed=10, workflow_id="base-illustrious"
+        )
+        self.assertNotIn("35", clean)
+        self.assertEqual(clean["31"]["inputs"]["model"], ["4", 0])
+
 
 class BatchTests(unittest.TestCase):
     def test_batch_queues_unique_workflows_and_passes_history(self) -> None:
@@ -153,11 +191,16 @@ class BatchTests(unittest.TestCase):
                 )
 
         class FakeWorkflow:
-            def build(self, positive, negative, seed):
+            def selected_workflow_id(self, workflow_id=""):
+                return workflow_id or "test-workflow"
+
+            def build(self, positive, negative, seed, workflow_id=""):
                 return {"positive": positive, "negative": negative, "seed": seed}
 
-            def bind_checkpoint(self, _workflow, _available, _notify):
-                return None
+            def bind_checkpoint(
+                self, _workflow, _available, _notify, requested=""
+            ):
+                return requested or "test.safetensors"
 
         class FakeImageForge:
             def __init__(self):
@@ -204,6 +247,67 @@ class BatchTests(unittest.TestCase):
             {"subject_id": "subject-a", "revision": 2},
         )
 
+    def test_manual_resource_selection_reaches_the_queued_workflow(self) -> None:
+        class FakeConceptForge:
+            model = "default-llm"
+            selected_model = ""
+
+            def list_models(self):
+                return ["default-llm", "manual-llm"]
+
+            def generate_prompt(self, _text, _history, model=""):
+                self.selected_model = model
+                return GenerationPlan(
+                    "illustrious", "positive", "negative", 1, "over"
+                )
+
+        class FakeImageForge:
+            workflow = None
+
+            def list_checkpoints(self):
+                return ["default.safetensors", "manual.safetensors"]
+
+            def list_loras(self):
+                return ["style.safetensors"]
+
+            def queue_prompt(self, workflow):
+                self.workflow = workflow
+                return "prompt-selected"
+
+        config = load_config()
+        runner = TaskRunner.__new__(TaskRunner)
+        runner.concept = FakeConceptForge()
+        runner.workflow = WorkflowManager(config["workflow"])
+        runner.image = FakeImageForge()
+        runner.supported_models = {"illustrious"}
+        runner.max_model_retries = 0
+        runner.max_batch_size = 20
+
+        result = runner.run(
+            "portrait",
+            selection={
+                "workflow": "base-illustrious",
+                "checkpoint": "manual.safetensors",
+                "llm": "manual-llm",
+                "loras": [
+                    {
+                        "name": "style.safetensors",
+                        "strength_model": 0.75,
+                        "strength_clip": 0.5,
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(runner.concept.selected_model, "manual-llm")
+        self.assertEqual(
+            runner.image.workflow["4"]["inputs"]["ckpt_name"],
+            "manual.safetensors",
+        )
+        self.assertEqual(runner.image.workflow["35"]["inputs"]["lora_name"], "style.safetensors")
+        self.assertEqual(result["selection"]["workflow"], "base-illustrious")
+        self.assertEqual(result["selection"]["checkpoint"], "manual.safetensors")
+
 
 class SubjectIntegrationTests(unittest.TestCase):
     def test_generation_extracts_and_uses_the_session_subject_without_an_id(self) -> None:
@@ -219,11 +323,16 @@ class SubjectIntegrationTests(unittest.TestCase):
                 return GenerationPlan("illustrious", "rooftop", "low quality", 1, "over")
 
         class FakeWorkflow:
-            def build(self, positive, negative, seed):
+            def selected_workflow_id(self, workflow_id=""):
+                return workflow_id or "test-workflow"
+
+            def build(self, positive, negative, seed, workflow_id=""):
                 return {"positive": positive, "negative": negative, "seed": seed}
 
-            def bind_checkpoint(self, _workflow, _available, _notify):
-                return None
+            def bind_checkpoint(
+                self, _workflow, _available, _notify, requested=""
+            ):
+                return requested or "test.safetensors"
 
         class FakeImageForge:
             def list_checkpoints(self):
@@ -334,7 +443,7 @@ class APITests(unittest.TestCase):
         def clear_memory(self, session_id):
             self.cleared = session_id
 
-        def discuss(self, text, session_id):
+        def discuss(self, text, session_id, selection=None):
             return {
                 "ok": True,
                 "reply": f"reply:{text}",
@@ -345,12 +454,21 @@ class APITests(unittest.TestCase):
         def get_session_subject(self, _session_id):
             return self.document
 
-        def submit(self, text, session_id, subject_id=""):
+        def submit(self, text, session_id, selection=None):
             return {
                 "ok": True,
                 "text": text,
                 "session_id": session_id,
-                "subject_id": subject_id,
+                "selection": selection,
+            }
+
+        def resources(self):
+            return {
+                "workflows": [],
+                "checkpoints": [],
+                "loras": [],
+                "llms": [],
+                "defaults": {},
             }
 
         def save_subject(self, document):

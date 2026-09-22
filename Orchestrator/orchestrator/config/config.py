@@ -119,5 +119,11 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     if not workflow_path.is_absolute():
         workflow_path = REPO_ROOT / workflow_path
     config["workflow"]["template"] = str(workflow_path.resolve())
+    workflow_directory = Path(
+        str(config["workflow"].get("directory", workflow_path.parent))
+    ).expanduser()
+    if not workflow_directory.is_absolute():
+        workflow_directory = REPO_ROOT / workflow_directory
+    config["workflow"]["directory"] = str(workflow_directory.resolve())
     config["_config_path"] = str(selected)
     return config

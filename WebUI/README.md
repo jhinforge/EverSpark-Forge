@@ -25,6 +25,8 @@ configuration file.
 - Inspect immutable subject revision documents.
 - Switch the same conversation between discussion and image generation.
 - Combine the automatically maintained identity with a temporary scene.
+- Select a registered workflow, Checkpoint, and installed Ollama model.
+- Add one or more standard LoRAs with independent MODEL and CLIP strengths.
 - Submit image tasks and track their exact Image Forge prompt identifiers.
 - Display current results and recent Image Forge history.
 - Show local Orchestrator, Image Forge, and logging readiness.
@@ -37,6 +39,11 @@ Forge adapter. `WebUI/app.py` exposes a same-origin proxy and does not store
 subject state itself. Users never fill the internal JSON template or choose a
 subject ID. Character identity remains in Memory; scene, pose,
 camera, and background remain request-level task input.
+
+Resource choices are discovered through Orchestrator. Checkpoints and LoRAs
+come from the configured ComfyUI adapter, LLM names come from Ollama, and
+workflows come from the Image Forge registry. The selections are attached to
+each request and do not rewrite repository workflow files.
 
 Default endpoints can be overridden when needed:
 

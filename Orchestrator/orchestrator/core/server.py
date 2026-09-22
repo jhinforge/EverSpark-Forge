@@ -52,6 +52,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/health":
             self._send(200, {"ok": True, "status": "standby"})
+        elif parsed.path == "/resources":
+            self._send(
+                200,
+                {"ok": True, **self.server.orchestrator.resources()},
+            )
         elif parsed.path == "/memory/history":
             session_id = parse_qs(parsed.query).get("session_id", [""])[0]
             if not session_id:
@@ -144,12 +149,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                 result = self.server.orchestrator.submit(
                     str(payload.get("text", "")),
                     str(payload.get("session_id", "")),
+                    payload.get("selection"),
                 )
                 self._send(200, result)
             elif request_path == "/conversation":
                 result = self.server.orchestrator.discuss(
                     str(payload.get("text", "")),
                     str(payload.get("session_id", "")),
+                    payload.get("selection"),
                 )
                 self._send(200, result)
             elif request_path == "/memory/clear":

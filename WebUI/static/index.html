@@ -117,6 +117,29 @@
                 </span>
               </div>
 
+              <div class="generation-controls" aria-label="Generation resources">
+                <label class="resource-field">
+                  <span>Workflow</span>
+                  <span class="select-wrap"><select id="workflowSelect"></select></span>
+                </label>
+                <label class="resource-field">
+                  <span>Checkpoint</span>
+                  <span class="select-wrap"><select id="checkpointSelect"></select></span>
+                </label>
+                <label class="resource-field">
+                  <span>Concept LLM</span>
+                  <span class="select-wrap"><select id="llmSelect"></select></span>
+                </label>
+                <div class="resource-field lora-field">
+                  <span>LoRA</span>
+                  <div class="lora-picker">
+                    <span class="select-wrap"><select id="loraSelect"></select></span>
+                    <button class="secondary-button" id="addLoraButton" type="button">Add</button>
+                  </div>
+                </div>
+                <div class="selected-loras" id="selectedLoras"></div>
+              </div>
+
               <div class="result-stage" id="resultStage">
                 <div class="stage-empty">
                   <div class="spark-glyph" aria-hidden="true">✦</div>

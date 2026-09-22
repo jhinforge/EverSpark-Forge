@@ -157,6 +157,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         routes = {
             "/api/health": self._health,
             "/api/runtime/status": self._runtime_status,
+            "/api/resources": lambda: self._proxy_orchestrator_get(
+                "/resources", parsed.query
+            ),
             "/api/subjects": lambda: self._proxy_orchestrator_get(
                 "/subjects", parsed.query
             ),
@@ -222,7 +225,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_id = str(payload.get("session_id", "main")).strip()
         if not message:
             raise ValueError("Describe the scene before generating")
-        request_payload = {"text": message, "session_id": session_id}
+        request_payload = {
+            "text": message,
+            "session_id": session_id,
+            "selection": payload.get("selection", {}),
+        }
         self._proxy_orchestrator_post("/tasks", request_payload)
 
     def _conversation(self, payload: dict[str, Any]) -> None:
@@ -231,7 +238,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not message:
             raise ValueError("Message cannot be empty")
         self._proxy_orchestrator_post(
-            "/conversation", {"text": message, "session_id": session_id}
+            "/conversation",
+            {
+                "text": message,
+                "session_id": session_id,
+                "selection": payload.get("selection", {}),
+            },
         )
 
     def _proxy_orchestrator_get(self, path: str, query: str = "") -> None:

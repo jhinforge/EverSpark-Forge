@@ -88,6 +88,28 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
         if parsed.path in {"/health", "/system_stats"}:
             self._json(200, {"ok": True})
+        elif parsed.path == "/resources":
+            self._json(
+                200,
+                {
+                    "ok": True,
+                    "workflows": [
+                        {
+                            "id": "base-illustrious",
+                            "name": "Base Illustrious",
+                            "supports": {"lora_injection": True},
+                        }
+                    ],
+                    "checkpoints": ["base.safetensors"],
+                    "loras": ["style.safetensors"],
+                    "llms": ["concept:latest"],
+                    "defaults": {
+                        "workflow": "base-illustrious",
+                        "checkpoint": "base.safetensors",
+                        "llm": "concept:latest",
+                    },
+                },
+            )
         elif parsed.path == "/subjects" and query.get("subject_id"):
             self._json(200, {"ok": True, "document": self.subject()})
         elif parsed.path == "/subjects":
@@ -293,6 +315,31 @@ class WebUIIntegrationTests(unittest.TestCase):
         image_url = result["results"][0]["images"][0]["url"]
         with urlopen(self.base_url + image_url, timeout=5) as response:
             self.assertEqual(response.read(), PNG_BYTES)
+
+    def test_resources_and_generation_selection_are_proxied(self) -> None:
+        _, resources = self.request_json("/api/resources")
+        self.assertEqual(resources["workflows"][0]["id"], "base-illustrious")
+        selection = {
+            "workflow": "base-illustrious",
+            "checkpoint": "base.safetensors",
+            "llm": "concept:latest",
+            "loras": [
+                {
+                    "name": "style.safetensors",
+                    "strength_model": 0.8,
+                    "strength_clip": 0.7,
+                }
+            ],
+        }
+        self.request_json(
+            "/api/generate",
+            {
+                "message": "blue hour rooftop",
+                "session_id": "session-resources",
+                "selection": selection,
+            },
+        )
+        self.assertEqual(MockUpstreamHandler.received_task["selection"], selection)
 
     def test_discussion_and_current_subject_follow_the_session(self) -> None:
         _, discussed = self.request_json(

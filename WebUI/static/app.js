@@ -2,6 +2,8 @@ const state = {
   subjects: [],
   selectedSubject: null,
   mode: "discuss",
+  resources: { workflows: [], checkpoints: [], loras: [], llms: [], defaults: {} },
+  selectedLoras: [],
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
 };
@@ -39,6 +41,12 @@ const elements = {
   revisionList: $("#revisionList"),
   imageViewer: $("#imageViewer"),
   viewerImage: $("#viewerImage"),
+  workflowSelect: $("#workflowSelect"),
+  checkpointSelect: $("#checkpointSelect"),
+  llmSelect: $("#llmSelect"),
+  loraSelect: $("#loraSelect"),
+  addLoraButton: $("#addLoraButton"),
+  selectedLoras: $("#selectedLoras"),
 };
 
 const viewCopy = {
@@ -81,6 +89,132 @@ function formatDate(value) {
   if (!value) return "Unknown time";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
+function fillSelect(select, items, valueFor, labelFor, preferred = "") {
+  const previous = select.value;
+  select.replaceChildren();
+  for (const item of items) {
+    const option = document.createElement("option");
+    option.value = valueFor(item);
+    option.textContent = labelFor(item);
+    select.appendChild(option);
+  }
+  const candidates = [previous, preferred].filter(Boolean);
+  for (const candidate of candidates) {
+    const match = [...select.options].find((option) => option.value.toLowerCase() === candidate.toLowerCase());
+    if (match) {
+      select.value = match.value;
+      break;
+    }
+  }
+}
+
+function selectedWorkflow() {
+  return state.resources.workflows.find((item) => item.id === elements.workflowSelect.value);
+}
+
+function updateLoraAvailability() {
+  const enabled = Boolean(selectedWorkflow()?.supports?.lora_injection && state.resources.loras.length);
+  elements.loraSelect.disabled = !enabled;
+  elements.addLoraButton.disabled = !enabled;
+  if (!enabled && state.selectedLoras.length) {
+    state.selectedLoras = [];
+    renderSelectedLoras();
+  }
+}
+
+function renderSelectedLoras() {
+  elements.selectedLoras.replaceChildren();
+  if (state.selectedLoras.length) {
+    const header = document.createElement("div");
+    header.className = "lora-row lora-header";
+    for (const label of ["Selected LoRA", "Model", "CLIP", ""]) {
+      const cell = document.createElement("span");
+      cell.textContent = label;
+      header.appendChild(cell);
+    }
+    elements.selectedLoras.appendChild(header);
+  }
+  for (const item of state.selectedLoras) {
+    const row = document.createElement("div");
+    row.className = "lora-row";
+    const name = document.createElement("span");
+    name.className = "lora-name";
+    name.textContent = item.name;
+    const model = document.createElement("input");
+    model.type = "number";
+    model.step = "0.05";
+    model.min = "-10";
+    model.max = "10";
+    model.value = String(item.strength_model);
+    model.title = "Model strength";
+    model.setAttribute("aria-label", `${item.name} model strength`);
+    model.addEventListener("change", () => { item.strength_model = Number(model.value); });
+    const clip = document.createElement("input");
+    clip.type = "number";
+    clip.step = "0.05";
+    clip.min = "-10";
+    clip.max = "10";
+    clip.value = String(item.strength_clip);
+    clip.title = "CLIP strength";
+    clip.setAttribute("aria-label", `${item.name} CLIP strength`);
+    clip.addEventListener("change", () => { item.strength_clip = Number(clip.value); });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", `Remove ${item.name}`);
+    remove.addEventListener("click", () => {
+      state.selectedLoras = state.selectedLoras.filter((selected) => selected !== item);
+      renderSelectedLoras();
+    });
+    row.append(name, model, clip, remove);
+    elements.selectedLoras.appendChild(row);
+  }
+}
+
+function addSelectedLora() {
+  const name = elements.loraSelect.value;
+  if (!name || state.selectedLoras.some((item) => item.name === name)) return;
+  state.selectedLoras.push({ name, strength_model: 1, strength_clip: 1 });
+  renderSelectedLoras();
+}
+
+function generationSelection() {
+  return {
+    workflow: elements.workflowSelect.value,
+    checkpoint: elements.checkpointSelect.value,
+    llm: elements.llmSelect.value,
+    loras: state.selectedLoras.map((item) => ({ ...item })),
+  };
+}
+
+async function loadResources() {
+  try {
+    const data = await api("/api/resources");
+    state.resources = {
+      workflows: data.workflows || [],
+      checkpoints: data.checkpoints || [],
+      loras: data.loras || [],
+      llms: data.llms || [],
+      defaults: data.defaults || {},
+    };
+    fillSelect(elements.workflowSelect, state.resources.workflows, (item) => item.id, (item) => item.name, state.resources.defaults.workflow);
+    fillSelect(elements.checkpointSelect, state.resources.checkpoints, (item) => item, (item) => item, state.resources.defaults.checkpoint);
+    fillSelect(elements.llmSelect, state.resources.llms, (item) => item, (item) => item, state.resources.defaults.llm);
+    fillSelect(elements.loraSelect, state.resources.loras, (item) => item, (item) => item);
+    elements.workflowSelect.disabled = !state.resources.workflows.length;
+    elements.checkpointSelect.disabled = !state.resources.checkpoints.length;
+    elements.llmSelect.disabled = !state.resources.llms.length;
+    updateLoraAvailability();
+  } catch (error) {
+    elements.workflowSelect.disabled = true;
+    elements.checkpointSelect.disabled = true;
+    elements.llmSelect.disabled = true;
+    elements.loraSelect.disabled = true;
+    elements.addLoraButton.disabled = true;
+    showNotice(error.message);
+  }
 }
 
 function setView(name) {
@@ -314,7 +448,11 @@ async function discuss() {
     const data = await api("/api/conversation", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, session_id: state.sessionId }),
+      body: JSON.stringify({
+        message,
+        session_id: state.sessionId,
+        selection: generationSelection(),
+      }),
     });
     appendConversation("assistant", data.reply);
     state.selectedSubject = data.subject || null;
@@ -465,6 +603,7 @@ async function generate() {
       body: JSON.stringify({
         message,
         session_id: state.sessionId,
+        selection: generationSelection(),
       }),
     });
     elements.scenePrompt.value = "";
@@ -553,6 +692,8 @@ function bindEvents() {
   $("#newConversationButton").addEventListener("click", newConversation);
   elements.discussModeButton.addEventListener("click", () => setMode("discuss"));
   elements.generateModeButton.addEventListener("click", () => setMode("generate"));
+  elements.workflowSelect.addEventListener("change", updateLoraAvailability);
+  elements.addLoraButton.addEventListener("click", addSelectedLora);
   $("#viewRevisionsButton").addEventListener("click", showRevisions);
   $("#closeRevisionModal").addEventListener("click", () => elements.revisionModal.close());
   elements.generateButton.addEventListener("click", generate);
@@ -561,7 +702,7 @@ function bindEvents() {
   });
   $("#refreshButton").addEventListener("click", async () => {
     hideNotice();
-    await Promise.all([loadSubjects(), loadRuntime()]);
+    await Promise.all([loadSubjects(), loadRuntime(), loadResources()]);
   });
   $("#refreshHistoryButton").addEventListener("click", loadHistory);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);
@@ -576,7 +717,7 @@ async function initialize() {
   bindEvents();
   setMode("discuss");
   renderSelectedSubject();
-  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime()]);
+  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadResources()]);
   setInterval(loadRuntime, 20000);
 }
 
