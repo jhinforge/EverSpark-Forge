@@ -10,7 +10,6 @@ runtime:
     comfyui_version: v0.37.0
     comfyui_commit: 73c9bad4d21e7addbe1d13bc92eee0f1431b017d
     ollama_version: 0.34.2
-    torch_index_url: https://download.pytorch.org/whl/cu130
     single_gpu_ollama_keep_alive: 0
   gpu_assignment:
     image_forge: 0

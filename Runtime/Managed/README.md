@@ -19,6 +19,18 @@ after its response so Image Forge can reclaim GPU memory before diffusion. On
 two or more GPUs, the existing assignment policy defaults Image Forge to GPU 0
 and Concept Forge to GPU 1.
 
+## Automatic PyTorch compatibility
+
+EverSpark selects the managed PyTorch environment from detected hardware and
+the Pod/base-image CUDA runtime. Blackwell (`sm_120+`) on CUDA 12.8 or newer
+uses the validated `cu128` profile. Other and unknown combinations use the
+stable `cu121` profile. The selection is internal: there is no public CUDA
+wheel URL or profile override.
+
+The selected profile is recorded under `Data/Runtime/ComfyUI`. If a clone is
+moved to hardware requiring a different profile, only the managed ComfyUI venv
+is rebuilt; models, workflows, outputs, configuration, and memory are retained.
+
 `access_info.py` converts the platform's connection metadata into a safe SSH
 forwarding command. It recognizes Vast.ai's `PUBLIC_IPADDR` and
 `VAST_TCP_PORT_22`, supports explicit cross-platform overrides, and never

@@ -38,6 +38,9 @@ the tunnel port must match the EverSpark WebUI port (8780 by default). If
 `rclone.conf` is present, it is validated and staged but does not enable a
 remote storage policy automatically.
 
+Once `EVERSPARK_STORAGE_BACKEND=rclone` is explicitly selected, `setup`
+installs rclone automatically on the supported apt-based Linux runtime.
+
 To enable selective remote model downloads after import, add the following to
 the private environment file using paths from the user's own rclone remote:
 

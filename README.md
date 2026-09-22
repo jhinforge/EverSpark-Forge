@@ -94,8 +94,9 @@ directory, then normalize and validate them before setup:
 ```
 
 The input files remain untouched. Cloudflare joins the managed lifecycle only
-when its backend is enabled; an imported rclone connection is staged without
-activating an as-yet-unselected remote synchronization policy.
+when its backend is enabled. When the rclone storage backend is explicitly
+enabled, setup installs rclone automatically; merely importing `rclone.conf`
+does not activate remote storage or install anything.
 
 When rclone storage is enabled, the Runtime page can scan and selectively
 download remote Checkpoints, diffusion models, LoRAs, and Ollama models. Image
@@ -115,6 +116,9 @@ Concept Forge and Illustrious XL v1.0 for Image Forge. Inspect the download
 plan with `./everspark setup --plan`; run `./everspark setup` only when you are
 ready to download both models (roughly 9.5 GB total). A public, LoRA-free
 Illustrious API Format workflow is included for the initial generation path.
+The setup process also selects a validated PyTorch/CUDA compatibility profile
+from the detected GPU architecture and Pod base runtime; users do not choose a
+CUDA wheel family manually.
 The WebUI can select installed Ollama models, ComfyUI checkpoints, and
 registered API Format workflows. Standard SDXL/Illustrious workflows can add
 multiple LoRAs per request without modifying the bundled workflow file.

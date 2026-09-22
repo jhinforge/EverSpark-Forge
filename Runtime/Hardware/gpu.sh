@@ -40,11 +40,21 @@ core_gpu_compute_capability() {
 }
 
 core_gpu_sm_code() {
-  local capability
+  local capability gpu_name
   capability="$(core_gpu_compute_capability)"
 
   if [[ "$capability" =~ ^([0-9]+)\.([0-9]+) ]]; then
     printf '%s\n' "$((10#${BASH_REMATCH[1]} * 10 + 10#${BASH_REMATCH[2]}))"
+    return 0
+  fi
+
+  # Older nvidia-smi builds may not expose compute_cap. Preserve the validated
+  # Blackwell name fallback so profile selection still works before Python and
+  # PyTorch are installed.
+  gpu_name="$(core_gpu_name || true)"
+  if printf '%s' "$gpu_name" \
+    | grep -Eqi 'RTX 50|5090|5080|5070|5060|Blackwell|B200|B100'; then
+    printf '%s\n' "120"
     return 0
   fi
 

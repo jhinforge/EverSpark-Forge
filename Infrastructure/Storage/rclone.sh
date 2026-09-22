@@ -8,6 +8,22 @@ _EVERSPARK_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${_EVERSPARK_REPO_ROOT}/Runtime/Logging/log.sh"
 # shellcheck disable=SC1091
 source "${_EVERSPARK_REPO_ROOT}/Shared/Shell/common.sh"
+# shellcheck disable=SC1091
+source "${_EVERSPARK_REPO_ROOT}/Runtime/System/apt.sh"
+
+core_rclone_install() {
+  if core_command_exists rclone; then
+    core_ok storage.rclone.ready "rclone is already available" \
+      "version=$(rclone version 2>/dev/null | head -n 1 || true)"
+    return 0
+  fi
+
+  core_info storage.rclone.install "Installing rclone for the enabled storage backend"
+  core_apt_install_missing rclone || return 1
+  core_rclone_require || return 1
+  core_ok storage.rclone.ready "rclone installation completed" \
+    "version=$(rclone version 2>/dev/null | head -n 1 || true)"
+}
 
 core_rclone_require() {
   if ! core_command_exists rclone; then

@@ -23,4 +23,28 @@ bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/stop_tunnel.sh"
 
 grep -q "Cloudflare Tunnel is disabled" "${TEST_ROOT}/logs/tunnel.log"
 
+# Enabling the optional remote backend installs rclone exactly once. Keep this
+# test isolated from the host package manager by replacing only the command
+# probe and apt boundary after the production module has been sourced.
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/Infrastructure/Storage/rclone.sh"
+rclone_available=0
+rclone_install_calls=0
+core_command_exists() {
+  [ "$1" = "rclone" ] && [ "$rclone_available" -eq 1 ]
+}
+core_apt_install_missing() {
+  [ "$1" = "rclone" ]
+  rclone_install_calls=$((rclone_install_calls + 1))
+  rclone_available=1
+}
+rclone() {
+  printf '%s\n' "rclone v-test"
+}
+
+core_rclone_install
+[ "$rclone_install_calls" -eq 1 ]
+core_rclone_install
+[ "$rclone_install_calls" -eq 1 ]
+
 printf 'local infrastructure defaults: OK\n'

@@ -6,10 +6,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 COMFY_VERSION="${EVERSPARK_COMFYUI_VERSION:-v0.37.0}"
 COMFY_COMMIT="${EVERSPARK_COMFYUI_COMMIT:-73c9bad4d21e7addbe1d13bc92eee0f1431b017d}"
 OLLAMA_VERSION="${EVERSPARK_OLLAMA_VERSION:-0.34.2}"
-TORCH_INDEX_URL="${EVERSPARK_TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu130}"
 COMFY_RUNTIME="${REPO_ROOT}/Data/Runtime/ComfyUI"
 COMFY_ROOT="${COMFY_RUNTIME}/source"
 COMFY_VENV="${COMFY_RUNTIME}/venv"
+TORCH_PROFILE_STATE="${COMFY_RUNTIME}/torch-profile"
 
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/Runtime/Logging/log.sh"
@@ -17,6 +17,19 @@ source "${REPO_ROOT}/Runtime/Logging/log.sh"
 source "${REPO_ROOT}/Shared/Shell/common.sh"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/Runtime/System/apt.sh"
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/Runtime/Hardware/torch_profile.sh"
+
+TORCH_PROFILE="$(core_torch_profile_detect)"
+TORCH_INDEX_URL="$(core_torch_profile_index "$TORCH_PROFILE")"
+TORCH_EXPECTED_CUDA="$(core_torch_profile_expected_cuda "$TORCH_PROFILE")"
+TORCH_PROFILE_REVISION="${TORCH_PROFILE}-v1"
+DETECTED_GPU="$(core_gpu_name 2>/dev/null || true)"
+DETECTED_COMPUTE_CAPABILITY="$(core_gpu_compute_capability 2>/dev/null || true)"
+DETECTED_BASE_CUDA="$(core_cuda_runtime_version 2>/dev/null || true)"
+DETECTED_GPU="${DETECTED_GPU:-unknown}"
+DETECTED_COMPUTE_CAPABILITY="${DETECTED_COMPUTE_CAPABILITY:-unknown}"
+DETECTED_BASE_CUDA="${DETECTED_BASE_CUDA:-unknown}"
 
 LOG_DIR="${EVERSPARK_LOG_DIR:-${REPO_ROOT}/Data/Logs}"
 if [[ "$LOG_DIR" != /* ]]; then
@@ -46,7 +59,10 @@ Managed runtime plan
   ComfyUI: ${COMFY_VERSION}
   ComfyUI commit: ${COMFY_COMMIT}
   ComfyUI root: ${COMFY_ROOT}
-  PyTorch index: ${TORCH_INDEX_URL}
+  Detected GPU: ${DETECTED_GPU}
+  Detected compute capability: ${DETECTED_COMPUTE_CAPABILITY}
+  Detected base CUDA: ${DETECTED_BASE_CUDA}
+  Selected PyTorch profile: ${TORCH_PROFILE}
   Ollama: ${OLLAMA_VERSION}
   Service state: ${REPO_ROOT}/Data/Runtime/Services
 EOF
@@ -87,6 +103,12 @@ if ! python3 -c 'import venv' >/dev/null 2>&1; then
   exit 1
 fi
 
+core_info runtime.torch.profile "Selected managed PyTorch compatibility profile" \
+  "profile=${TORCH_PROFILE}" \
+  "gpu=${DETECTED_GPU}" \
+  "compute_capability=${DETECTED_COMPUTE_CAPABILITY}" \
+  "base_cuda=${DETECTED_BASE_CUDA}"
+
 mkdir -p "${REPO_ROOT}/Data/Runtime" "${REPO_ROOT}/Data/Models/ImageForge/checkpoints"
 
 if ! command -v ollama >/dev/null 2>&1; then
@@ -122,13 +144,89 @@ if [ "$actual_comfy_commit" != "$COMFY_COMMIT" ]; then
   exit 1
 fi
 
+installed_profile=""
+if [ -f "$TORCH_PROFILE_STATE" ]; then
+  installed_profile="$(tr -d '[:space:]' < "$TORCH_PROFILE_STATE")"
+fi
+environment_matches=0
+if [ -x "${COMFY_VENV}/bin/python" ] \
+  && [ "$installed_profile" = "$TORCH_PROFILE_REVISION" ]; then
+  installed_cuda="$("${COMFY_VENV}/bin/python" - <<'PY' 2>/dev/null || true
+try:
+    import torch
+    print(torch.version.cuda or "")
+except Exception:
+    pass
+PY
+)"
+  if [[ "$installed_cuda" == "$TORCH_EXPECTED_CUDA"* ]]; then
+    environment_matches=1
+  fi
+fi
+if [ -d "$COMFY_VENV" ] && [ "$environment_matches" -ne 1 ]; then
+  core_info runtime.torch.rebuild "Rebuilding managed environment for selected profile" \
+    "installed=${installed_profile:-legacy}" "selected=${TORCH_PROFILE_REVISION}" \
+    "installed_cuda=${installed_cuda:-unknown}"
+  rm -rf -- "$COMFY_VENV"
+fi
+
+new_environment=0
 if [ ! -x "${COMFY_VENV}/bin/python" ]; then
   python3 -m venv "$COMFY_VENV"
+  new_environment=1
 fi
 "${COMFY_VENV}/bin/python" -m pip install --disable-pip-version-check --upgrade pip wheel
-"${COMFY_VENV}/bin/python" -m pip install \
-  torch torchvision torchaudio --index-url "$TORCH_INDEX_URL"
+if [ "$new_environment" -eq 1 ]; then
+  case "$TORCH_PROFILE" in
+    cu121)
+      "${COMFY_VENV}/bin/python" -m pip install \
+        --index-url "$TORCH_INDEX_URL" \
+        --extra-index-url https://pypi.org/simple \
+        "torch==2.5.1+cu121" \
+        "torchvision==0.20.1+cu121" \
+        "torchaudio==2.5.1+cu121"
+      "${COMFY_VENV}/bin/python" -m pip install \
+        "xformers==0.0.27.post2" --no-deps
+      ;;
+    cu128)
+      "${COMFY_VENV}/bin/python" -m pip install \
+        torch torchvision torchaudio --index-url "$TORCH_INDEX_URL"
+      ;;
+    *)
+      core_die runtime.torch.profile "Unsupported internal PyTorch profile" \
+        "profile=${TORCH_PROFILE}"
+      exit 1
+      ;;
+  esac
+fi
 "${COMFY_VENV}/bin/python" -m pip install -r "${COMFY_ROOT}/requirements.txt"
+
+EVERSPARK_EXPECTED_TORCH_CUDA="$TORCH_EXPECTED_CUDA" \
+EVERSPARK_ALLOW_CPU="${EVERSPARK_ALLOW_CPU:-0}" \
+  "${COMFY_VENV}/bin/python" - <<'PY'
+import os
+
+import torch
+
+expected = os.environ["EVERSPARK_EXPECTED_TORCH_CUDA"]
+actual = str(torch.version.cuda or "")
+print("EverSpark PyTorch health check")
+print("  torch:", torch.__version__)
+print("  torch CUDA:", actual or "unavailable")
+print("  CUDA available:", torch.cuda.is_available())
+
+if not actual.startswith(expected):
+    raise SystemExit(f"PyTorch CUDA mismatch: expected {expected}, got {actual or 'none'}")
+
+if os.environ.get("EVERSPARK_ALLOW_CPU") != "1":
+    if not torch.cuda.is_available():
+        raise SystemExit("CUDA is unavailable in the selected PyTorch profile")
+    print("  device:", torch.cuda.get_device_name(0))
+    print("  capability:", torch.cuda.get_device_capability(0))
+    print("  CUDA tensor:", torch.ones(1, device="cuda"))
+PY
+
+printf '%s\n' "$TORCH_PROFILE_REVISION" > "$TORCH_PROFILE_STATE"
 
 cat >"${COMFY_ROOT}/extra_model_paths.yaml" <<EOF
 everspark:

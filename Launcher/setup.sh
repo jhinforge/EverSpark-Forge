@@ -62,6 +62,12 @@ if [ "${EVERSPARK_NETWORK_BACKEND:-local}" = "cloudflare" ]; then
   core_cloudflared_install
 fi
 
+if [ "${EVERSPARK_STORAGE_BACKEND:-local}" = "rclone" ]; then
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/Infrastructure/Storage/rclone.sh"
+  core_rclone_install
+fi
+
 bash "${REPO_ROOT}/Runtime/Managed/install_runtime.sh"
 
 if [ "$SKIP_MODELS" = true ]; then
