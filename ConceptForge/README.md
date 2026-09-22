@@ -13,7 +13,7 @@ The current implementation contains:
 - strict local validation without third-party dependencies;
 - deterministic subject-to-prompt compilation;
 - protected document identity and sequential revisions;
-- model-assisted creation and update against the same fixed contract.
+- automatic extraction and update from the user/model conversation context.
 
 Ollama remains an implementation provider: Orchestrator talks to the Concept
 Forge interface and does not own Ollama HTTP behavior.
@@ -24,8 +24,12 @@ The schema is stored at `Schemas/character_subject.v1.schema.json`. It contains
 only reusable character identity: identity, appearance, default wardrobe,
 locked/flexible traits, prompt terms, and metadata. Scene, pose, camera, and
 background remain request-level state and are not persisted into the subject.
+The schema is an internal contract, not a form the user is expected to fill.
+For v0.1, each conversation automatically owns one current subject. Discussion
+and generation turns both refresh it from the complete bounded context.
 
-Create, validate, or compile a document locally:
+Developer and diagnostic commands can still create, validate, or compile a
+document locally:
 
 ```bash
 ./everspark concept new character-id "Display Name"

@@ -206,6 +206,90 @@ class BatchTests(unittest.TestCase):
 
 
 class SubjectIntegrationTests(unittest.TestCase):
+    def test_generation_extracts_and_uses_the_session_subject_without_an_id(self) -> None:
+        class FakeConceptForge:
+            def generate_subject(
+                self, _text, subject_id, existing=None, history=None, assistant_reply=""
+            ):
+                document = new_subject(subject_id, "Auto Character")
+                document["appearance"]["hair"]["color"] = "silver"
+                return document
+
+            def generate_prompt(self, _text, _history):
+                return GenerationPlan("illustrious", "rooftop", "low quality", 1, "over")
+
+        class FakeWorkflow:
+            def build(self, positive, negative, seed):
+                return {"positive": positive, "negative": negative, "seed": seed}
+
+            def bind_checkpoint(self, _workflow, _available, _notify):
+                return None
+
+        class FakeImageForge:
+            def list_checkpoints(self):
+                return ["test.safetensors"]
+
+            def queue_prompt(self, _workflow):
+                return "prompt-1"
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = load_config()
+            config["memory"]["database"] = str(Path(directory) / "memory.db")
+            orchestrator = Orchestrator(config)
+            orchestrator.runner.concept = FakeConceptForge()
+            orchestrator.runner.workflow = FakeWorkflow()
+            orchestrator.runner.image = FakeImageForge()
+
+            response = orchestrator.submit("Put her on a rooftop", "session-a")
+            result = response["result"]
+            current = orchestrator.get_session_subject("session-a")
+
+            self.assertEqual(result["subject"]["subject_id"], current["subject_id"])
+            self.assertIn("silver", result["positive_prompt"])
+
+    def test_discussion_automatically_maintains_one_subject_per_session(self) -> None:
+        class FakeConceptForge:
+            histories = []
+
+            def discuss(self, text, history):
+                self.histories.append(history)
+                return f"Understood: {text}"
+
+            def generate_subject(
+                self, text, subject_id, existing=None, history=None, assistant_reply=""
+            ):
+                document = (
+                    json.loads(json.dumps(existing))
+                    if existing is not None
+                    else new_subject(subject_id, "Current Character")
+                )
+                if existing is not None:
+                    document["revision"] += 1
+                if "silver" in text:
+                    document["appearance"]["hair"]["color"] = "silver"
+                return document
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = load_config()
+            config["memory"]["database"] = str(Path(directory) / "memory.db")
+            orchestrator = Orchestrator(config)
+            concept = FakeConceptForge()
+            orchestrator.runner.concept = concept
+
+            first = orchestrator.discuss("She has silver hair", "session-a")
+            second = orchestrator.discuss("Keep that design", "session-a")
+
+            self.assertEqual(
+                first["subject"]["subject_id"], second["subject"]["subject_id"]
+            )
+            self.assertEqual(second["subject"]["revision"], 1)
+            self.assertEqual(second["subject"]["appearance"]["hair"]["color"], "silver")
+            self.assertEqual(len(concept.histories[1]), 2)
+            self.assertEqual(
+                orchestrator.get_session_subject("session-a")["subject_id"],
+                first["subject"]["subject_id"],
+            )
+
     def test_orchestrator_persists_updates_and_compiles_subjects(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = load_config()
@@ -249,6 +333,17 @@ class APITests(unittest.TestCase):
 
         def clear_memory(self, session_id):
             self.cleared = session_id
+
+        def discuss(self, text, session_id):
+            return {
+                "ok": True,
+                "reply": f"reply:{text}",
+                "session_id": session_id,
+                "subject": self.document,
+            }
+
+        def get_session_subject(self, _session_id):
+            return self.document
 
         def submit(self, text, session_id, subject_id=""):
             return {
@@ -326,6 +421,18 @@ class APITests(unittest.TestCase):
         with self.assertRaises(HTTPError) as caught:
             self._request(f"/context/history?{query}")
         self.assertEqual(caught.exception.code, 404)
+
+        status, discussed = self._request(
+            "/conversation", {"session_id": "session-a", "text": "hello"}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(discussed["reply"], "reply:hello")
+
+        status, current = self._request(
+            f"/subjects/current?{urlencode({'session_id': 'session-a'})}"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(current["document"]["subject_id"], "subject-a")
 
     def test_subject_create_update_compile_and_read_routes(self) -> None:
         document = new_subject("subject-a", "Subject A")

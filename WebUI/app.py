@@ -163,6 +163,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/subjects/revisions": lambda: self._proxy_orchestrator_get(
                 "/subjects/revisions", parsed.query
             ),
+            "/api/subjects/current": lambda: self._proxy_orchestrator_get(
+                "/subjects/current", parsed.query
+            ),
+            "/api/conversation/history": lambda: self._proxy_orchestrator_get(
+                "/memory/history", parsed.query
+            ),
             "/api/results": lambda: self._results(parse_qs(parsed.query)),
             "/api/history": lambda: self._history(parse_qs(parsed.query)),
             "/api/image/view": lambda: self._proxy_image(parse_qs(parsed.query)),
@@ -187,6 +193,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
             if path == "/api/generate":
                 self._generate(payload)
+            elif path == "/api/conversation":
+                self._conversation(payload)
+            elif path == "/api/conversation/clear":
+                self._proxy_orchestrator_post("/memory/clear", payload)
             elif path in upstream_paths:
                 self._proxy_orchestrator_post(upstream_paths[path], payload)
             else:
@@ -210,13 +220,19 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _generate(self, payload: dict[str, Any]) -> None:
         message = str(payload.get("message", "")).strip()
         session_id = str(payload.get("session_id", "main")).strip()
-        subject_id = str(payload.get("subject_id", "")).strip()
         if not message:
             raise ValueError("Describe the scene before generating")
         request_payload = {"text": message, "session_id": session_id}
-        if subject_id:
-            request_payload["subject_id"] = subject_id
         self._proxy_orchestrator_post("/tasks", request_payload)
+
+    def _conversation(self, payload: dict[str, Any]) -> None:
+        message = str(payload.get("message", "")).strip()
+        session_id = str(payload.get("session_id", "main")).strip()
+        if not message:
+            raise ValueError("Message cannot be empty")
+        self._proxy_orchestrator_post(
+            "/conversation", {"text": message, "session_id": session_id}
+        )
 
     def _proxy_orchestrator_get(self, path: str, query: str = "") -> None:
         url = f"{self.server.settings.orchestrator_url}{path}"

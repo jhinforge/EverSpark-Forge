@@ -30,9 +30,11 @@ The service binds to `127.0.0.1:8765` by default and exposes:
 
 - `GET /health`
 - `POST /tasks`
+- `POST /conversation`
 - `GET /memory/history?session_id=...`
 - `POST /memory/clear`
 - `GET /subjects`
+- `GET /subjects/current?session_id=...`
 - `GET /subjects?subject_id=...`
 - `GET /subjects/revisions?subject_id=...`
 - `POST /subjects`
@@ -40,9 +42,15 @@ The service binds to `127.0.0.1:8765` by default and exposes:
 - `POST /subjects/update`
 - `POST /subjects/compile`
 
-Generation requests may include `subject_id`. Orchestrator loads that revision
-from Memory, asks Concept Forge to compile its stable traits, and merges them
-with the request-level scene prompt before sending the workflow to Image Forge.
+Every conversation automatically owns one current subject. Orchestrator asks
+Concept Forge to extract that internal JSON document from the bounded user and
+assistant context, validates it, and stores a revision only when its content
+changes. Generation compiles the current subject automatically and merges its
+stable traits with the request-level scene prompt before sending the workflow
+to Image Forge. Clients do not select or configure a subject ID.
+
+The explicit subject write endpoints remain available as developer/debugging
+interfaces; they are not part of the normal WebUI workflow.
 
 ## Configuration
 

@@ -73,6 +73,30 @@ class SubjectCompilerTests(unittest.TestCase):
 
 
 class OllamaSubjectBuilderTests(unittest.TestCase):
+    def test_subject_extraction_receives_user_and_model_conversation(self) -> None:
+        document = new_subject("auto-subject", "Current Character")
+        provider = OllamaProvider(
+            {"base_url": "http://127.0.0.1:11434", "model": "test", "timeout": 1}
+        )
+        with patch.object(
+            provider,
+            "_post_json",
+            return_value={"message": {"content": json.dumps(document)}},
+        ) as post:
+            provider.generate_subject(
+                "Make her eyes amber",
+                "auto-subject",
+                history=[
+                    {"role": "user", "content": "She has black hair"},
+                    {"role": "assistant", "content": "A long style would suit her."},
+                ],
+                assistant_reply="Amber eyes are now part of the design.",
+            )
+        extraction_request = post.call_args.args[1]["messages"][-1]["content"]
+        self.assertIn("She has black hair", extraction_request)
+        self.assertIn("A long style would suit her", extraction_request)
+        self.assertIn("Amber eyes are now part of the design", extraction_request)
+
     def test_provider_requires_the_fixed_subject_contract(self) -> None:
         document = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
         provider = OllamaProvider(

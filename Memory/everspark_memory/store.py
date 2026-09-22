@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,13 @@ class SQLiteMemoryStore:
 
                 CREATE INDEX IF NOT EXISTS idx_messages_session_id
                     ON messages(session_id, id);
+
+                CREATE TABLE IF NOT EXISTS session_subjects (
+                    session_id TEXT PRIMARY KEY,
+                    subject_id TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
 
                 CREATE TABLE IF NOT EXISTS tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +110,59 @@ class SQLiteMemoryStore:
                 (session_id, self.max_history_messages),
             ).fetchall()
         return [{"role": role, "content": content} for role, content in rows]
+
+    def get_or_create_session_subject_id(self, session_id: str) -> str:
+        if not session_id:
+            raise ValueError("session_id cannot be empty")
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT subject_id FROM session_subjects WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            if row is not None:
+                return str(row[0])
+            subject_id = f"subject-{secrets.token_hex(8)}"
+            connection.execute(
+                """
+                INSERT INTO session_subjects(session_id, subject_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (session_id, subject_id, now, now),
+            )
+        return subject_id
+
+    def get_session_subject_id(self, session_id: str) -> str | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT subject_id FROM session_subjects WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+        return None if row is None else str(row[0])
+
+    def record_conversation(
+        self, session_id: str, user_text: str, assistant_text: str
+    ) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO sessions(session_id, created_at, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET updated_at = excluded.updated_at
+                """,
+                (session_id, now, now),
+            )
+            connection.executemany(
+                """
+                INSERT INTO messages(session_id, role, content, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                [
+                    (session_id, "user", user_text, now),
+                    (session_id, "assistant", assistant_text, now),
+                ],
+            )
 
     def record_success(
         self, session_id: str, user_text: str, result: dict[str, Any]
@@ -166,6 +227,9 @@ class SQLiteMemoryStore:
             connection.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             connection.execute("DELETE FROM tasks WHERE session_id = ?", (session_id,))
             connection.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+            connection.execute(
+                "DELETE FROM session_subjects WHERE session_id = ?", (session_id,)
+            )
 
     def save_subject(self, document: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(document, dict):

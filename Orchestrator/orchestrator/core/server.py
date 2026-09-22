@@ -65,6 +65,19 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "messages": self.server.orchestrator.get_history(session_id),
                 },
             )
+        elif parsed.path == "/subjects/current":
+            session_id = parse_qs(parsed.query).get("session_id", [""])[0]
+            if not session_id:
+                self._send(400, {"ok": False, "error": "session_id is required"})
+                return
+            self._send(
+                200,
+                {
+                    "ok": True,
+                    "session_id": session_id,
+                    "document": self.server.orchestrator.get_session_subject(session_id),
+                },
+            )
         elif parsed.path == "/subjects":
             subject_id = parse_qs(parsed.query).get("subject_id", [""])[0]
             if subject_id:
@@ -113,6 +126,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         request_path = urlparse(self.path).path
         if request_path not in {
             "/tasks",
+            "/conversation",
             "/memory/clear",
             "/subjects",
             "/subjects/generate",
@@ -130,7 +144,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 result = self.server.orchestrator.submit(
                     str(payload.get("text", "")),
                     str(payload.get("session_id", "")),
-                    str(payload.get("subject_id", "")),
+                )
+                self._send(200, result)
+            elif request_path == "/conversation":
+                result = self.server.orchestrator.discuss(
+                    str(payload.get("text", "")),
+                    str(payload.get("session_id", "")),
                 )
                 self._send(200, result)
             elif request_path == "/memory/clear":

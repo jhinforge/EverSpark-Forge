@@ -17,6 +17,18 @@ from everspark_memory import (  # noqa: E402
 
 
 class SQLiteMemoryStoreTests(unittest.TestCase):
+    def test_session_subject_is_automatic_stable_and_cleared_with_session(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = SQLiteMemoryStore(str(Path(directory) / "memory.db"))
+            first = store.get_or_create_session_subject_id("session-a")
+            self.assertTrue(first.startswith("subject-"))
+            self.assertEqual(store.get_or_create_session_subject_id("session-a"), first)
+            self.assertNotEqual(
+                store.get_or_create_session_subject_id("session-b"), first
+            )
+            store.clear_session("session-a")
+            self.assertIsNone(store.get_session_subject_id("session-a"))
+
     def test_history_persists_and_clears(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / "memory.db"

@@ -25,8 +25,18 @@ Return exactly one complete JSON object and no Markdown or commentary.
 The output must preserve every key in the supplied Character Subject v1 template,
 must not add keys, and must use arrays and strings with the same types as the template.
 Fill visual identity fields from the user's description. Preserve existing values when
-the user does not request a change. Do not add scene, pose, camera, or background details
-to the persistent character identity. Use concise image-generation terms where useful.
+the user does not request a change. For a new subject, infer sensible reusable visual
+details when the conversation leaves them open instead of asking the user to configure
+schema fields. Do not add scene, pose, camera, or background details to the persistent
+character identity. Use concise image-generation terms where useful.
+"""
+
+DISCUSSION_SYSTEM_PROMPT = """You are the conversational Concept Forge component of EverSpark Forge.
+Discuss the user's current character concept naturally and concisely. Help clarify stable
+visual identity such as face, hair, body, clothing, and distinguishing features. You may
+suggest or infer sensible details when the user leaves them open. Do not expose internal
+JSON, schema fields, or implementation details. Do not claim that an image was generated.
+Reply in the user's language.
 """
 
 
@@ -92,6 +102,8 @@ class OllamaProvider:
         user_text: str,
         subject_id: str,
         existing: dict[str, Any] | None = None,
+        history: list[dict[str, str]] | None = None,
+        assistant_reply: str = "",
     ) -> dict[str, Any]:
         if existing is None:
             target = new_subject(subject_id, subject_id)
@@ -115,12 +127,23 @@ class OllamaProvider:
             + "\nThe required output template/current document is:\n"
             + json.dumps(target, ensure_ascii=False)
         )
+        conversation = list(history or [])
+        conversation.append({"role": "user", "content": user_text})
+        if assistant_reply:
+            conversation.append({"role": "assistant", "content": assistant_reply})
         messages = [
             {
                 "role": "system",
                 "content": self._system_prompt(subject_prompt),
             },
-            {"role": "user", "content": user_text},
+            {
+                "role": "user",
+                "content": (
+                    "Extract the current persistent character identity from this complete "
+                    "conversation. Ignore scene-only details. Conversation:\n"
+                    + json.dumps(conversation, ensure_ascii=False)
+                ),
+            },
         ]
         response = self._post_json(
             "/api/chat",
@@ -147,6 +170,26 @@ class OllamaProvider:
                 f"expected {expected_revision}"
             )
         return document
+
+    def discuss(
+        self, user_text: str, history: list[dict[str, str]] | None = None
+    ) -> str:
+        messages = [
+            {"role": "system", "content": self._system_prompt(DISCUSSION_SYSTEM_PROMPT)}
+        ]
+        messages.extend(history or [])
+        messages.append({"role": "user", "content": user_text})
+        response = self._post_json(
+            "/api/chat",
+            {"model": self.model, "stream": False, "messages": messages},
+        )
+        try:
+            reply = str(response["message"]["content"]).strip()
+        except (KeyError, TypeError) as exc:
+            raise OllamaError("Ollama returned an invalid discussion response") from exc
+        if not reply:
+            raise OllamaError("Ollama returned an empty discussion response")
+        return reply
 
     def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         request = Request(f"{self.base_url}{path}", data=json.dumps(payload, ensure_ascii=True).encode("utf-8"), headers={"Content-Type": "application/json; charset=utf-8"}, method="POST")

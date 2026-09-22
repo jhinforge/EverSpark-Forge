@@ -20,11 +20,11 @@ configuration file.
 
 ## Current features
 
-- Create a versioned Character Subject from a natural-language identity
-  description.
-- Update an existing subject without replacing unspecified traits.
+- Discuss a character naturally with Concept Forge.
+- Automatically extract and revise one current Character Subject per conversation.
 - Inspect immutable subject revision documents.
-- Select a subject and combine its stable traits with a temporary scene.
+- Switch the same conversation between discussion and image generation.
+- Combine the automatically maintained identity with a temporary scene.
 - Submit image tasks and track their exact Image Forge prompt identifiers.
 - Display current results and recent Image Forge history.
 - Show local Orchestrator, Image Forge, and logging readiness.
@@ -34,7 +34,8 @@ configuration file.
 
 The browser never connects directly to Orchestrator or the configured Image
 Forge adapter. `WebUI/app.py` exposes a same-origin proxy and does not store
-subject state itself. Character identity remains in Memory; scene, pose,
+subject state itself. Users never fill the internal JSON template or choose a
+subject ID. Character identity remains in Memory; scene, pose,
 camera, and background remain request-level task input.
 
 Default endpoints can be overridden when needed:

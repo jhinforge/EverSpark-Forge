@@ -106,6 +106,7 @@ Illustrious API Format workflow is included for the initial generation path.
 - [x] Image checkpoint discovery and deterministic fallback implemented
 - [x] Managed ComfyUI/Ollama installation and service lifecycle implemented
 - [x] Character Subject structured state and revision history implemented
+- [x] Conversation-derived automatic current subject implemented
 - [ ] Episodic memory implemented
 - [x] WebUI subject, generation, gallery, and runtime workflow implemented
 - [ ] First public release

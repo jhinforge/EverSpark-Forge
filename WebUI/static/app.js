@@ -1,9 +1,11 @@
 const state = {
   subjects: [],
   selectedSubject: null,
-  subjectMode: "create",
+  mode: "discuss",
+  sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
 };
+localStorage.setItem("everspark.session", state.sessionId);
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -11,7 +13,6 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const elements = {
   notice: $("#notice"),
   noticeText: $("#noticeText"),
-  subjectSelect: $("#subjectSelect"),
   subjectCount: $("#subjectCount"),
   selectedEmpty: $("#selectedSubjectEmpty"),
   selectedCard: $("#selectedSubjectCard"),
@@ -26,21 +27,14 @@ const elements = {
   generationState: $("#generationState"),
   scenePrompt: $("#scenePrompt"),
   generateButton: $("#generateButton"),
+  conversationFeed: $("#conversationFeed"),
+  discussModeButton: $("#discussModeButton"),
+  generateModeButton: $("#generateModeButton"),
   galleryGrid: $("#galleryGrid"),
   runtimeGrid: $("#runtimeGrid"),
   healthDot: $("#globalHealthDot"),
   healthTitle: $("#globalHealthTitle"),
   healthDetail: $("#globalHealthDetail"),
-  subjectModal: $("#subjectModal"),
-  subjectForm: $("#subjectForm"),
-  subjectModalKicker: $("#subjectModalKicker"),
-  subjectModalTitle: $("#subjectModalTitle"),
-  subjectModalCopy: $("#subjectModalCopy"),
-  subjectIdRow: $("#subjectIdRow"),
-  subjectIdInput: $("#subjectIdInput"),
-  subjectDescriptionInput: $("#subjectDescriptionInput"),
-  subjectDescriptionLabel: $("#subjectDescriptionLabel"),
-  saveSubjectButton: $("#saveSubjectButton"),
   revisionModal: $("#revisionModal"),
   revisionList: $("#revisionList"),
   imageViewer: $("#imageViewer"),
@@ -120,7 +114,6 @@ function renderSelectedSubject() {
   const hasSubject = Boolean(subject);
   elements.selectedEmpty.classList.toggle("hidden", hasSubject);
   elements.selectedCard.classList.toggle("hidden", !hasSubject);
-  $("#editSubjectButton").disabled = !hasSubject;
 
   elements.composerContext.replaceChildren();
   const miniAvatar = document.createElement("span");
@@ -159,28 +152,12 @@ function renderSelectedSubject() {
   elements.composerContext.append(miniAvatar, contextText);
 }
 
-function renderSubjectOptions() {
-  const current = state.selectedSubject?.subject_id || localStorage.getItem("everspark.subject") || "";
-  elements.subjectSelect.replaceChildren();
-  const none = document.createElement("option");
-  none.value = "";
-  none.textContent = "No subject · scene only";
-  elements.subjectSelect.appendChild(none);
-  for (const item of state.subjects) {
-    const option = document.createElement("option");
-    option.value = item.subject_id;
-    option.textContent = `${item.display_name || item.subject_id} · R${item.revision}`;
-    elements.subjectSelect.appendChild(option);
-  }
-  elements.subjectSelect.value = state.subjects.some((item) => item.subject_id === current) ? current : "";
-}
-
 function renderSubjectGrid() {
   elements.subjectGrid.replaceChildren();
   if (!state.subjects.length) {
     const empty = document.createElement("div");
     empty.className = "empty-collection";
-    empty.textContent = "No subjects yet. Create the first reusable character identity.";
+    empty.textContent = "No subjects yet. Start a conversation and EverSpark will extract one automatically.";
     elements.subjectGrid.appendChild(empty);
     return;
   }
@@ -211,129 +188,33 @@ function renderSubjectGrid() {
     updated.textContent = formatDate(item.updated_at);
     meta.append(revision, updated);
 
-    const actions = document.createElement("div");
-    actions.className = "subject-card-actions";
-    const use = document.createElement("button");
-    use.type = "button";
-    use.textContent = "Use in Forge";
-    use.addEventListener("click", async () => {
-      await selectSubject(item.subject_id);
-      setView("forge");
-    });
-    const revise = document.createElement("button");
-    revise.type = "button";
-    revise.textContent = "Update";
-    revise.addEventListener("click", async () => {
-      await selectSubject(item.subject_id);
-      openSubjectModal("update");
-    });
-    actions.append(use, revise);
-    card.append(top, meta, actions);
+    card.append(top, meta);
     elements.subjectGrid.appendChild(card);
   }
 }
 
-async function loadSubjects(preferredId = null) {
+async function loadSubjects() {
   try {
     const data = await api("/api/subjects");
     state.subjects = data.subjects || [];
     elements.subjectCount.textContent = String(state.subjects.length);
-    renderSubjectOptions();
     renderSubjectGrid();
-    const candidate = preferredId ?? elements.subjectSelect.value;
-    if (candidate && state.subjects.some((item) => item.subject_id === candidate)) {
-      await selectSubject(candidate, false);
-    } else if (state.selectedSubject && !state.subjects.some((item) => item.subject_id === state.selectedSubject.subject_id)) {
-      await selectSubject("", false);
-    } else {
-      renderSelectedSubject();
-    }
   } catch (error) {
     state.subjects = [];
     elements.subjectCount.textContent = "0";
-    renderSubjectOptions();
     renderSubjectGrid();
-    renderSelectedSubject();
     showNotice(error.message);
   }
 }
 
-async function selectSubject(subjectId, persist = true) {
-  if (!subjectId) {
-    state.selectedSubject = null;
-    elements.subjectSelect.value = "";
-    if (persist) localStorage.removeItem("everspark.subject");
-    renderSelectedSubject();
-    return;
-  }
+async function loadCurrentSubject() {
   try {
-    const query = new URLSearchParams({ subject_id: subjectId });
-    const data = await api(`/api/subjects?${query}`);
-    state.selectedSubject = data.document;
-    elements.subjectSelect.value = subjectId;
-    if (persist) localStorage.setItem("everspark.subject", subjectId);
+    const query = new URLSearchParams({ session_id: state.sessionId });
+    const data = await api(`/api/subjects/current?${query}`);
+    state.selectedSubject = data.document || null;
     renderSelectedSubject();
   } catch (error) {
     showNotice(error.message);
-  }
-}
-
-function openSubjectModal(mode) {
-  state.subjectMode = mode;
-  const update = mode === "update";
-  if (update && !state.selectedSubject) {
-    showNotice("Select a subject before updating it.");
-    return;
-  }
-  elements.subjectModalKicker.textContent = update ? "NEW IMMUTABLE REVISION" : "NEW STRUCTURED IDENTITY";
-  elements.subjectModalTitle.textContent = update ? "Update this subject" : "Create a subject";
-  elements.subjectModalCopy.textContent = update
-    ? "Describe only what changed. Unmentioned identity fields remain intact and a new revision is saved."
-    : "Describe stable visual identity only. Scene, pose, camera and background belong in the Forge prompt.";
-  elements.subjectIdRow.classList.toggle("hidden", update);
-  elements.subjectDescriptionLabel.textContent = update ? "Requested identity change" : "Identity description";
-  elements.subjectDescriptionInput.placeholder = update
-    ? "Change the hair to silver and keep every other trait unchanged..."
-    : "A young woman with waist-length black hair, sharp amber eyes, a black high-collar coat...";
-  elements.saveSubjectButton.textContent = update ? "Create revision" : "Build subject";
-  elements.subjectIdInput.value = update ? state.selectedSubject.subject_id : "";
-  elements.subjectDescriptionInput.value = "";
-  elements.subjectModal.showModal();
-  setTimeout(() => (update ? elements.subjectDescriptionInput : elements.subjectIdInput).focus(), 30);
-}
-
-async function saveSubject(event) {
-  event.preventDefault();
-  if (event.submitter?.value === "cancel") {
-    elements.subjectModal.close();
-    return;
-  }
-  const subjectId = (state.subjectMode === "update" ? state.selectedSubject?.subject_id : elements.subjectIdInput.value).trim();
-  const text = elements.subjectDescriptionInput.value.trim();
-  if (!subjectId || !text) {
-    showNotice("Subject ID and identity description are required.");
-    return;
-  }
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(subjectId)) {
-    showNotice("Subject ID must use lowercase letters, numbers and hyphens.");
-    return;
-  }
-  elements.saveSubjectButton.disabled = true;
-  elements.saveSubjectButton.textContent = state.subjectMode === "update" ? "Creating revision..." : "Building subject...";
-  try {
-    const data = await api("/api/subjects/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject_id: subjectId, text }),
-    });
-    elements.subjectModal.close();
-    hideNotice();
-    await loadSubjects(data.document.subject_id);
-  } catch (error) {
-    showNotice(error.message);
-  } finally {
-    elements.saveSubjectButton.disabled = false;
-    elements.saveSubjectButton.textContent = state.subjectMode === "update" ? "Create revision" : "Build subject";
   }
 }
 
@@ -371,6 +252,92 @@ async function showRevisions() {
     message.textContent = error.message;
     elements.revisionList.appendChild(message);
   }
+}
+
+function appendConversation(role, content) {
+  const message = document.createElement("article");
+  message.className = `conversation-message ${role}`;
+  const label = document.createElement("strong");
+  label.textContent = role === "user" ? "You" : "Concept Forge";
+  const body = document.createElement("p");
+  body.textContent = content;
+  message.append(label, body);
+  elements.conversationFeed.appendChild(message);
+  elements.conversationFeed.scrollTop = elements.conversationFeed.scrollHeight;
+}
+
+async function loadConversation() {
+  elements.conversationFeed.replaceChildren();
+  try {
+    const query = new URLSearchParams({ session_id: state.sessionId });
+    const data = await api(`/api/conversation/history?${query}`);
+    for (const message of data.messages || []) {
+      let content = message.content;
+      if (message.role === "assistant") {
+        try {
+          const parsed = JSON.parse(content);
+          if (parsed.status === "over") content = `Queued ${parsed.count || 1} image request.`;
+        } catch (_error) {
+          // Visible discussion replies are stored as plain text.
+        }
+      }
+      appendConversation(message.role, content);
+    }
+  } catch (error) {
+    showNotice(error.message);
+  }
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  const discussing = mode === "discuss";
+  elements.discussModeButton.classList.toggle("active", discussing);
+  elements.generateModeButton.classList.toggle("active", !discussing);
+  elements.generateButton.firstElementChild.textContent = discussing ? "Discuss" : "Forge image";
+  elements.scenePrompt.placeholder = discussing
+    ? "Let's design a character with long black hair and amber eyes..."
+    : "Place the current character on a rooftop at blue hour...";
+}
+
+async function discuss() {
+  const message = elements.scenePrompt.value.trim();
+  if (!message || elements.generateButton.disabled) {
+    if (!message) showNotice("Say something about the current character.");
+    return;
+  }
+  hideNotice();
+  elements.generateButton.disabled = true;
+  appendConversation("user", message);
+  elements.scenePrompt.value = "";
+  setGenerationState("Thinking", "running");
+  try {
+    const data = await api("/api/conversation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, session_id: state.sessionId }),
+    });
+    appendConversation("assistant", data.reply);
+    state.selectedSubject = data.subject || null;
+    renderSelectedSubject();
+    await loadSubjects();
+    setGenerationState("Ready", "success");
+  } catch (error) {
+    setGenerationState("Failed", "error");
+    showNotice(error.message);
+  } finally {
+    elements.generateButton.disabled = false;
+  }
+}
+
+async function newConversation() {
+  state.sessionId = crypto.randomUUID();
+  localStorage.setItem("everspark.session", state.sessionId);
+  state.selectedSubject = null;
+  elements.conversationFeed.replaceChildren();
+  elements.scenePrompt.value = "";
+  renderSelectedSubject();
+  setMode("discuss");
+  setGenerationState("Ready", "idle");
 }
 
 function setGenerationState(label, mode = "idle") {
@@ -466,6 +433,10 @@ async function pollResults(items) {
 }
 
 async function generate() {
+  if (state.mode === "discuss") {
+    await discuss();
+    return;
+  }
   const message = elements.scenePrompt.value.trim();
   if (!message || elements.generateButton.disabled) {
     if (!message) showNotice("Describe the scene before generating.");
@@ -473,6 +444,7 @@ async function generate() {
   }
   if (state.pollTimer) clearInterval(state.pollTimer);
   hideNotice();
+  appendConversation("user", message);
   elements.generateButton.disabled = true;
   setGenerationState("Planning", "running");
   elements.resultStage.replaceChildren();
@@ -492,10 +464,11 @@ async function generate() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message,
-        session_id: "main",
-        subject_id: state.selectedSubject?.subject_id || "",
+        session_id: state.sessionId,
       }),
     });
+    elements.scenePrompt.value = "";
+    await Promise.all([loadCurrentSubject(), loadSubjects()]);
     const items = data.result?.items || [];
     if (!items.length) throw new Error("Orchestrator did not return any queued frames.");
     renderWaiting(items);
@@ -577,10 +550,9 @@ async function loadRuntime() {
 
 function bindEvents() {
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
-  [$("#newSubjectButton"), $("#emptyNewSubjectButton"), $("#subjectsNewButton")].forEach((button) => button.addEventListener("click", () => openSubjectModal("create")));
-  $("#editSubjectButton").addEventListener("click", () => openSubjectModal("update"));
-  elements.subjectSelect.addEventListener("change", () => selectSubject(elements.subjectSelect.value));
-  elements.subjectForm.addEventListener("submit", saveSubject);
+  $("#newConversationButton").addEventListener("click", newConversation);
+  elements.discussModeButton.addEventListener("click", () => setMode("discuss"));
+  elements.generateModeButton.addEventListener("click", () => setMode("generate"));
   $("#viewRevisionsButton").addEventListener("click", showRevisions);
   $("#closeRevisionModal").addEventListener("click", () => elements.revisionModal.close());
   elements.generateButton.addEventListener("click", generate);
@@ -602,8 +574,9 @@ function bindEvents() {
 
 async function initialize() {
   bindEvents();
+  setMode("discuss");
   renderSelectedSubject();
-  await Promise.all([loadSubjects(), loadRuntime()]);
+  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime()]);
   setInterval(loadRuntime, 20000);
 }
 

@@ -185,6 +185,14 @@ h1, h2, h3, p { margin: 0; }
 .composer { padding: 18px 24px 22px; border-top: 1px solid var(--line); background: rgba(7, 10, 13, .32); }
 .composer-header label { color: #d9d9d6; font-size: 12px; font-weight: 650; }
 .composer-header span { color: var(--subtle); font-size: 9px; }
+.mode-switch { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: rgba(0, 0, 0, .18); }
+.mode-button { padding: 5px 9px; border-radius: 6px; color: var(--muted); background: transparent; font-size: 9px; }
+.mode-button.active { color: #fff; background: var(--ember-soft); }
+.conversation-feed { display: grid; gap: 8px; max-height: 220px; margin-top: 12px; overflow-y: auto; }
+.conversation-message { max-width: 88%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255, 255, 255, .025); }
+.conversation-message.user { justify-self: end; border-color: rgba(242, 139, 69, .2); background: var(--ember-soft); }
+.conversation-message strong { display: block; margin-bottom: 5px; color: var(--subtle); font-size: 8px; text-transform: uppercase; }
+.conversation-message p { color: var(--muted); font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
 textarea, input { width: 100%; border: 1px solid var(--line); border-radius: 11px; outline: 0; color: var(--text); background: rgba(6, 9, 12, .6); }
 textarea { resize: vertical; padding: 13px 14px; line-height: 1.6; }
 input { padding: 11px 12px; }

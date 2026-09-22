@@ -62,8 +62,8 @@
           </div>
           <div class="top-actions">
             <button class="ghost-button" id="refreshButton" type="button">Refresh</button>
-            <button class="primary-button compact" id="newSubjectButton" type="button">
-              <span>＋</span> New subject
+            <button class="primary-button compact" id="newConversationButton" type="button">
+              <span>＋</span> New conversation
             </button>
           </div>
         </header>
@@ -82,14 +82,12 @@
                   <p class="section-kicker">CHARACTER SUBJECT</p>
                   <h2>Identity anchor</h2>
                 </div>
-                <button class="icon-button" id="editSubjectButton" type="button" title="Update selected subject">✦</button>
               </div>
 
               <div id="selectedSubjectEmpty" class="subject-empty">
                 <div class="subject-orbit"><span>＋</span></div>
-                <h3>No subject selected</h3>
-                <p>Generate without a persistent character, or create one to keep visual traits stable.</p>
-                <button class="secondary-button" id="emptyNewSubjectButton" type="button">Create subject</button>
+                <h3>No identity extracted yet</h3>
+                <p>Talk naturally. EverSpark will build the current character from this conversation.</p>
               </div>
 
               <div id="selectedSubjectCard" class="selected-subject hidden">
@@ -105,13 +103,7 @@
                 <button class="text-button" id="viewRevisionsButton" type="button">View revision history →</button>
               </div>
 
-              <label class="field-label" for="subjectSelect">Active subject</label>
-              <div class="select-wrap">
-                <select id="subjectSelect">
-                  <option value="">No subject · scene only</option>
-                </select>
-              </div>
-              <p class="field-help">Subject traits persist. The scene below does not.</p>
+              <p class="field-help">Identity is extracted automatically. Scene, pose and camera remain request-level details.</p>
             </section>
 
             <section class="panel canvas-panel">
@@ -129,23 +121,28 @@
                 <div class="stage-empty">
                   <div class="spark-glyph" aria-hidden="true">✦</div>
                   <h3>Your next frame starts here</h3>
-                  <p>Select a subject, describe only the scene, then send it through the Forge.</p>
+                  <p>Discuss the character or switch to Generate when the current concept is ready.</p>
                 </div>
               </div>
 
               <div class="composer">
                 <div class="composer-header">
-                  <label for="scenePrompt">Scene direction</label>
+                  <label for="scenePrompt">Conversation</label>
+                  <div class="mode-switch" role="group" aria-label="Conversation mode">
+                    <button class="mode-button active" id="discussModeButton" type="button">Discuss</button>
+                    <button class="mode-button" id="generateModeButton" type="button">Generate</button>
+                  </div>
                   <span>Ctrl + Enter</span>
                 </div>
-                <textarea id="scenePrompt" rows="4" placeholder="A quiet rooftop at blue hour, soft wind, cinematic rim light..."></textarea>
+                <div class="conversation-feed" id="conversationFeed"></div>
+                <textarea id="scenePrompt" rows="4" placeholder="Let's design a character with long black hair and amber eyes..."></textarea>
                 <div class="composer-footer">
                   <div class="subject-context" id="composerSubjectContext">
                     <span class="mini-avatar">—</span>
                     <span>No persistent subject</span>
                   </div>
                   <button class="forge-button" id="generateButton" type="button">
-                    <span>Forge image</span>
+                    <span>Discuss</span>
                     <span class="button-arrow">→</span>
                   </button>
                 </div>
@@ -159,9 +156,8 @@
             <div>
               <p class="section-kicker">STRUCTURED STATE</p>
               <h2>Character subjects</h2>
-              <p class="section-copy">Reusable identity documents with strict fields and immutable revisions.</p>
+              <p class="section-copy">Identity documents extracted automatically from conversation, with immutable revisions.</p>
             </div>
-            <button class="primary-button" id="subjectsNewButton" type="button">＋ Create subject</button>
           </div>
           <div class="subject-grid" id="subjectGrid"></div>
         </section>
@@ -194,41 +190,15 @@
               <h3>Bring each layer online</h3>
             </div>
             <ol class="setup-steps">
-              <li><span>1</span><div><strong>Initialize local data</strong><code>./everspark init</code></div></li>
-              <li><span>2</span><div><strong>Start Orchestrator</strong><code>./everspark orchestrator start</code></div></li>
-              <li><span>3</span><div><strong>Start WebUI</strong><code>./everspark webui start</code></div></li>
+              <li><span>1</span><div><strong>Install runtime and models</strong><code>./everspark setup</code></div></li>
+              <li><span>2</span><div><strong>Start every local service</strong><code>./everspark start</code></div></li>
+              <li><span>3</span><div><strong>Verify readiness</strong><code>./everspark status</code></div></li>
             </ol>
             <p class="setup-note">Image generation also needs a configured Image Forge adapter and workflow. Optional remote storage and Cloudflare networking remain disabled until explicitly enabled.</p>
           </div>
         </section>
       </main>
     </div>
-
-    <dialog class="modal" id="subjectModal">
-      <form method="dialog" class="modal-shell" id="subjectForm">
-        <div class="modal-heading">
-          <div>
-            <p class="section-kicker" id="subjectModalKicker">NEW STRUCTURED IDENTITY</p>
-            <h2 id="subjectModalTitle">Create a subject</h2>
-          </div>
-          <button class="modal-close" value="cancel" type="submit" aria-label="Close">×</button>
-        </div>
-        <p class="modal-copy" id="subjectModalCopy">Describe stable visual identity only. Scene, pose, camera and background belong in the Forge prompt.</p>
-        <div class="form-row" id="subjectIdRow">
-          <label for="subjectIdInput">Subject ID</label>
-          <input id="subjectIdInput" type="text" pattern="[a-z0-9][a-z0-9-]*" maxlength="64" placeholder="ember-keeper" autocomplete="off">
-          <small>Lowercase letters, numbers and hyphens.</small>
-        </div>
-        <div class="form-row">
-          <label for="subjectDescriptionInput" id="subjectDescriptionLabel">Identity description</label>
-          <textarea id="subjectDescriptionInput" rows="8" placeholder="A young woman with waist-length black hair, sharp amber eyes, a black high-collar coat..."></textarea>
-        </div>
-        <div class="modal-actions">
-          <button class="ghost-button" value="cancel" type="submit">Cancel</button>
-          <button class="primary-button" id="saveSubjectButton" value="default" type="submit">Build subject</button>
-        </div>
-      </form>
-    </dialog>
 
     <dialog class="modal wide" id="revisionModal">
       <div class="modal-shell">

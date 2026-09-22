@@ -28,9 +28,7 @@ class Orchestrator:
         )
         self._task_lock = threading.Lock()
 
-    def submit(
-        self, user_text: str, session_id: str, subject_id: str = ""
-    ) -> dict[str, Any]:
+    def submit(self, user_text: str, session_id: str) -> dict[str, Any]:
         text = normalize_unicode(user_text).strip()
         session = normalize_unicode(session_id).strip()
         if not text:
@@ -44,11 +42,8 @@ class Orchestrator:
         notices: list[str] = []
         try:
             history = self.memory.get_history(session)
-            compiled_subject = None
-            normalized_subject_id = normalize_unicode(subject_id).strip()
-            if normalized_subject_id:
-                document = self.get_subject(normalized_subject_id)
-                compiled_subject = compile_subject(document)
+            document = self._refresh_session_subject(session, text, history)
+            compiled_subject = compile_subject(document)
             result = self.runner.run(
                 text,
                 history=history,
@@ -59,6 +54,57 @@ class Orchestrator:
             return {"ok": True, "notices": notices, "result": result}
         finally:
             self._task_lock.release()
+
+    def discuss(self, user_text: str, session_id: str) -> dict[str, Any]:
+        text = normalize_unicode(user_text).strip()
+        session = normalize_unicode(session_id).strip()
+        if not text:
+            raise ValueError("Message cannot be empty")
+        if not session:
+            raise ValueError("session_id cannot be empty")
+        if len(session) > 128:
+            raise ValueError("session_id is too long")
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("The first-version Orchestrator is already running one task")
+        try:
+            history = self.memory.get_history(session)
+            reply = self.runner.concept.discuss(text, history)
+            document = self._refresh_session_subject(
+                session, text, history, assistant_reply=reply
+            )
+            self.memory.record_conversation(session, text, reply)
+            return {"ok": True, "reply": reply, "subject": document}
+        finally:
+            self._task_lock.release()
+
+    def _refresh_session_subject(
+        self,
+        session_id: str,
+        user_text: str,
+        history: list[dict[str, str]],
+        assistant_reply: str = "",
+    ) -> dict[str, Any]:
+        subject_id = self.memory.get_or_create_session_subject_id(session_id)
+        existing = self.memory.get_subject(subject_id)
+        document = self.runner.concept.generate_subject(
+            user_text,
+            subject_id,
+            existing,
+            history=history,
+            assistant_reply=assistant_reply,
+        )
+        if existing is not None:
+            comparable_existing = {**existing, "revision": document["revision"]}
+            if comparable_existing == document:
+                return existing
+        return self.memory.save_subject(document)
+
+    def get_session_subject(self, session_id: str) -> dict[str, Any] | None:
+        session = normalize_unicode(session_id).strip()
+        if not session:
+            raise ValueError("session_id cannot be empty")
+        subject_id = self.memory.get_session_subject_id(session)
+        return None if subject_id is None else self.memory.get_subject(subject_id)
 
     def get_history(self, session_id: str) -> list[dict[str, str]]:
         return self.memory.get_history(normalize_unicode(session_id).strip())

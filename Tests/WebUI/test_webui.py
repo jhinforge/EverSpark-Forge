@@ -121,6 +121,10 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     ],
                 },
             )
+        elif parsed.path == "/subjects/current":
+            self._json(200, {"ok": True, "session_id": query.get("session_id", [""])[0], "document": self.subject()})
+        elif parsed.path == "/memory/history":
+            self._json(200, {"ok": True, "messages": []})
         elif parsed.path == "/history/prompt-1":
             self._json(
                 200,
@@ -184,6 +188,13 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+        elif self.path == "/conversation":
+            self._json(
+                200,
+                {"ok": True, "reply": "Tell me more about the character.", "subject": self.subject()},
+            )
+        elif self.path == "/memory/clear":
+            self._json(200, {"ok": True, "session_id": payload.get("session_id")})
         elif self.path == "/subjects/generate":
             type(self).revision += 1
             self._json(201, {"ok": True, "document": self.subject()})
@@ -249,6 +260,8 @@ class WebUIIntegrationTests(unittest.TestCase):
             page = response.read().decode("utf-8")
         self.assertIn("EverSpark Forge", page)
         self.assertIn("Character subjects", page)
+        self.assertIn("New conversation", page)
+        self.assertNotIn("Subject ID", page)
         status, health = self.request_json("/api/runtime/status")
         self.assertEqual(status, 200)
         self.assertTrue(health["services"]["orchestrator"]["online"])
@@ -267,18 +280,30 @@ class WebUIIntegrationTests(unittest.TestCase):
         )
         self.assertGreaterEqual(updated["document"]["revision"], 2)
 
-    def test_generation_forwards_subject_and_result_uses_exact_prompt(self) -> None:
+    def test_generation_uses_session_subject_and_result_uses_exact_prompt(self) -> None:
         _, queued = self.request_json(
             "/api/generate",
-            {"message": "blue hour rooftop", "session_id": "main", "subject_id": "ember-keeper"},
+            {"message": "blue hour rooftop", "session_id": "session-a"},
         )
         self.assertEqual(queued["result"]["items"][0]["prompt_id"], "prompt-1")
-        self.assertEqual(MockUpstreamHandler.received_task["subject_id"], "ember-keeper")
+        self.assertEqual(MockUpstreamHandler.received_task["session_id"], "session-a")
+        self.assertNotIn("subject_id", MockUpstreamHandler.received_task)
         _, result = self.request_json("/api/results?prompt_id=prompt-1")
         self.assertEqual(result["results"][0]["status"], "completed")
         image_url = result["results"][0]["images"][0]["url"]
         with urlopen(self.base_url + image_url, timeout=5) as response:
             self.assertEqual(response.read(), PNG_BYTES)
+
+    def test_discussion_and_current_subject_follow_the_session(self) -> None:
+        _, discussed = self.request_json(
+            "/api/conversation",
+            {"message": "She has silver hair", "session_id": "session-a"},
+        )
+        self.assertIn("reply", discussed)
+        _, current = self.request_json(
+            "/api/subjects/current?session_id=session-a"
+        )
+        self.assertEqual(current["document"]["subject_id"], "ember-keeper")
 
     def test_image_proxy_rejects_parent_paths(self) -> None:
         with self.assertRaises(HTTPError) as caught:
