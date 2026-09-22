@@ -21,11 +21,13 @@ and Concept Forge to GPU 1.
 
 ## Automatic PyTorch compatibility
 
-EverSpark selects the managed PyTorch environment from detected hardware and
-the Pod/base-image CUDA runtime. Blackwell (`sm_120+`) on CUDA 12.8 or newer
-uses the validated `cu128` profile. Other and unknown combinations use the
-stable `cu121` profile. The selection is internal: there is no public CUDA
-wheel URL or profile override.
+EverSpark selects the managed PyTorch 2.9.1 environment from detected hardware
+and the CUDA capability exposed by the NVIDIA driver. Driver CUDA 12.8 or newer
+uses `cu128`; compatible older GPUs use `cu126`. Blackwell (`sm_120+`) requires
+`cu128` and stops with an actionable error when the driver is too old. The Pod
+base-image CUDA runtime is only a fallback signal because PyTorch wheels carry
+their own CUDA runtime. Selection is internal: there is no public CUDA wheel
+URL or profile override.
 
 The selected profile is recorded under `Data/Runtime/ComfyUI`. If a clone is
 moved to hardware requiring a different profile, only the managed ComfyUI venv

@@ -119,9 +119,11 @@ Concept Forge and Illustrious XL v1.0 for Image Forge. Inspect the download
 plan with `./everspark setup --plan`; run `./everspark setup` only when you are
 ready to download both models (roughly 9.5 GB total). A public, LoRA-free
 Illustrious API Format workflow is included for the initial generation path.
-The setup process also selects a validated PyTorch/CUDA compatibility profile
-from the detected GPU architecture and Pod base runtime; users do not choose a
-CUDA wheel family manually.
+The setup process also selects a pinned PyTorch 2.9.1 CUDA profile from the
+detected GPU architecture and NVIDIA driver capability; users do not choose a
+CUDA wheel family manually. A runtime-profile change rebuilds only the managed
+ComfyUI virtual environment and retains models, workflows, configuration,
+outputs, and memory.
 The WebUI can select installed Ollama models, ComfyUI checkpoints, and
 registered API Format workflows. Standard SDXL/Illustrious workflows can add
 multiple LoRAs per request without modifying the bundled workflow file.
