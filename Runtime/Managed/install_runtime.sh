@@ -103,6 +103,25 @@ if [ "${EVERSPARK_ALLOW_CPU:-0}" != "1" ]; then
   fi
 fi
 
+BASE_SYSTEM_PACKAGES=(
+  git
+  wget
+  curl
+  aria2
+  ffmpeg
+  libgl1
+  libglib2.0-0
+  build-essential
+  ca-certificates
+  bzip2
+  jq
+  zip
+  unzip
+  lsof
+  python3
+  python3-venv
+  zstd
+)
 required_commands=(git curl python3)
 missing_commands=()
 for command_name in "${required_commands[@]}"; do
@@ -114,9 +133,9 @@ if [ "${#missing_commands[@]}" -gt 0 ]; then
       "Missing commands require administrator installation: ${missing_commands[*]}"
     exit 1
   fi
-  core_apt_install_missing git curl ca-certificates python3 python3-venv zstd
+  core_apt_install_missing "${BASE_SYSTEM_PACKAGES[@]}"
 elif [ "${EUID:-$(id -u)}" -eq 0 ] && command -v apt-get >/dev/null 2>&1; then
-  core_apt_install_missing git curl ca-certificates python3 python3-venv zstd
+  core_apt_install_missing "${BASE_SYSTEM_PACKAGES[@]}"
 fi
 
 if ! python3 -c 'import venv' >/dev/null 2>&1; then

@@ -246,6 +246,7 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .button-arrow { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: rgba(0, 0, 0, .13); }
 
 .section-toolbar { margin: 10px 0 24px; }
+.toolbar-actions { display: flex; flex-wrap: wrap; gap: 9px; }
 .section-toolbar h2 { font-size: 24px; }
 .section-copy { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .subject-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 14px; }
@@ -282,7 +283,13 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .storage-resource > span:first-child { grid-column: 1 / -1; color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
 .storage-resource select { width: 100%; min-width: 0; font-size: 10px; }
 .storage-resource button { padding: 8px 11px; font-size: 10px; }
-.storage-job { min-height: 16px; margin-top: 14px; color: var(--cyan); font: 10px/1.5 ui-monospace, monospace; }
+.storage-progress { margin-top: 16px; }
+.storage-progress progress { width: 100%; height: 8px; overflow: hidden; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .06); }
+.storage-progress progress::-webkit-progress-bar { border-radius: 999px; background: rgba(255, 255, 255, .06); }
+.storage-progress progress::-webkit-progress-value { border-radius: 999px; background: linear-gradient(90deg, var(--ember), var(--cyan)); }
+.storage-progress progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(90deg, var(--ember), var(--cyan)); }
+.storage-progress-meta { display: flex; justify-content: space-between; gap: 14px; min-height: 16px; margin-top: 7px; color: var(--cyan); font: 10px/1.5 ui-monospace, monospace; }
+.storage-progress-meta span:last-child { color: var(--muted); text-align: right; }
 .setup-panel { margin-top: 18px; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(242, 139, 69, .055), rgba(17, 21, 27, .7) 45%); }
 .setup-panel h3 { margin-top: 7px; font-size: 19px; }
 .setup-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0; margin: 22px 0 0; list-style: none; }

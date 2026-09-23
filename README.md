@@ -106,7 +106,8 @@ download remote Checkpoints, diffusion models, LoRAs, and Ollama models. Image
 resources are written only into `Data/Models/ImageForge`; Concept resources are
 restored from Ollama manifests and content-addressed blobs into
 `Data/Models/ConceptForge/Ollama`. Legacy ComfyUI program files and Ollama
-identity keys are never restored.
+identity keys are never restored. Active transfers show bytes, percentage,
+speed, ETA, and file counts, and the page can resume monitoring after refresh.
 
 Open `http://127.0.0.1:8780` locally. On a Vast.ai Pod, `start` reads the
 platform-provided public IP and mapped SSH port and prints the complete tunnel
@@ -127,6 +128,8 @@ outputs, and memory.
 The WebUI can select installed Ollama models, ComfyUI checkpoints, and
 registered API Format workflows. Standard SDXL/Illustrious workflows can add
 multiple LoRAs per request without modifying the bundled workflow file.
+The Gallery can package the complete `Data/Outputs` tree into a timestamped ZIP
+and download it through the same WebUI connection.
 
 ## Repository status
 

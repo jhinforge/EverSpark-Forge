@@ -39,6 +39,10 @@ class FakeRclone:
             return subprocess.CompletedProcess(command, 0, output, "")
         if action == "cat":
             return subprocess.CompletedProcess(command, 0, json.dumps(self.manifest), "")
+        if action == "size":
+            return subprocess.CompletedProcess(
+                command, 0, json.dumps({"count": 1, "bytes": 11}), ""
+            )
         if action == "copyto":
             destination = Path(command[3])
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -46,6 +50,26 @@ class FakeRclone:
             self.copies.append((source, str(destination)))
             return subprocess.CompletedProcess(command, 0, "", "")
         return subprocess.CompletedProcess(command, 1, "", "unexpected command")
+
+
+class SlowFakeRclone(FakeRclone):
+    def __call__(self, command, **kwargs):
+        action = command[1]
+        if action == "size":
+            return subprocess.CompletedProcess(
+                command, 0, json.dumps({"count": 1, "bytes": 12}), ""
+            )
+        if action == "copyto":
+            source = command[2]
+            destination = Path(command[3])
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("wb", buffering=0) as handle:
+                handle.write(b"remote")
+                time.sleep(0.4)
+                handle.write(b"-data!")
+            self.copies.append((source, str(destination)))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return super().__call__(command, **kwargs)
 
 
 def enabled_config(config_file: Path) -> dict:
@@ -93,6 +117,9 @@ class R2StorageTests(unittest.TestCase):
             job = manager.start_pull("checkpoint", "hero.safetensors")
             completed = self.wait_for_job(manager, job["job_id"])
             self.assertEqual(completed["status"], "completed")
+            self.assertEqual(completed["progress"]["percent"], 100.0)
+            self.assertEqual(completed["progress"]["bytes_completed"], 11)
+            self.assertEqual(completed["progress"]["bytes_total"], 11)
             self.assertTrue((root / "image/checkpoints/Hero.SAFETENSORS").is_file())
 
     @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
@@ -106,9 +133,30 @@ class R2StorageTests(unittest.TestCase):
             job = manager.start_pull("concept_model", "gemma3test:latest")
             completed = self.wait_for_job(manager, job["job_id"])
             self.assertEqual(completed["status"], "completed")
+            self.assertEqual(completed["progress"]["percent"], 100.0)
+            self.assertEqual(completed["progress"]["bytes_total"], 22)
             self.assertEqual(len(fake.copies), 2)
             self.assertIn("/blobs/sha256-", fake.copies[0][0])
             self.assertIn("/manifests/", fake.copies[1][0])
+
+    @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
+    def test_image_pull_reports_live_byte_progress(self, _which) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = self.make_manager(Path(directory), SlowFakeRclone())
+            started = manager.start_pull("checkpoint", "hero.safetensors")
+            observed = None
+            for _ in range(100):
+                job = manager.job(started["job_id"])
+                progress = job["progress"] if job else {}
+                if 0 < progress.get("bytes_completed", 0) < 12:
+                    observed = progress
+                    break
+                time.sleep(0.01)
+            self.assertIsNotNone(observed)
+            self.assertGreater(observed["percent"], 0)
+            self.assertLess(observed["percent"], 100)
+            completed = self.wait_for_job(manager, started["job_id"])
+            self.assertEqual(completed["status"], "completed")
 
     def test_rejects_unsafe_ollama_digest(self) -> None:
         with self.assertRaises(StorageError):

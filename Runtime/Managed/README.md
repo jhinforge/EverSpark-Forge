@@ -7,6 +7,8 @@ under `Data/Runtime/`. It never stores personal configuration in the repository.
 - Ollama is installed through its official Linux installer when unavailable.
 - PID identity includes the Linux process start time to avoid killing a reused PID.
 - Services bind to localhost by default and write raw process output to `Data/Logs/`.
+- Setup restores the shared Linux utility baseline used by the original runtime,
+  including wget, aria2, FFmpeg, jq, zip/unzip, lsof, build tools, and zstd.
 
 Default pinned versions are ComfyUI `v0.37.0` at commit
 `73c9bad4d21e7addbe1d13bc92eee0f1431b017d` and Ollama `0.34.2`. They can be

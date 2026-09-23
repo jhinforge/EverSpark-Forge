@@ -4,6 +4,10 @@ import json
 import mimetypes
 import os
 import sys
+import tempfile
+import threading
+import time
+import zipfile
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -38,9 +42,15 @@ class Settings:
     image_forge_url: str = "http://127.0.0.1:8188"
     request_timeout: int = 600
     image_timeout: int = 60
+    output_directory: Path = REPO_ROOT / "Data" / "Outputs"
 
 
 def load_settings() -> Settings:
+    output_directory = Path(
+        os.environ.get("EVERSPARK_OUTPUT_DIR", str(REPO_ROOT / "Data" / "Outputs"))
+    ).expanduser()
+    if not output_directory.is_absolute():
+        output_directory = (REPO_ROOT / output_directory).resolve()
     return Settings(
         host=os.environ.get("EVERSPARK_WEBUI_HOST", "127.0.0.1"),
         port=int(os.environ.get("EVERSPARK_WEBUI_PORT", "8780")),
@@ -55,6 +65,7 @@ def load_settings() -> Settings:
             os.environ.get("EVERSPARK_WEBUI_REQUEST_TIMEOUT", "600")
         ),
         image_timeout=int(os.environ.get("EVERSPARK_IMAGE_FORGE_TIMEOUT", "60")),
+        output_directory=output_directory,
     )
 
 
@@ -147,6 +158,7 @@ class WebUIServer(ThreadingHTTPServer):
         super().__init__((settings.host, settings.port), RequestHandler)
         self.settings = settings
         self.logger = logger
+        self.archive_lock = threading.Lock()
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -181,6 +193,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/results": lambda: self._results(parse_qs(parsed.query)),
             "/api/history": lambda: self._history(parse_qs(parsed.query)),
             "/api/image/view": lambda: self._proxy_image(parse_qs(parsed.query)),
+            "/api/outputs/archive": self._output_archive,
         }
         if parsed.path in routes:
             routes[parsed.path]()
@@ -417,6 +430,72 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(exc.code, {"ok": False, "error": "Image not found"})
         except (URLError, TimeoutError) as exc:
             self._upstream_unavailable(exc, "Image Forge")
+
+    def _output_archive(self) -> None:
+        if not self.server.archive_lock.acquire(blocking=False):
+            self._json(409, {"ok": False, "error": "An output archive is already being prepared"})
+            return
+        archive_path: Path | None = None
+        response_started = False
+        try:
+            output_root = self.server.settings.output_directory.resolve()
+            output_root.mkdir(parents=True, exist_ok=True)
+            archive_root = REPO_ROOT / "Data" / "Runtime" / "Archives"
+            archive_root.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                prefix="everspark-outputs-",
+                suffix=".zip",
+                dir=archive_root,
+                delete=False,
+            ) as handle:
+                archive_path = Path(handle.name)
+            file_count = 0
+            with zipfile.ZipFile(
+                archive_path,
+                mode="w",
+                compression=zipfile.ZIP_DEFLATED,
+                compresslevel=6,
+            ) as archive:
+                archive.writestr("EverSpark-Outputs/", b"")
+                for path in sorted(output_root.rglob("*")):
+                    if path.is_symlink() or not path.is_file():
+                        continue
+                    relative = path.relative_to(output_root)
+                    archive.write(path, (Path("EverSpark-Outputs") / relative).as_posix())
+                    file_count += 1
+            filename = f"EverSpark-Outputs-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}.zip"
+            size = archive_path.stat().st_size
+            self._log(
+                "info",
+                "outputs.archive.ready",
+                "Output archive prepared",
+                files=file_count,
+                bytes=size,
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Content-Length", str(size))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            response_started = True
+            with archive_path.open("rb") as source:
+                while chunk := source.read(1024 * 1024):
+                    self.wfile.write(chunk)
+        except (OSError, zipfile.BadZipFile) as exc:
+            self._log(
+                "error",
+                "outputs.archive.failed",
+                "Could not prepare output archive",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            if not response_started:
+                self._json(500, {"ok": False, "error": "Could not create output archive"})
+        finally:
+            if archive_path is not None:
+                archive_path.unlink(missing_ok=True)
+            self.server.archive_lock.release()
 
     def _static(self, relative_path: str) -> None:
         target = (STATIC_ROOT / relative_path).resolve()

@@ -7,6 +7,7 @@ const state = {
   selectedLoras: [],
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
+  storagePollJobId: null,
 };
 localStorage.setItem("everspark.session", state.sessionId);
 
@@ -34,6 +35,7 @@ const elements = {
   discussModeButton: $("#discussModeButton"),
   generateModeButton: $("#generateModeButton"),
   galleryGrid: $("#galleryGrid"),
+  downloadOutputsButton: $("#downloadOutputsButton"),
   runtimeGrid: $("#runtimeGrid"),
   healthDot: $("#globalHealthDot"),
   healthTitle: $("#globalHealthTitle"),
@@ -49,7 +51,10 @@ const elements = {
   addLoraButton: $("#addLoraButton"),
   selectedLoras: $("#selectedLoras"),
   storageSummary: $("#storageSummary"),
+  storageProgress: $("#storageProgress"),
+  storageProgressBar: $("#storageProgressBar"),
   storageJobStatus: $("#storageJobStatus"),
+  storageProgressDetail: $("#storageProgressDetail"),
   remoteCheckpointSelect: $("#remoteCheckpointSelect"),
   remoteDiffusionSelect: $("#remoteDiffusionSelect"),
   remoteLoraSelect: $("#remoteLoraSelect"),
@@ -96,6 +101,27 @@ function formatDate(value) {
   if (!value) return "Unknown time";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
+function formatBytes(value) {
+  const bytes = Math.max(0, Number(value) || 0);
+  if (bytes < 1024) return `${bytes.toFixed(0)} B`;
+  const units = ["KiB", "MiB", "GiB", "TiB"];
+  let scaled = bytes;
+  let index = -1;
+  do {
+    scaled /= 1024;
+    index += 1;
+  } while (scaled >= 1024 && index < units.length - 1);
+  return `${scaled.toFixed(scaled >= 100 ? 0 : 1)} ${units[index]}`;
+}
+
+function formatDuration(value) {
+  const seconds = Math.max(0, Math.round(Number(value) || 0));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m ${remainder}s`;
 }
 
 function fillSelect(select, items, valueFor, labelFor, preferred = "") {
@@ -275,6 +301,17 @@ async function loadRemoteStorage() {
       ? "R2 is connected. Downloads are selective and never restore the legacy ComfyUI runtime."
       : "Remote storage is disabled in local mode. Configure the rclone backend to enable it.";
     updateStorageButtons();
+    const jobs = await api("/api/storage/jobs");
+    const active = jobs.job;
+    if (active) {
+      renderStorageJob(active);
+      if (["queued", "running"].includes(active.status) && state.storagePollJobId !== active.job_id) {
+        void pollStorageJob(active.job_id).catch((error) => {
+          showNotice(error.message);
+          updateStorageButtons();
+        });
+      }
+    }
   } catch (error) {
     state.remoteStorage = null;
     elements.storageSummary.textContent = error.message;
@@ -282,19 +319,42 @@ async function loadRemoteStorage() {
   }
 }
 
+function renderStorageJob(job) {
+  const progress = job.progress || {};
+  const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
+  const completedBytes = Number(progress.bytes_completed) || 0;
+  const totalBytes = Number(progress.bytes_total) || 0;
+  const speed = Number(progress.speed_bytes_per_second) || 0;
+  const eta = Number(progress.eta_seconds) || 0;
+  elements.storageProgress.classList.remove("hidden");
+  elements.storageProgressBar.value = percent;
+  elements.storageJobStatus.textContent = `${job.name}: ${job.status} · ${percent.toFixed(1)}%`;
+  const parts = [];
+  if (totalBytes) parts.push(`${formatBytes(completedBytes)} / ${formatBytes(totalBytes)}`);
+  if (speed && ["queued", "running"].includes(job.status)) parts.push(`${formatBytes(speed)}/s`);
+  if (eta && ["queued", "running"].includes(job.status)) parts.push(`ETA ${formatDuration(eta)}`);
+  if (progress.total) parts.push(`${progress.completed || 0}/${progress.total} files`);
+  elements.storageProgressDetail.textContent = parts.join(" · ");
+}
+
 async function pollStorageJob(jobId) {
-  while (true) {
-    const data = await api(`/api/storage/jobs?job_id=${encodeURIComponent(jobId)}`);
-    const job = data.job;
-    if (!job) throw new Error("Remote download job disappeared");
-    const progress = job.progress || {};
-    elements.storageJobStatus.textContent = `${job.name}: ${job.status} ${progress.completed || 0}/${progress.total || 0}`;
-    if (job.status === "completed") {
-      await Promise.all([loadRemoteStorage(), loadResources()]);
-      return;
+  state.storagePollJobId = jobId;
+  try {
+    while (true) {
+      const data = await api(`/api/storage/jobs?job_id=${encodeURIComponent(jobId)}`);
+      const job = data.job;
+      if (!job) throw new Error("Remote download job disappeared");
+      renderStorageJob(job);
+      if (job.status === "completed") {
+        state.storagePollJobId = null;
+        await Promise.all([loadRemoteStorage(), loadResources()]);
+        return;
+      }
+      if (job.status === "failed") throw new Error(job.error || "Remote download failed");
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    if (job.status === "failed") throw new Error(job.error || "Remote download failed");
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  } finally {
+    if (state.storagePollJobId === jobId) state.storagePollJobId = null;
   }
 }
 
@@ -303,7 +363,11 @@ async function pullRemoteResource(button) {
   const name = storageSelect(kind)?.value;
   if (!name) return;
   $$(".storage-pull-button").forEach((item) => { item.disabled = true; });
-  elements.storageJobStatus.textContent = `${name}: queued`;
+  renderStorageJob({
+    name,
+    status: "queued",
+    progress: { percent: 0, bytes_completed: 0, bytes_total: 0 },
+  });
   try {
     const data = await api("/api/storage/pull", {
       method: "POST",
@@ -750,6 +814,23 @@ async function loadHistory() {
   }
 }
 
+function downloadOutputsArchive() {
+  hideNotice();
+  elements.downloadOutputsButton.disabled = true;
+  const original = elements.downloadOutputsButton.textContent;
+  elements.downloadOutputsButton.textContent = "Preparing ZIP…";
+  const link = document.createElement("a");
+  link.href = `/api/outputs/archive?requested_at=${Date.now()}`;
+  link.download = "EverSpark-Outputs.zip";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => {
+    elements.downloadOutputsButton.disabled = false;
+    elements.downloadOutputsButton.textContent = original;
+  }, 1500);
+}
+
 function runtimeCard(title, online, copy) {
   const card = document.createElement("article");
   card.className = "runtime-card";
@@ -806,6 +887,7 @@ function bindEvents() {
     await Promise.all([loadSubjects(), loadRuntime(), loadResources(), loadRemoteStorage()]);
   });
   $("#refreshHistoryButton").addEventListener("click", loadHistory);
+  elements.downloadOutputsButton.addEventListener("click", downloadOutputsArchive);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);
   $("#refreshStorageButton").addEventListener("click", loadRemoteStorage);
   $$(".storage-pull-button").forEach((button) => button.addEventListener("click", () => pullRemoteResource(button)));

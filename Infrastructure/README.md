@@ -12,8 +12,10 @@ policies; Infrastructure only provides connection and transfer primitives.
 
 `Storage/r2_manager.py` adds the managed resource layer used by Orchestrator
 and WebUI. It scans flat Image Forge model directories, parses Ollama manifests,
-and downloads only the selected model. It never restores a complete legacy
-ComfyUI directory or copies Ollama identity keys.
+and downloads only the selected model. Transfers use an isolated partial file,
+publish live byte progress, and atomically replace the final target only after
+size validation. It never restores a complete legacy ComfyUI directory or
+copies Ollama identity keys.
 
 R2 is enabled by selecting an rclone-backed storage mode and supplying an
 existing rclone configuration. Missing or invalid remote configuration is a

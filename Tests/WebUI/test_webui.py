@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
+import tempfile
 import threading
 import unittest
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
@@ -279,6 +282,13 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
 class WebUIIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls.output_temp = tempfile.TemporaryDirectory()
+        cls.output_root = Path(cls.output_temp.name)
+        (cls.output_root / "batch").mkdir()
+        (cls.output_root / "image-a.png").write_bytes(PNG_BYTES)
+        (cls.output_root / "batch" / "image-b.txt").write_text(
+            "nested output", encoding="utf-8"
+        )
         cls.upstream = ThreadingHTTPServer(("127.0.0.1", 0), MockUpstreamHandler)
         upstream_url = f"http://127.0.0.1:{cls.upstream.server_port}"
         cls.webui = app.WebUIServer(
@@ -289,6 +299,7 @@ class WebUIIntegrationTests(unittest.TestCase):
                 image_forge_url=upstream_url,
                 request_timeout=3,
                 image_timeout=3,
+                output_directory=cls.output_root,
             )
         )
         cls.base_url = f"http://127.0.0.1:{cls.webui.server_port}"
@@ -307,6 +318,7 @@ class WebUIIntegrationTests(unittest.TestCase):
         cls.upstream.server_close()
         for thread in cls.threads:
             thread.join(timeout=2)
+        cls.output_temp.cleanup()
 
     def request_json(self, path: str, payload: dict | None = None) -> tuple[int, dict]:
         data = None
@@ -408,6 +420,25 @@ class WebUIIntegrationTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as caught:
             urlopen(self.base_url + "/api/image/view?filename=../private", timeout=5)
         self.assertEqual(caught.exception.code, 400)
+
+    def test_output_archive_contains_the_complete_output_tree(self) -> None:
+        with urlopen(self.base_url + "/api/outputs/archive", timeout=5) as response:
+            self.assertEqual(response.headers.get_content_type(), "application/zip")
+            self.assertIn("EverSpark-Outputs-", response.headers["Content-Disposition"])
+            payload = response.read()
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            self.assertEqual(
+                set(archive.namelist()),
+                {
+                    "EverSpark-Outputs/",
+                    "EverSpark-Outputs/image-a.png",
+                    "EverSpark-Outputs/batch/image-b.txt",
+                },
+            )
+            self.assertEqual(
+                archive.read("EverSpark-Outputs/batch/image-b.txt"),
+                b"nested output",
+            )
 
 
 if __name__ == "__main__":

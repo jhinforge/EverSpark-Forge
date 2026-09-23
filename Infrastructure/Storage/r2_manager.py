@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -137,14 +138,63 @@ class RcloneClient:
             raise StorageError(f"Remote Ollama manifest must be an object: {remote_file}")
         return value
 
-    def copy_file(self, remote_file: str, local_file: Path) -> None:
+    def file_size(self, remote_file: str) -> int:
+        try:
+            payload = json.loads(self.run("size", remote_file, "--json"))
+            size = int(payload.get("bytes", 0))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise StorageError(f"Could not determine remote file size: {remote_file}") from exc
+        if size < 0:
+            raise StorageError(f"Remote file has an invalid size: {remote_file}")
+        return size
+
+    def copy_file(
+        self,
+        remote_file: str,
+        local_file: Path,
+        progress: Callable[[int, int], None] | None = None,
+        known_size: int | None = None,
+    ) -> None:
         local_file.parent.mkdir(parents=True, exist_ok=True)
-        self.run(
-            "copyto",
-            remote_file,
-            str(local_file),
-            timeout=24 * 60 * 60,
-        )
+        total = self.file_size(remote_file) if known_size is None else known_size
+        partial = local_file.with_name(f".{local_file.name}.{uuid.uuid4().hex}.partial")
+        failure: list[BaseException] = []
+
+        def transfer() -> None:
+            try:
+                self.run(
+                    "copyto",
+                    remote_file,
+                    str(partial),
+                    "--inplace",
+                    timeout=24 * 60 * 60,
+                )
+            except BaseException as exc:  # propagated after the worker joins
+                failure.append(exc)
+
+        worker = threading.Thread(target=transfer, name="everspark-rclone-copy")
+        worker.start()
+        try:
+            while worker.is_alive():
+                completed = partial.stat().st_size if partial.is_file() else 0
+                if progress is not None:
+                    progress(min(completed, total) if total else completed, total)
+                worker.join(timeout=0.25)
+            if failure:
+                raise failure[0]
+            if not partial.is_file():
+                raise StorageError(f"rclone completed without creating: {local_file.name}")
+            completed = partial.stat().st_size
+            if total and completed != total:
+                raise StorageError(
+                    f"Downloaded size mismatch for {local_file.name}: "
+                    f"expected {total}, got {completed}"
+                )
+            if progress is not None:
+                progress(completed, total or completed)
+            partial.replace(local_file)
+        finally:
+            partial.unlink(missing_ok=True)
 
 
 class R2StorageManager:
@@ -223,8 +273,9 @@ class R2StorageManager:
                 "kind": normalized_kind,
                 "name": normalized_name,
                 "status": "queued",
-                "progress": {"completed": 0, "total": 0},
+                "progress": self._progress_payload(),
                 "error": "",
+                "started_at": time.time(),
             }
             self._jobs[job_id] = job
             self._active_job = job_id
@@ -256,6 +307,9 @@ class R2StorageManager:
                 self._pull_image_model(job_id, kind, name)
             with self._lock:
                 self._jobs[job_id]["status"] = "completed"
+                progress = self._jobs[job_id]["progress"]
+                progress["percent"] = 100.0
+                progress["eta_seconds"] = 0
         except Exception as exc:
             with self._lock:
                 self._jobs[job_id]["status"] = "failed"
@@ -270,10 +324,19 @@ class R2StorageManager:
             raise StorageError(f"Remote {kind} was not found: {requested}")
         if PurePosixPath(match).name != match:
             raise StorageError("Image model names must not contain directories")
-        self._set_progress(job_id, 0, 1)
+        remote_file = f"{remote_dir}/{match}"
+        total_bytes = self.client.file_size(remote_file)
+        self._set_progress(job_id, 0, 1, 0, total_bytes)
         destination = self.settings.image_root / directory / match
-        self.client.copy_file(f"{remote_dir}/{match}", destination)
-        self._set_progress(job_id, 1, 1)
+        self.client.copy_file(
+            remote_file,
+            destination,
+            progress=lambda completed, total: self._set_progress(
+                job_id, 0, 1, completed, total
+            ),
+            known_size=total_bytes,
+        )
+        self._set_progress(job_id, 1, 1, total_bytes, total_bytes)
 
     def _pull_concept_model(self, job_id: str, requested: str) -> None:
         manifests_root = f"{self.settings.concept_remote}/manifests"
@@ -288,22 +351,55 @@ class R2StorageManager:
         manifest_remote = f"{manifests_root}/{manifest_path}"
         manifest = self.client.read_json(manifest_remote)
         digests = self._manifest_digests(manifest)
-        self._set_progress(job_id, 0, len(digests) + 1)
-        completed = 0
+        transfers: list[tuple[str, Path, bool]] = []
         for digest in digests:
             blob_name = digest.replace(":", "-", 1)
             destination = self.settings.concept_root / "blobs" / blob_name
-            if not destination.is_file() or destination.stat().st_size == 0:
-                self.client.copy_file(
-                    f"{self.settings.concept_remote}/blobs/{blob_name}", destination
+            transfers.append(
+                (
+                    f"{self.settings.concept_remote}/blobs/{blob_name}",
+                    destination,
+                    destination.is_file() and destination.stat().st_size > 0,
                 )
-            completed += 1
-            self._set_progress(job_id, completed, len(digests) + 1)
+            )
         manifest_destination = (
             self.settings.concept_root / "manifests" / PurePosixPath(manifest_path)
         )
-        self.client.copy_file(manifest_remote, manifest_destination)
-        self._set_progress(job_id, len(digests) + 1, len(digests) + 1)
+        transfers.append((manifest_remote, manifest_destination, False))
+
+        sized = [
+            (remote, destination, installed, self.client.file_size(remote))
+            for remote, destination, installed in transfers
+        ]
+        total_files = len(sized)
+        total_bytes = sum(item[3] for item in sized)
+        completed_files = 0
+        completed_bytes = 0
+        self._set_progress(job_id, 0, total_files, 0, total_bytes)
+        for remote, destination, installed, size in sized:
+            if not installed:
+                base_bytes = completed_bytes
+                self.client.copy_file(
+                    remote,
+                    destination,
+                    progress=lambda current, _total, base=base_bytes: self._set_progress(
+                        job_id,
+                        completed_files,
+                        total_files,
+                        base + current,
+                        total_bytes,
+                    ),
+                    known_size=size,
+                )
+            completed_files += 1
+            completed_bytes += size
+            self._set_progress(
+                job_id,
+                completed_files,
+                total_files,
+                completed_bytes,
+                total_bytes,
+            )
 
     @staticmethod
     def _manifest_digests(manifest: dict[str, Any]) -> list[str]:
@@ -356,9 +452,42 @@ class R2StorageManager:
             if path.is_file()
         }
 
-    def _set_progress(self, job_id: str, completed: int, total: int) -> None:
+    @staticmethod
+    def _progress_payload(
+        completed: int = 0,
+        total: int = 0,
+        bytes_completed: int = 0,
+        bytes_total: int = 0,
+        elapsed: float = 0.0,
+    ) -> dict[str, int | float]:
+        percent = (bytes_completed * 100 / bytes_total) if bytes_total else 0.0
+        speed = int(bytes_completed / elapsed) if elapsed > 0 else 0
+        eta = int((bytes_total - bytes_completed) / speed) if speed > 0 else 0
+        return {
+            "completed": completed,
+            "total": total,
+            "bytes_completed": bytes_completed,
+            "bytes_total": bytes_total,
+            "percent": round(min(100.0, max(0.0, percent)), 1),
+            "speed_bytes_per_second": speed,
+            "eta_seconds": max(0, eta),
+        }
+
+    def _set_progress(
+        self,
+        job_id: str,
+        completed: int,
+        total: int,
+        bytes_completed: int = 0,
+        bytes_total: int = 0,
+    ) -> None:
         with self._lock:
-            self._jobs[job_id]["progress"] = {
-                "completed": completed,
-                "total": total,
-            }
+            job = self._jobs[job_id]
+            elapsed = max(0.0, time.time() - float(job["started_at"]))
+            job["progress"] = self._progress_payload(
+                completed,
+                total,
+                bytes_completed,
+                bytes_total,
+                elapsed,
+            )

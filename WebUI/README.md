@@ -28,11 +28,12 @@ configuration file.
 - Select a registered workflow, Checkpoint, and installed Ollama model.
 - Add one or more standard LoRAs with independent MODEL and CLIP strengths.
 - Submit image tasks and track their exact Image Forge prompt identifiers.
-- Display current results and recent Image Forge history.
+- Display current results and recent Image Forge history, and download the
+  complete output directory as a timestamped ZIP archive.
 - Show local Orchestrator, Image Forge, and logging readiness.
 - Explain missing first-run services without requiring R2 or Cloudflare.
-- Scan optional R2 model roots and start selective background downloads without
-  blocking generation requests.
+- Scan optional R2 model roots and start selective background downloads with
+  live byte progress, transfer speed, ETA, and refresh recovery.
 
 ## Boundaries
 
@@ -55,3 +56,4 @@ Default endpoints can be overridden when needed:
 - `EVERSPARK_IMAGE_FORGE_URL`
 - `EVERSPARK_WEBUI_REQUEST_TIMEOUT`
 - `EVERSPARK_IMAGE_FORGE_TIMEOUT`
+- `EVERSPARK_OUTPUT_DIR`

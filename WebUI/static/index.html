@@ -192,7 +192,10 @@
               <h2>Recent gallery</h2>
               <p class="section-copy">Recent images reported by the configured image execution adapter.</p>
             </div>
-            <button class="ghost-button" id="refreshHistoryButton" type="button">Refresh gallery</button>
+            <div class="toolbar-actions">
+              <button class="ghost-button" id="downloadOutputsButton" type="button">Download outputs ZIP</button>
+              <button class="ghost-button" id="refreshHistoryButton" type="button">Refresh gallery</button>
+            </div>
           </div>
           <div class="gallery-grid" id="galleryGrid"></div>
         </section>
@@ -238,7 +241,13 @@
                 <button class="secondary-button storage-pull-button" type="button" data-kind="concept_model">Download</button>
               </div>
             </div>
-            <p class="storage-job" id="storageJobStatus"></p>
+            <div class="storage-progress hidden" id="storageProgress">
+              <progress id="storageProgressBar" max="100" value="0"></progress>
+              <div class="storage-progress-meta">
+                <span id="storageJobStatus"></span>
+                <span id="storageProgressDetail"></span>
+              </div>
+            </div>
           </div>
           <div class="setup-panel">
             <div>
