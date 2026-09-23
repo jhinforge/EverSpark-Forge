@@ -18,6 +18,7 @@ MODEL_DIRS = {
     "checkpoint": "checkpoints",
     "diffusion_model": "diffusion_models",
     "lora": "loras",
+    "vae": "vae",
 }
 
 

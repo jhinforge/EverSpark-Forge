@@ -24,6 +24,7 @@ IMAGE_KINDS = {
     "checkpoint": ("checkpoints", {".safetensors", ".ckpt"}),
     "diffusion_model": ("diffusion_models", {".safetensors", ".ckpt"}),
     "lora": ("loras", {".safetensors", ".ckpt"}),
+    "vae": ("vae", {".safetensors", ".ckpt", ".pt"}),
 }
 RUNTIME_NAME_PATTERN = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._/-]*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?$"

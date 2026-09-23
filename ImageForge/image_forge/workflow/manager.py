@@ -203,6 +203,40 @@ class WorkflowManager:
                 self._rewrite_checkpoint_links(inputs, checkpoint_id, previous_id)
         return normalized
 
+    def bind_vae(self, workflow: dict[str, Any], requested: str, available: list[str]) -> str:
+        name = requested.strip().replace("\\", "/")
+        if not name:
+            return ""
+        lookup = {item.casefold(): item for item in available if isinstance(item, str)}
+        if name.casefold() not in lookup:
+            raise WorkflowError(f"Selected VAE is unavailable: {name}")
+        sources = {
+            str(node_id) for node_id, node in workflow.items()
+            if isinstance(node, dict) and node.get("class_type") == "CheckpointLoaderSimple"
+        }
+        consumers = []
+        for node in workflow.values():
+            if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+                continue
+            inputs = node["inputs"]
+            link = inputs.get("vae")
+            if (isinstance(link, list) and len(link) == 2
+                    and str(link[0]) in sources and link[1] == 2):
+                consumers.append(inputs)
+        if not consumers:
+            raise WorkflowError("Selected workflow has no checkpoint VAE connection to replace")
+        numeric_ids = [int(key) for key in workflow if str(key).isdigit()]
+        node_id = str(max(numeric_ids, default=0) + 1)
+        selected = lookup[name.casefold()]
+        workflow[node_id] = {
+            "inputs": {"vae_name": selected},
+            "class_type": "VAELoader",
+            "_meta": {"title": f"EverSpark VAE · {selected}"},
+        }
+        for inputs in consumers:
+            inputs["vae"] = [node_id, 0]
+        return selected
+
     def _load_definitions(
         self, config: dict[str, Any]
     ) -> dict[str, WorkflowDefinition]:

@@ -40,6 +40,9 @@ class ComfyUIAdapter:
     def list_loras(self) -> list[str]:
         return self._list_node_options("LoraLoader", "lora_name")
 
+    def list_vaes(self) -> list[str]:
+        return self._list_node_options("VAELoader", "vae_name")
+
     def _list_node_options(self, class_type: str, input_name: str) -> list[str]:
         request = Request(f"{self.base_url}/object_info/{class_type}")
         try:

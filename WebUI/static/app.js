@@ -2,7 +2,7 @@ const state = {
   subjects: [],
   selectedSubject: null,
   mode: "discuss",
-  resources: { workflows: [], checkpoints: [], loras: [], llms: [], defaults: {} },
+  resources: { workflows: [], checkpoints: [], vaes: [], loras: [], llms: [], defaults: {} },
   remoteStorage: null,
   selectedLoras: [],
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
@@ -49,6 +49,7 @@ const elements = {
   viewerImage: $("#viewerImage"),
   workflowSelect: $("#workflowSelect"),
   checkpointSelect: $("#checkpointSelect"),
+  vaeSelect: $("#vaeSelect"),
   llmSelect: $("#llmSelect"),
   loraSelect: $("#loraSelect"),
   addLoraButton: $("#addLoraButton"),
@@ -69,6 +70,7 @@ const elements = {
   remoteCheckpointSelect: $("#remoteCheckpointSelect"),
   remoteDiffusionSelect: $("#remoteDiffusionSelect"),
   remoteLoraSelect: $("#remoteLoraSelect"),
+  remoteVaeSelect: $("#remoteVaeSelect"),
   remoteConceptSelect: $("#remoteConceptSelect"),
   imageDownloadForm: $("#imageDownloadForm"),
   imageDownloadKind: $("#imageDownloadKind"),
@@ -242,6 +244,7 @@ function generationSelection() {
   return {
     workflow: elements.workflowSelect.value,
     checkpoint: elements.checkpointSelect.value,
+    vae: elements.vaeSelect.value,
     llm: elements.llmSelect.value,
     loras: state.selectedLoras.map((item) => ({ ...item })),
   };
@@ -253,21 +256,25 @@ async function loadResources() {
     state.resources = {
       workflows: data.workflows || [],
       checkpoints: data.checkpoints || [],
+      vaes: data.vaes || [],
       loras: data.loras || [],
       llms: data.llms || [],
       defaults: data.defaults || {},
     };
     fillSelect(elements.workflowSelect, state.resources.workflows, (item) => item.id, (item) => item.name, state.resources.defaults.workflow);
     fillSelect(elements.checkpointSelect, state.resources.checkpoints, (item) => item, (item) => item, state.resources.defaults.checkpoint);
+    fillSelect(elements.vaeSelect, ["", ...state.resources.vaes], (item) => item, (item) => item || "Checkpoint VAE");
     fillSelect(elements.llmSelect, state.resources.llms, (item) => item, (item) => item, state.resources.defaults.llm);
     fillSelect(elements.loraSelect, state.resources.loras, (item) => item, (item) => item);
     elements.workflowSelect.disabled = !state.resources.workflows.length;
     elements.checkpointSelect.disabled = !state.resources.checkpoints.length;
+    elements.vaeSelect.disabled = !state.resources.vaes.length;
     elements.llmSelect.disabled = !state.resources.llms.length;
     updateLoraAvailability();
   } catch (error) {
     elements.workflowSelect.disabled = true;
     elements.checkpointSelect.disabled = true;
+    elements.vaeSelect.disabled = true;
     elements.llmSelect.disabled = true;
     elements.loraSelect.disabled = true;
     elements.addLoraButton.disabled = true;
@@ -300,6 +307,7 @@ function storageSelect(kind) {
     checkpoint: elements.remoteCheckpointSelect,
     diffusion_model: elements.remoteDiffusionSelect,
     lora: elements.remoteLoraSelect,
+    vae: elements.remoteVaeSelect,
     concept_model: elements.remoteConceptSelect,
   }[kind];
 }
@@ -321,6 +329,7 @@ async function loadRemoteStorage() {
     fillRemoteSelect(elements.remoteCheckpointSelect, image.checkpoint || []);
     fillRemoteSelect(elements.remoteDiffusionSelect, image.diffusion_model || []);
     fillRemoteSelect(elements.remoteLoraSelect, image.lora || []);
+    fillRemoteSelect(elements.remoteVaeSelect, image.vae || []);
     fillRemoteSelect(elements.remoteConceptSelect, data.concept?.models || []);
     elements.storageSummary.textContent = data.enabled
       ? "R2 is connected. Downloads are selective and never restore the legacy ComfyUI runtime."
@@ -1138,7 +1147,7 @@ function bindEvents() {
   elements.cancelDirectDownload.addEventListener("click", cancelDirectDownload);
   elements.retryDirectDownload.addEventListener("click", retryDirectDownload);
   $$(".storage-pull-button").forEach((button) => button.addEventListener("click", () => pullRemoteResource(button)));
-  [elements.remoteCheckpointSelect, elements.remoteDiffusionSelect, elements.remoteLoraSelect, elements.remoteConceptSelect]
+  [elements.remoteCheckpointSelect, elements.remoteDiffusionSelect, elements.remoteLoraSelect, elements.remoteVaeSelect, elements.remoteConceptSelect]
     .forEach((select) => select.addEventListener("change", updateStorageButtons));
   $("#dismissNotice").addEventListener("click", hideNotice);
   $("#closeImageViewer").addEventListener("click", () => elements.imageViewer.close());

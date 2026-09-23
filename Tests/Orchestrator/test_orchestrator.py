@@ -25,7 +25,7 @@ for module_directory in (
 
 from concept_forge.providers.ollama import GenerationPlan  # noqa: E402
 from concept_forge.subjects import CompiledSubject, new_subject  # noqa: E402
-from image_forge.workflow.manager import WorkflowManager  # noqa: E402
+from image_forge.workflow.manager import WorkflowManager, WorkflowError  # noqa: E402
 from image_forge.models.resolver import (  # noqa: E402
     CheckpointResolutionError,
     resolve_checkpoint,
@@ -68,6 +68,20 @@ class ConfigurationTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_selected_vae_replaces_checkpoint_decode_link_only(self) -> None:
+        config = load_config()
+        manager = WorkflowManager(config["workflow"])
+        workflow = manager.build("portrait", "bad", workflow_id=manager.default_workflow_id)
+        self.assertEqual(workflow["8"]["inputs"]["vae"], ["4", 2])
+        self.assertEqual(manager.bind_vae(workflow, "Custom.safetensors", ["custom.safetensors"]), "custom.safetensors")
+        vae_link = workflow["8"]["inputs"]["vae"]
+        self.assertEqual(workflow[vae_link[0]]["class_type"], "VAELoader")
+        self.assertEqual(workflow[vae_link[0]]["inputs"]["vae_name"], "custom.safetensors")
+        self.assertEqual(workflow["31"]["inputs"]["model"], ["4", 0])
+        self.assertEqual(workflow["34"]["inputs"]["clip"], ["4", 1])
+        with self.assertRaisesRegex(WorkflowError, "unavailable"):
+            manager.bind_vae(workflow, "missing.safetensors", ["custom.safetensors"])
+
     def test_prompts_and_seed_are_replaced(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workflow.json"

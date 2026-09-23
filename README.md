@@ -125,7 +125,7 @@ detected GPU architecture and NVIDIA driver capability; users do not choose a
 CUDA wheel family manually. A runtime-profile change rebuilds only the managed
 ComfyUI virtual environment and retains models, workflows, configuration,
 outputs, and memory.
-The WebUI can select installed Ollama models, ComfyUI checkpoints, and
+The WebUI can select installed Ollama models, ComfyUI checkpoints, VAE models, and
 registered API Format workflows. Standard SDXL/Illustrious workflows can add
 multiple LoRAs per request without modifying the bundled workflow file.
 The Gallery can package the complete `Data/Outputs` tree into a timestamped ZIP

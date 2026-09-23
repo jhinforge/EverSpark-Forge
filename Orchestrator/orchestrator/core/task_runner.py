@@ -48,6 +48,7 @@ class TaskRunner:
             str(selected.get("workflow", ""))
         )
         checkpoint = str(selected.get("checkpoint", "")).strip()
+        vae = str(selected.get("vae", "")).strip()
         llm_model = str(selected.get("llm", "")).strip()
         loras = selected.get("loras", [])
         if not isinstance(loras, list):
@@ -85,7 +86,9 @@ class TaskRunner:
         items = []
         available_checkpoints: list[str] | None = None
         available_loras: list[str] | None = None
+        available_vaes: list[str] | None = None
         selected_checkpoint = ""
+        selected_vae = ""
         selected_loras: list[dict[str, Any]] = []
         for index in range(1, plan.count + 1):
             seed = secrets.randbelow(2**63)
@@ -103,6 +106,10 @@ class TaskRunner:
                 notify or (lambda _message: None),
                 requested=checkpoint,
             )
+            if vae:
+                if available_vaes is None:
+                    available_vaes = self.image.list_vaes()
+                selected_vae = self.workflow.bind_vae(workflow, vae, available_vaes)
             if loras:
                 if available_loras is None:
                     available_loras = self.image.list_loras()
@@ -124,6 +131,7 @@ class TaskRunner:
             "selection": {
                 "workflow": workflow_id,
                 "checkpoint": selected_checkpoint,
+                "vae": selected_vae,
                 "llm": llm_model or str(getattr(self.concept, "model", "")),
                 "loras": selected_loras,
             },
@@ -142,6 +150,7 @@ class TaskRunner:
             "workflows": self.workflow.list_workflows(),
             "checkpoints": self.image.list_checkpoints(),
             "loras": self.image.list_loras(),
+            "vaes": self.image.list_vaes(),
             "llms": llms,
             "defaults": {
                 "workflow": self.workflow.default_workflow_id,

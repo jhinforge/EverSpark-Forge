@@ -127,6 +127,10 @@
                   <span class="select-wrap"><select id="checkpointSelect"></select></span>
                 </label>
                 <label class="resource-field">
+                  <span>VAE</span>
+                  <span class="select-wrap"><select id="vaeSelect"></select></span>
+                </label>
+                <label class="resource-field">
                   <span>Concept LLM</span>
                   <span class="select-wrap"><select id="llmSelect"></select></span>
                 </label>
@@ -236,6 +240,11 @@
                 <button class="secondary-button storage-pull-button" type="button" data-kind="lora">Download</button>
               </div>
               <div class="storage-resource">
+                <span>VAE</span>
+                <span class="select-wrap"><select id="remoteVaeSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="vae">Download</button>
+              </div>
+              <div class="storage-resource">
                 <span>Concept LLM</span>
                 <span class="select-wrap"><select id="remoteConceptSelect"></select></span>
                 <button class="secondary-button storage-pull-button" type="button" data-kind="concept_model">Download</button>
@@ -290,6 +299,7 @@
                   <select id="imageDownloadKind">
                     <option value="checkpoint">Checkpoint</option>
                     <option value="lora">LoRA</option>
+                    <option value="vae">VAE</option>
                     <option value="diffusion_model">Diffusion model</option>
                   </select>
                 </label>

@@ -35,7 +35,7 @@ IMAGE_FORGE_RCLONE_REMOTE=remote:path/models_cold
 CONCEPT_FORGE_RCLONE_REMOTE=remote:path/.ollama/models
 ```
 
-Image Forge expects `checkpoints`, `diffusion_models`, and `loras` below its
+Image Forge expects `checkpoints`, `diffusion_models`, `loras`, and `vae` below its
 root. Concept Forge expects standard Ollama `blobs` and `manifests` directories.
 
 ## Network

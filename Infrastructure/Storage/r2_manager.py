@@ -18,6 +18,7 @@ IMAGE_KINDS = {
     "checkpoint": "checkpoints",
     "diffusion_model": "diffusion_models",
     "lora": "loras",
+    "vae": "vae",
 }
 DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
