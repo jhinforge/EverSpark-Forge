@@ -7,6 +7,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from ..subjects import new_subject, validate_subject
+from ..subjects.document import _merge_object
 
 SYSTEM_PROMPT = """You are the Concept Forge component of EverSpark Forge.
 Convert the user's image request into one complete JSON object and output JSON only.
@@ -22,8 +23,9 @@ Do not use Markdown and do not add explanations outside the JSON object.
 
 SUBJECT_SYSTEM_PROMPT = """You are the Character Subject builder inside EverSpark Concept Forge.
 Return exactly one complete JSON object and no Markdown or commentary.
-The output must preserve every key in the supplied Character Subject v1 template,
-must not add keys, and must use arrays and strings with the same types as the template.
+Return only the identity, appearance, wardrobe, or metadata fields that need updating.
+Do not add keys outside the supplied Character Subject v1 template; keep field types.
+Prompt terms are managed separately and must not appear in this JSON.
 Fill visual identity fields from the user's description. Preserve existing values when
 the user does not request a change. For a new subject, infer sensible reusable visual
 details when the conversation leaves them open instead of asking the user to configure
@@ -177,10 +179,14 @@ class OllamaProvider:
         ):
             document[protected_key] = target[protected_key]
         try:
-            validate_subject(document)
+            editable = {key: value for key, value in document.items()
+                        if key not in ("schema_version", "document_type", "subject_id", "revision")}
+            result = json.loads(json.dumps(target, ensure_ascii=False))
+            _merge_object(result, editable)
+            validate_subject(result)
         except ValueError as exc:
             raise OllamaError(str(exc)) from exc
-        return document
+        return result
 
     def discuss(
         self,

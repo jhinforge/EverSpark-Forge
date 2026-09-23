@@ -10,7 +10,6 @@ EDITABLE_SECTIONS = {
     "identity",
     "appearance",
     "wardrobe",
-    "prompt_contract",
     "metadata",
 }
 
@@ -35,12 +34,6 @@ def new_subject(subject_id: str, display_name: str) -> dict[str, Any]:
             "distinguishing_features": [],
         },
         "wardrobe": {"default_outfit": "", "items": [], "accessories": []},
-        "prompt_contract": {
-            "positive_terms": [],
-            "negative_terms": [],
-            "locked_traits": [],
-            "flexible_traits": [],
-        },
         "metadata": {"tags": [], "notes": ""},
     }
     return validate_subject(document)

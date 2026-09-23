@@ -310,6 +310,55 @@ class BatchTests(unittest.TestCase):
 
 
 class SubjectIntegrationTests(unittest.TestCase):
+    def test_negative_prompt_stays_at_first_generation_until_explicit_change(self) -> None:
+        class Concept:
+            def __init__(self):
+                self.index = 0
+
+            def generate_subject(self, _text, subject_id, existing=None, **_kwargs):
+                document = new_subject(subject_id, "Character") if existing is None else existing.copy()
+                if existing is not None:
+                    document["revision"] += 1
+                return document
+
+            def generate_prompt(self, _text, _history):
+                self.index += 1
+                return GenerationPlan("illustrious", "portrait", f"negative-{self.index}", 1, "over")
+
+        class Workflow:
+            def selected_workflow_id(self, _id=""):
+                return "test"
+
+            def build(self, positive, negative, **_kwargs):
+                return {"positive": positive, "negative": negative}
+
+            def bind_checkpoint(self, *_args, **_kwargs):
+                return "test.safetensors"
+
+        class Image:
+            def list_checkpoints(self):
+                return ["test.safetensors"]
+
+            def queue_prompt(self, _workflow):
+                return "queued"
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = load_config()
+            config["memory"]["database"] = str(Path(directory) / "memory.db")
+            orchestrator = Orchestrator(config)
+            orchestrator.runner.concept = Concept()
+            orchestrator.runner.workflow = Workflow()
+            orchestrator.runner.image = Image()
+            first = orchestrator.submit("画一个角色", "session")["result"]
+            second = orchestrator.submit("改变背景", "session")["result"]
+            third = orchestrator.submit("修改负面提示词", "session")["result"]
+            self.assertEqual(first["negative_prompt"], "negative-1")
+            self.assertEqual(second["negative_prompt"], "negative-1")
+            self.assertEqual(third["negative_prompt"], "negative-3")
+            self.assertEqual(orchestrator.memory.get_subject_prompt(
+                orchestrator.get_session_subject("session")["subject_id"]
+            )["negative_prompt"], "negative-3")
+
     def test_generation_extracts_and_uses_the_session_subject_without_an_id(self) -> None:
         class FakeConceptForge:
             def generate_subject(

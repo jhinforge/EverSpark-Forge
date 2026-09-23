@@ -12,7 +12,6 @@
     "identity",
     "appearance",
     "wardrobe",
-    "prompt_contract",
     "metadata"
   ],
   "properties": {
@@ -101,38 +100,6 @@
           "uniqueItems": true
         },
         "accessories": {
-          "type": "array",
-          "items": {"type": "string", "minLength": 1},
-          "uniqueItems": true
-        }
-      }
-    },
-    "prompt_contract": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "positive_terms",
-        "negative_terms",
-        "locked_traits",
-        "flexible_traits"
-      ],
-      "properties": {
-        "positive_terms": {
-          "type": "array",
-          "items": {"type": "string", "minLength": 1},
-          "uniqueItems": true
-        },
-        "negative_terms": {
-          "type": "array",
-          "items": {"type": "string", "minLength": 1},
-          "uniqueItems": true
-        },
-        "locked_traits": {
-          "type": "array",
-          "items": {"type": "string", "minLength": 1},
-          "uniqueItems": true
-        },
-        "flexible_traits": {
           "type": "array",
           "items": {"type": "string", "minLength": 1},
           "uniqueItems": true

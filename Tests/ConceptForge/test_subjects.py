@@ -61,7 +61,7 @@ class SubjectSchemaTests(unittest.TestCase):
 class SubjectCompilerTests(unittest.TestCase):
     def test_example_compiles_stable_positive_and_negative_fragments(self) -> None:
         document = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
-        compiled = compile_subject(document)
+        compiled = compile_subject(document, {"negative_prompt": "different hair color, different eye color"})
         self.assertEqual(compiled.subject_id, "ember-keeper")
         self.assertIn("amber sharp eyes", compiled.positive_prompt)
         self.assertIn("waist-length black straight hair", compiled.positive_prompt)
@@ -119,8 +119,17 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
             "_post_json",
             return_value={"message": {"content": json.dumps(broken)}},
         ):
-            with self.assertRaisesRegex(RuntimeError, "not allowed"):
+            with self.assertRaisesRegex(RuntimeError, "Unknown subject field"):
                 provider.generate_subject("Create", "ember-keeper")
+
+    def test_provider_accepts_partial_identity_update(self) -> None:
+        provider = OllamaProvider({"base_url": "http://127.0.0.1:11434", "model": "test"})
+        with patch.object(provider, "_post_json", return_value={
+            "message": {"content": json.dumps({"appearance": {"hair": {"color": "silver"}}})}
+        }):
+            result = provider.generate_subject("silver hair", "test-character")
+        self.assertEqual(result["appearance"]["hair"]["color"], "silver")
+        self.assertEqual(result["wardrobe"]["items"], [])
 
     def test_provider_stamps_orchestrator_owned_subject_metadata(self) -> None:
         existing = new_subject("auto-subject", "Current Character")

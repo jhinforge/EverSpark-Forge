@@ -41,6 +41,7 @@ class TaskRunner:
         notify: Callable[[str], None] | None = None,
         subject: CompiledSubject | None = None,
         selection: dict[str, Any] | None = None,
+        saved_negative_prompt: str | None = None,
     ) -> dict[str, Any]:
         selected = selection or {}
         workflow_id = self.workflow.selected_workflow_id(
@@ -75,8 +76,10 @@ class TaskRunner:
         positive_prompt = self._merge_prompts(
             subject.positive_prompt if subject else "", plan.positive_prompt
         )
+        negative_prompt = (saved_negative_prompt if saved_negative_prompt is not None
+                           else plan.negative_prompt)
         negative_prompt = self._merge_prompts(
-            plan.negative_prompt, subject.negative_prompt if subject else ""
+            negative_prompt, subject.negative_prompt if subject else ""
         )
 
         items = []

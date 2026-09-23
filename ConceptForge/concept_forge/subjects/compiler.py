@@ -35,7 +35,7 @@ def _combined_feature(parts: Iterable[Any], suffix: str) -> str:
     return " ".join([*values, suffix])
 
 
-def compile_subject(document: dict[str, Any]) -> CompiledSubject:
+def compile_subject(document: dict[str, Any], prompts: dict[str, Any] | None = None) -> CompiledSubject:
     subject = validate_subject(document)
     identity = subject["identity"]
     appearance = subject["appearance"]
@@ -43,7 +43,7 @@ def compile_subject(document: dict[str, Any]) -> CompiledSubject:
     face = appearance["face"]
     hair = appearance["hair"]
     wardrobe = subject["wardrobe"]
-    contract = subject["prompt_contract"]
+    prompts = prompts or {}
 
     positive = _clean(
         [
@@ -60,11 +60,10 @@ def compile_subject(document: dict[str, Any]) -> CompiledSubject:
             wardrobe["default_outfit"],
             *wardrobe["items"],
             *wardrobe["accessories"],
-            *contract["locked_traits"],
-            *contract["positive_terms"],
+            prompts.get("positive_prompt", ""),
         ]
     )
-    negative = _clean(contract["negative_terms"])
+    negative = _clean([prompts.get("negative_prompt", "")])
     return CompiledSubject(
         subject_id=subject["subject_id"],
         revision=subject["revision"],

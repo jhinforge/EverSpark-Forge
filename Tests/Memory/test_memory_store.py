@@ -17,6 +17,28 @@ from everspark_memory import (  # noqa: E402
 
 
 class SQLiteMemoryStoreTests(unittest.TestCase):
+    def test_old_subject_prompt_contract_migrates_to_separate_json(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "memory.db"
+            store = SQLiteMemoryStore(str(database))
+            document = json.loads((REPO_ROOT / "ConceptForge" / "Examples" /
+                                   "character_subject.example.json").read_text(encoding="utf-8"))
+            document["prompt_contract"] = {
+                "positive_terms": ["solo"], "negative_terms": ["different hair color"],
+                "locked_traits": ["amber eyes"], "flexible_traits": ["lighting"],
+            }
+            store.save_subject(document)
+            reopened = SQLiteMemoryStore(str(database))
+            self.assertNotIn("prompt_contract", reopened.get_subject("ember-keeper"))
+            self.assertNotIn("prompt_contract", reopened.get_subject_revisions("ember-keeper")[0]["document"])
+            self.assertEqual(reopened.get_subject_prompt("ember-keeper"), {
+                "positive_prompt": "amber eyes, solo",
+                "negative_prompt": "different hair color",
+            })
+            # Reopening must not overwrite a newer prompt record.
+            reopened.save_subject_prompt("ember-keeper", "new", "keep this")
+            self.assertEqual(SQLiteMemoryStore(str(database)).get_subject_prompt("ember-keeper")["negative_prompt"], "keep this")
+
     def test_session_subject_is_automatic_stable_and_cleared_with_session(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = SQLiteMemoryStore(str(Path(directory) / "memory.db"))

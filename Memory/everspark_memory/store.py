@@ -83,6 +83,12 @@ class SQLiteMemoryStore:
 
                 CREATE INDEX IF NOT EXISTS idx_subject_revisions_subject_id
                     ON subject_revisions(subject_id, revision DESC);
+
+                CREATE TABLE IF NOT EXISTS subject_prompts (
+                    subject_id TEXT PRIMARY KEY,
+                    document TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             task_columns = {
@@ -90,6 +96,54 @@ class SQLiteMemoryStore:
             }
             if "subject_id" not in task_columns:
                 connection.execute("ALTER TABLE tasks ADD COLUMN subject_id TEXT")
+            # Move old prompt contracts into their own JSON records. Keep history readable.
+            for subject_id, raw in connection.execute(
+                "SELECT subject_id, document FROM subjects"
+            ).fetchall():
+                document = json.loads(raw)
+                contract = document.pop("prompt_contract", None)
+                if contract is None:
+                    continue
+                prompt = {
+                    "positive_prompt": ", ".join(
+                        [*contract.get("locked_traits", []), *contract.get("positive_terms", [])]
+                    ),
+                    "negative_prompt": ", ".join(contract.get("negative_terms", [])),
+                }
+                connection.execute(
+                    "INSERT OR IGNORE INTO subject_prompts VALUES (?, ?, ?)",
+                    (subject_id, json.dumps(prompt, ensure_ascii=False), datetime.now(timezone.utc).isoformat()),
+                )
+                connection.execute(
+                    "UPDATE subjects SET document = ? WHERE subject_id = ?",
+                    (json.dumps(document, ensure_ascii=False), subject_id),
+                )
+            for subject_id, revision, raw in connection.execute(
+                "SELECT subject_id, revision, document FROM subject_revisions"
+            ).fetchall():
+                document = json.loads(raw)
+                if document.pop("prompt_contract", None) is not None:
+                    connection.execute(
+                        "UPDATE subject_revisions SET document = ? WHERE subject_id = ? AND revision = ?",
+                        (json.dumps(document, ensure_ascii=False), subject_id, revision),
+                    )
+
+    def get_subject_prompt(self, subject_id: str) -> dict[str, str] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT document FROM subject_prompts WHERE subject_id = ?", (subject_id,)
+            ).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def save_subject_prompt(self, subject_id: str, positive: str, negative: str) -> dict[str, str]:
+        document = {"positive_prompt": positive, "negative_prompt": negative}
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO subject_prompts VALUES (?, ?, ?) "
+                "ON CONFLICT(subject_id) DO UPDATE SET document = excluded.document, updated_at = excluded.updated_at",
+                (subject_id, json.dumps(document, ensure_ascii=False), datetime.now(timezone.utc).isoformat()),
+            )
+        return document
 
     def get_history(self, session_id: str) -> list[dict[str, str]]:
         if self.max_history_messages == 0:

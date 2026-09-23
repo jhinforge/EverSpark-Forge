@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import threading
 import sys
 from pathlib import Path
@@ -65,13 +67,29 @@ class Orchestrator:
                 history,
                 llm_model=str(selected.get("llm", "")),
             )
+            saved_prompts = self.memory.get_subject_prompt(document["subject_id"])
             compiled_subject = compile_subject(document)
+            # An existing negative prompt is immutable unless the request explicitly
+            # asks to change negative prompting.
+            changes_negative = bool(re.search(
+                r"(?:修改|更改|调整|重写|替换|清空|删除|添加|增加|改|换|加|删).{0,12}(?:负面|负向)提示词"
+                r"|(?:负面|负向)提示词.{0,12}(?:修改|更改|调整|重写|替换|清空|删除|添加|增加|改|换|加|删)"
+                r"|(?:change|edit|update|replace|remove|add|clear).{0,30}negative\s+(?:prompt|terms)",
+                text, re.IGNORECASE,
+            )) and not bool(re.search(r"(?:不要|别|不必|无需).{0,8}(?:修改|更改|调整|重写|替换|清空|删除|添加|增加|改|换|加|删).{0,12}(?:负面|负向)提示词", text))
             result = self.runner.run(
                 text,
                 history=history,
                 notify=notices.append,
                 subject=compiled_subject,
                 selection=selected,
+                saved_negative_prompt=(saved_prompts["negative_prompt"]
+                                       if saved_prompts and not changes_negative else None),
+            )
+            self.memory.save_subject_prompt(
+                document["subject_id"],
+                result["positive_prompt"],
+                result["negative_prompt"],
             )
             self.memory.record_success(session, text, result)
             return {"ok": True, "notices": notices, "result": result}
@@ -191,12 +209,14 @@ class Orchestrator:
         return self.memory.get_subject_revisions(normalized)
 
     def compile_subject(self, subject_id: str) -> dict[str, Any]:
-        compiled = compile_subject(self.get_subject(subject_id))
+        subject = self.get_subject(subject_id)
+        prompts = self.memory.get_subject_prompt(subject_id)
+        compiled = compile_subject(subject)
         return {
             "subject_id": compiled.subject_id,
             "revision": compiled.revision,
-            "positive_prompt": compiled.positive_prompt,
-            "negative_prompt": compiled.negative_prompt,
+            "positive_prompt": prompts["positive_prompt"] if prompts else compiled.positive_prompt,
+            "negative_prompt": prompts["negative_prompt"] if prompts else "",
         }
 
     def resources(self) -> dict[str, Any]:

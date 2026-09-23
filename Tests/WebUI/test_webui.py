@@ -82,7 +82,6 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                 "distinguishing_features": [],
             },
             "wardrobe": {"default_outfit": "black coat", "items": [], "accessories": []},
-            "prompt_contract": {"positive_terms": [], "negative_terms": [], "locked_traits": [], "flexible_traits": []},
             "metadata": {"tags": [], "notes": ""},
         }
 

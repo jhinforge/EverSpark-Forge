@@ -22,7 +22,10 @@ Forge interface and does not own Ollama HTTP behavior.
 
 The schema is stored at `Schemas/character_subject.v1.schema.json`. It contains
 only reusable character identity: identity, appearance, default wardrobe,
-locked/flexible traits, prompt terms, and metadata. Scene, pose, camera, and
+and metadata. Positive and negative prompts are stored in a separate JSON
+document per subject in SQLite (`subject_prompts`). The initial negative prompt
+is reused on later generations unless the user explicitly requests a negative
+prompt change. Existing v1 prompt contracts migrate on startup. Scene, pose, camera, and
 background remain request-level state and are not persisted into the subject.
 The schema is an internal contract, not a form the user is expected to fill.
 For v0.1, each conversation automatically owns one current subject. Discussion
@@ -38,3 +41,4 @@ document locally:
 ```
 
 `Examples/character_subject.example.json` is a complete public example.
+`Examples/character_prompts.example.json` shows the independent prompt JSON.

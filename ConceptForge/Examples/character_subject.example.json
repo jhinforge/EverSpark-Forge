@@ -33,12 +33,6 @@
     "items": ["dark fitted trousers", "leather boots"],
     "accessories": ["copper pendant"]
   },
-  "prompt_contract": {
-    "positive_terms": ["solo", "character focus"],
-    "negative_terms": ["different hair color", "different eye color"],
-    "locked_traits": ["amber eyes", "black waist-length hair"],
-    "flexible_traits": ["expression", "pose", "lighting"]
-  },
   "metadata": {
     "tags": ["example", "original-character"],
     "notes": "Public example data; not tied to a private runtime or model."
