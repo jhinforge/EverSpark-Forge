@@ -14,6 +14,7 @@ from .text import normalize_unicode
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Storage"))
 from r2_manager import R2StorageManager  # noqa: E402
+from download_manager import DirectDownloadManager  # noqa: E402
 
 
 class BusyError(RuntimeError):
@@ -28,6 +29,7 @@ class Orchestrator:
     def __init__(self, config: dict[str, Any]):
         self.runner = TaskRunner(config)
         self.storage = R2StorageManager(config)
+        self.downloads = DirectDownloadManager(config)
         memory_config = config["memory"]
         self.memory = SQLiteMemoryStore(
             memory_config["database"],
@@ -206,6 +208,24 @@ class Orchestrator:
 
     def storage_job(self, job_id: str = "") -> dict[str, Any] | None:
         return self.storage.job(job_id)
+
+    def start_download(
+        self,
+        kind: str,
+        url: str,
+        filename: str = "",
+        runtime_name: str = "",
+    ) -> dict[str, Any]:
+        return self.downloads.start(kind, url, filename, runtime_name)
+
+    def download_job(self, job_id: str = "") -> dict[str, Any] | None:
+        return self.downloads.job(job_id)
+
+    def cancel_download(self, job_id: str) -> dict[str, Any]:
+        return self.downloads.cancel(job_id)
+
+    def retry_download(self, job_id: str) -> dict[str, Any]:
+        return self.downloads.retry(job_id)
 
     @staticmethod
     def _normalize_selection(

@@ -141,6 +141,19 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+        elif parsed.path == "/downloads/jobs":
+            self._json(
+                200,
+                {
+                    "ok": True,
+                    "job": {
+                        "job_id": query.get("job_id", [""])[0] or "download-job-1",
+                        "name": "direct.safetensors",
+                        "status": "completed",
+                        "progress": {"percent": 100.0},
+                    },
+                },
+            )
         elif parsed.path == "/subjects" and query.get("subject_id"):
             self._json(200, {"ok": True, "document": self.subject()})
         elif parsed.path == "/subjects":
@@ -264,6 +277,19 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+        elif self.path in {"/downloads", "/downloads/retry", "/downloads/cancel"}:
+            self._json(
+                202,
+                {
+                    "ok": True,
+                    "job": {
+                        "job_id": "download-job-1",
+                        "kind": payload.get("kind", "checkpoint"),
+                        "name": payload.get("filename", "direct.safetensors"),
+                        "status": "queued",
+                    },
+                },
+            )
         else:
             self._json(404, {"ok": False, "error": "Not found"})
 
@@ -336,6 +362,7 @@ class WebUIIntegrationTests(unittest.TestCase):
         self.assertIn("EverSpark Forge", page)
         self.assertIn("Character subjects", page)
         self.assertIn("New conversation", page)
+        self.assertIn("Install models from a URL", page)
         self.assertNotIn("Subject ID", page)
         status, health = self.request_json("/api/runtime/status")
         self.assertEqual(status, 200)
@@ -404,6 +431,23 @@ class WebUIIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(status, 202)
         self.assertEqual(started["job"]["job_id"], "storage-job-1")
+
+    def test_direct_download_routes_are_proxied(self) -> None:
+        status, started = self.request_json(
+            "/api/downloads",
+            {
+                "kind": "checkpoint",
+                "url": "https://models.example/direct.safetensors",
+                "filename": "direct.safetensors",
+            },
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(started["job"]["job_id"], "download-job-1")
+        status, fetched = self.request_json(
+            "/api/downloads/jobs?job_id=download-job-1"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(fetched["job"]["status"], "completed")
 
     def test_discussion_and_current_subject_follow_the_session(self) -> None:
         _, discussed = self.request_json(

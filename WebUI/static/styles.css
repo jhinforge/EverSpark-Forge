@@ -290,6 +290,17 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .storage-progress progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(90deg, var(--ember), var(--cyan)); }
 .storage-progress-meta { display: flex; justify-content: space-between; gap: 14px; min-height: 16px; margin-top: 7px; color: var(--cyan); font: 10px/1.5 ui-monospace, monospace; }
 .storage-progress-meta span:last-child { color: var(--muted); text-align: right; }
+.direct-download-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+.direct-download-card { display: grid; gap: 13px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .15); }
+.direct-download-card h4 { margin: 5px 0 0; font-size: 14px; }
+.download-card-label { color: var(--ember); font-size: 9px; font-weight: 750; letter-spacing: .13em; }
+.direct-download-card label { display: grid; gap: 7px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.direct-download-card label small { color: var(--subtle); font-size: 8px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.direct-download-card input, .direct-download-card select { width: 100%; min-width: 0; padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--text); background: rgba(255, 255, 255, .035); font-size: 10px; letter-spacing: 0; text-transform: none; outline: none; }
+.direct-download-card input:focus, .direct-download-card select:focus { border-color: rgba(113, 200, 189, .45); box-shadow: 0 0 0 3px rgba(113, 200, 189, .07); }
+.direct-download-card .direct-download-start { justify-self: start; margin-top: 2px; padding: 9px 13px; font-size: 10px; }
+.download-job-actions { display: flex; gap: 8px; margin-top: 10px; }
+.download-job-actions button { padding: 7px 11px; font-size: 9px; }
 .setup-panel { margin-top: 18px; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(242, 139, 69, .055), rgba(17, 21, 27, .7) 45%); }
 .setup-panel h3 { margin-top: 7px; font-size: 19px; }
 .setup-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0; margin: 22px 0 0; list-style: none; }
@@ -337,7 +348,7 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
   .forge-layout { grid-template-columns: 1fr; }
   .subject-rail { min-height: auto; }
   .subject-empty { min-height: 240px; }
-  .runtime-grid, .setup-steps, .storage-resource-grid { grid-template-columns: 1fr; }
+  .runtime-grid, .setup-steps, .storage-resource-grid, .direct-download-grid { grid-template-columns: 1fr; }
   .generation-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

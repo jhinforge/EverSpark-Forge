@@ -34,6 +34,10 @@ configuration file.
 - Explain missing first-run services without requiring R2 or Cloudflare.
 - Scan optional R2 model roots and start selective background downloads with
   live byte progress, transfer speed, ETA, and refresh recovery.
+- Download Checkpoints, diffusion models, LoRAs, and GGUF language models from
+  direct public HTTP URLs without enabling R2. Partial files remain isolated,
+  interrupted transfers can be retried, and GGUF files are registered with
+  Ollama automatically.
 
 ## Boundaries
 
@@ -47,6 +51,12 @@ Resource choices are discovered through Orchestrator. Checkpoints and LoRAs
 come from the configured ComfyUI adapter, LLM names come from Ollama, and
 workflows come from the Image Forge registry. The selections are attached to
 each request and do not rewrite repository workflow files.
+
+Direct image downloads currently accept `.safetensors` and `.ckpt`; Concept
+Forge downloads accept `.gguf`. The optional filename is useful for signed or
+API-style links that do not end with a model filename. Direct downloads reject
+local/private network destinations and never expose URL query strings through
+the job API.
 
 Default endpoints can be overridden when needed:
 

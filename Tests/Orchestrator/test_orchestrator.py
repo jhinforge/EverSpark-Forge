@@ -485,6 +485,25 @@ class APITests(unittest.TestCase):
         def storage_job(self, job_id=""):
             return {"job_id": job_id or "job-1", "status": "completed"}
 
+        def start_download(self, kind, url, filename="", runtime_name=""):
+            return {
+                "job_id": "download-1",
+                "kind": kind,
+                "source": url,
+                "name": filename,
+                "runtime_name": runtime_name,
+                "status": "queued",
+            }
+
+        def download_job(self, job_id=""):
+            return {"job_id": job_id or "download-1", "status": "completed"}
+
+        def cancel_download(self, job_id):
+            return {"job_id": job_id, "status": "downloading"}
+
+        def retry_download(self, _job_id):
+            return {"job_id": "download-2", "status": "queued"}
+
         def save_subject(self, document):
             self.document = document
             return document
@@ -578,6 +597,32 @@ class APITests(unittest.TestCase):
         status, job = self._request("/storage/jobs?job_id=job-1")
         self.assertEqual(status, 200)
         self.assertEqual(job["job"]["status"], "completed")
+
+    def test_direct_download_routes_use_the_infrastructure_boundary(self) -> None:
+        status, started = self._request(
+            "/downloads",
+            {
+                "kind": "concept_model",
+                "url": "https://models.example/model.gguf",
+                "filename": "model.gguf",
+                "runtime_name": "model-a",
+            },
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(started["job"]["runtime_name"], "model-a")
+        status, job = self._request("/downloads/jobs?job_id=download-1")
+        self.assertEqual(status, 200)
+        self.assertEqual(job["job"]["status"], "completed")
+        status, cancelled = self._request(
+            "/downloads/cancel", {"job_id": "download-1"}
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(cancelled["job"]["job_id"], "download-1")
+        status, retried = self._request(
+            "/downloads/retry", {"job_id": "download-1"}
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(retried["job"]["job_id"], "download-2")
 
     def test_subject_create_update_compile_and_read_routes(self) -> None:
         document = new_subject("subject-a", "Subject A")

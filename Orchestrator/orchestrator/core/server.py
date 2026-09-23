@@ -16,6 +16,7 @@ from .orchestrator import BusyError, Orchestrator, SubjectNotFoundError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "Infrastructure" / "Storage"))
 from r2_manager import StorageError  # noqa: E402
+from download_manager import DownloadError  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "Runtime" / "Logging"))
@@ -73,6 +74,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send(
                 200,
                 {"ok": True, "job": self.server.orchestrator.storage_job(job_id)},
+            )
+        elif parsed.path == "/downloads/jobs":
+            job_id = parse_qs(parsed.query).get("job_id", [""])[0]
+            self._send(
+                200,
+                {"ok": True, "job": self.server.orchestrator.download_job(job_id)},
             )
         elif parsed.path == "/memory/history":
             session_id = parse_qs(parsed.query).get("session_id", [""])[0]
@@ -155,6 +162,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/subjects/update",
             "/subjects/compile",
             "/storage/pull",
+            "/downloads",
+            "/downloads/cancel",
+            "/downloads/retry",
         }:
             self._send(404, {"ok": False, "error": "Not found"})
             return
@@ -204,6 +214,24 @@ class RequestHandler(BaseHTTPRequestHandler):
                     str(payload.get("kind", "")), str(payload.get("name", ""))
                 )
                 self._send(202, {"ok": True, "job": job})
+            elif request_path == "/downloads":
+                job = self.server.orchestrator.start_download(
+                    str(payload.get("kind", "")),
+                    str(payload.get("url", "")),
+                    str(payload.get("filename", "")),
+                    str(payload.get("runtime_name", "")),
+                )
+                self._send(202, {"ok": True, "job": job})
+            elif request_path == "/downloads/cancel":
+                job = self.server.orchestrator.cancel_download(
+                    str(payload.get("job_id", ""))
+                )
+                self._send(202, {"ok": True, "job": job})
+            elif request_path == "/downloads/retry":
+                job = self.server.orchestrator.retry_download(
+                    str(payload.get("job_id", ""))
+                )
+                self._send(202, {"ok": True, "job": job})
             else:
                 subject_id = str(payload.get("subject_id", ""))
                 compiled = self.server.orchestrator.compile_subject(subject_id)
@@ -225,7 +253,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send(409, {"ok": False, "error": str(exc)})
         except SubjectNotFoundError as exc:
             self._send(404, {"ok": False, "error": str(exc)})
-        except StorageError as exc:
+        except (StorageError, DownloadError) as exc:
             self._send(400, {"ok": False, "error": str(exc)})
         except (ValueError, SubjectValidationError, json.JSONDecodeError) as exc:
             self._log(

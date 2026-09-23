@@ -8,6 +8,8 @@ const state = {
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
   storagePollJobId: null,
+  directDownloadPollJobId: null,
+  directDownloadJob: null,
 };
 localStorage.setItem("everspark.session", state.sessionId);
 
@@ -59,6 +61,20 @@ const elements = {
   remoteDiffusionSelect: $("#remoteDiffusionSelect"),
   remoteLoraSelect: $("#remoteLoraSelect"),
   remoteConceptSelect: $("#remoteConceptSelect"),
+  imageDownloadForm: $("#imageDownloadForm"),
+  imageDownloadKind: $("#imageDownloadKind"),
+  imageDownloadUrl: $("#imageDownloadUrl"),
+  imageDownloadFilename: $("#imageDownloadFilename"),
+  conceptDownloadForm: $("#conceptDownloadForm"),
+  conceptDownloadUrl: $("#conceptDownloadUrl"),
+  conceptDownloadFilename: $("#conceptDownloadFilename"),
+  conceptRuntimeName: $("#conceptRuntimeName"),
+  directDownloadProgress: $("#directDownloadProgress"),
+  directDownloadProgressBar: $("#directDownloadProgressBar"),
+  directDownloadStatus: $("#directDownloadStatus"),
+  directDownloadDetail: $("#directDownloadDetail"),
+  cancelDirectDownload: $("#cancelDirectDownload"),
+  retryDirectDownload: $("#retryDirectDownload"),
 };
 
 const viewCopy = {
@@ -382,13 +398,130 @@ async function pullRemoteResource(button) {
   }
 }
 
+function setDirectDownloadControls(running) {
+  $$(".direct-download-start").forEach((button) => { button.disabled = running; });
+  elements.cancelDirectDownload.disabled = !running;
+}
+
+function renderDirectDownloadJob(job) {
+  state.directDownloadJob = job;
+  const progress = job.progress || {};
+  const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
+  const completed = Number(progress.bytes_completed) || 0;
+  const total = Number(progress.bytes_total) || 0;
+  const speed = Number(progress.speed_bytes_per_second) || 0;
+  const eta = Number(progress.eta_seconds) || 0;
+  const running = ["queued", "downloading"].includes(job.status);
+  const active = ["queued", "downloading", "registering"].includes(job.status);
+  elements.directDownloadProgress.classList.remove("hidden");
+  if (total) {
+    elements.directDownloadProgressBar.value = percent;
+  } else {
+    elements.directDownloadProgressBar.removeAttribute("value");
+  }
+  elements.directDownloadStatus.textContent = `${job.name}: ${job.status}${total ? ` · ${percent.toFixed(1)}%` : ""}`;
+  const parts = [];
+  if (total) parts.push(`${formatBytes(completed)} / ${formatBytes(total)}`);
+  else if (completed) parts.push(formatBytes(completed));
+  if (speed && running) parts.push(`${formatBytes(speed)}/s`);
+  if (eta && running) parts.push(`ETA ${formatDuration(eta)}`);
+  if (job.status === "registering") parts.push(`Registering ${job.runtime_name || "model"} with Ollama`);
+  if (job.error) parts.push(job.error);
+  elements.directDownloadDetail.textContent = parts.join(" · ");
+  elements.cancelDirectDownload.classList.toggle("hidden", !running);
+  elements.retryDirectDownload.classList.toggle("hidden", !["failed", "cancelled"].includes(job.status));
+  setDirectDownloadControls(active);
+}
+
+async function pollDirectDownload(jobId) {
+  state.directDownloadPollJobId = jobId;
+  try {
+    while (true) {
+      const data = await api(`/api/downloads/jobs?job_id=${encodeURIComponent(jobId)}`);
+      const job = data.job;
+      if (!job) throw new Error("Direct download job disappeared");
+      renderDirectDownloadJob(job);
+      if (job.status === "completed") {
+        state.directDownloadPollJobId = null;
+        await loadResources();
+        return;
+      }
+      if (["failed", "cancelled"].includes(job.status)) return;
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+  } finally {
+    if (state.directDownloadPollJobId === jobId) state.directDownloadPollJobId = null;
+  }
+}
+
+async function startDirectDownload(kind, url, filename = "", runtimeName = "") {
+  hideNotice();
+  setDirectDownloadControls(true);
+  try {
+    const data = await api("/api/downloads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, url, filename, runtime_name: runtimeName }),
+    });
+    renderDirectDownloadJob(data.job);
+    await pollDirectDownload(data.job.job_id);
+  } catch (error) {
+    setDirectDownloadControls(false);
+    showNotice(error.message);
+  }
+}
+
+async function loadDirectDownload() {
+  try {
+    const data = await api("/api/downloads/jobs");
+    if (!data.job) return;
+    renderDirectDownloadJob(data.job);
+    if (["queued", "downloading", "registering"].includes(data.job.status)
+        && state.directDownloadPollJobId !== data.job.job_id) {
+      await pollDirectDownload(data.job.job_id);
+    }
+  } catch (error) {
+    showNotice(error.message);
+  }
+}
+
+async function cancelDirectDownload() {
+  const job = state.directDownloadJob;
+  if (!job) return;
+  try {
+    await api("/api/downloads/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: job.job_id }),
+    });
+  } catch (error) {
+    showNotice(error.message);
+  }
+}
+
+async function retryDirectDownload() {
+  const job = state.directDownloadJob;
+  if (!job) return;
+  try {
+    const data = await api("/api/downloads/retry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: job.job_id }),
+    });
+    renderDirectDownloadJob(data.job);
+    await pollDirectDownload(data.job.job_id);
+  } catch (error) {
+    showNotice(error.message);
+  }
+}
+
 function setView(name) {
   $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
   $$("[data-view-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.viewPanel === name));
   $("#viewEyebrow").textContent = viewCopy[name][0];
   $("#viewTitle").textContent = viewCopy[name][1];
   if (name === "history") loadHistory();
-  if (name === "runtime") Promise.all([loadRuntime(), loadRemoteStorage()]);
+  if (name === "runtime") Promise.all([loadRuntime(), loadRemoteStorage(), loadDirectDownload()]);
 }
 
 function traitValues(document) {
@@ -890,6 +1023,25 @@ function bindEvents() {
   elements.downloadOutputsButton.addEventListener("click", downloadOutputsArchive);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);
   $("#refreshStorageButton").addEventListener("click", loadRemoteStorage);
+  elements.imageDownloadForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void startDirectDownload(
+      elements.imageDownloadKind.value,
+      elements.imageDownloadUrl.value.trim(),
+      elements.imageDownloadFilename.value.trim(),
+    );
+  });
+  elements.conceptDownloadForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void startDirectDownload(
+      "concept_model",
+      elements.conceptDownloadUrl.value.trim(),
+      elements.conceptDownloadFilename.value.trim(),
+      elements.conceptRuntimeName.value.trim(),
+    );
+  });
+  elements.cancelDirectDownload.addEventListener("click", cancelDirectDownload);
+  elements.retryDirectDownload.addEventListener("click", retryDirectDownload);
   $$(".storage-pull-button").forEach((button) => button.addEventListener("click", () => pullRemoteResource(button)));
   [elements.remoteCheckpointSelect, elements.remoteDiffusionSelect, elements.remoteLoraSelect, elements.remoteConceptSelect]
     .forEach((select) => select.addEventListener("change", updateStorageButtons));
@@ -904,7 +1056,7 @@ async function initialize() {
   bindEvents();
   setMode("discuss");
   renderSelectedSubject();
-  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadResources(), loadRemoteStorage()]);
+  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadResources(), loadRemoteStorage(), loadDirectDownload()]);
   setInterval(loadRuntime, 20000);
 }
 

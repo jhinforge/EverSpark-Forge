@@ -131,6 +131,12 @@ multiple LoRAs per request without modifying the bundled workflow file.
 The Gallery can package the complete `Data/Outputs` tree into a timestamped ZIP
 and download it through the same WebUI connection.
 
+The Runtime page also includes a direct model downloader that works without R2.
+Users can paste a public model URL, choose the Image Forge model type, or install
+a Concept Forge GGUF and have it registered with Ollama automatically. Downloads
+show byte progress, speed, ETA, cancellation, and retry state; incomplete files
+are never exposed to the model scanners.
+
 ## Repository status
 
 - [x] Public repository created
@@ -150,6 +156,7 @@ and download it through the same WebUI connection.
 - [x] Conversation-derived automatic current subject implemented
 - [ ] Episodic memory implemented
 - [x] WebUI subject, generation, gallery, and runtime workflow implemented
+- [x] Direct Image Forge and Concept Forge model downloads implemented
 - [ ] First public release
 
 ## License

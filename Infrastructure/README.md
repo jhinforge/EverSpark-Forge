@@ -17,6 +17,13 @@ publish live byte progress, and atomically replace the final target only after
 size validation. It never restores a complete legacy ComfyUI directory or
 copies Ollama identity keys.
 
+`Storage/download_manager.py` provides the local-first direct model downloader.
+It accepts public HTTP(S) model links independently of rclone, routes each model
+type into its fixed managed directory, preserves resumable hidden partial files,
+and atomically publishes completed downloads. Local and private network targets
+are rejected. Concept Forge GGUF files are imported with `ollama create` after
+the download completes.
+
 R2 is enabled by selecting an rclone-backed storage mode and supplying an
 existing rclone configuration. Missing or invalid remote configuration is a
 startup error after the backend has been explicitly enabled.

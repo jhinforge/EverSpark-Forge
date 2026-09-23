@@ -249,6 +249,70 @@
               </div>
             </div>
           </div>
+          <div class="storage-panel direct-download-panel">
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">DIRECT DOWNLOADS</p>
+                <h3>Install models from a URL</h3>
+                <p class="section-copy">Paste a direct HTTP download link. Files are staged safely, then added to EverSpark's managed model paths.</p>
+              </div>
+            </div>
+            <div class="direct-download-grid">
+              <form class="direct-download-card" id="imageDownloadForm">
+                <div>
+                  <span class="download-card-label">IMAGE FORGE</span>
+                  <h4>Image model</h4>
+                </div>
+                <label>
+                  <span>Model type</span>
+                  <select id="imageDownloadKind">
+                    <option value="checkpoint">Checkpoint</option>
+                    <option value="lora">LoRA</option>
+                    <option value="diffusion_model">Diffusion model</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Direct URL</span>
+                  <input id="imageDownloadUrl" type="url" inputmode="url" required placeholder="https://.../model.safetensors">
+                </label>
+                <label>
+                  <span>File name <small>optional</small></span>
+                  <input id="imageDownloadFilename" type="text" placeholder="model.safetensors">
+                </label>
+                <button class="secondary-button direct-download-start" type="submit">Download image model</button>
+              </form>
+              <form class="direct-download-card" id="conceptDownloadForm">
+                <div>
+                  <span class="download-card-label">CONCEPT FORGE</span>
+                  <h4>GGUF language model</h4>
+                </div>
+                <label>
+                  <span>Direct URL</span>
+                  <input id="conceptDownloadUrl" type="url" inputmode="url" required placeholder="https://.../model.gguf">
+                </label>
+                <label>
+                  <span>File name <small>optional</small></span>
+                  <input id="conceptDownloadFilename" type="text" placeholder="model.gguf">
+                </label>
+                <label>
+                  <span>Ollama name <small>optional</small></span>
+                  <input id="conceptRuntimeName" type="text" placeholder="my-concept-model">
+                </label>
+                <button class="secondary-button direct-download-start" type="submit">Download and register</button>
+              </form>
+            </div>
+            <div class="storage-progress hidden" id="directDownloadProgress">
+              <progress id="directDownloadProgressBar" max="100" value="0"></progress>
+              <div class="storage-progress-meta">
+                <span id="directDownloadStatus"></span>
+                <span id="directDownloadDetail"></span>
+              </div>
+              <div class="download-job-actions">
+                <button class="ghost-button" id="cancelDirectDownload" type="button">Cancel</button>
+                <button class="ghost-button hidden" id="retryDirectDownload" type="button">Retry</button>
+              </div>
+            </div>
+          </div>
           <div class="setup-panel">
             <div>
               <p class="section-kicker">FIRST RUN</p>
