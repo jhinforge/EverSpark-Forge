@@ -28,7 +28,8 @@ Fill visual identity fields from the user's description. Preserve existing value
 the user does not request a change. For a new subject, infer sensible reusable visual
 details when the conversation leaves them open instead of asking the user to configure
 schema fields. Do not add scene, pose, camera, or background details to the persistent
-character identity. Use concise image-generation terms where useful.
+character identity. Use concise image-generation terms where useful. Protected document
+metadata is owned by Orchestrator and will be applied after your response.
 """
 
 DISCUSSION_SYSTEM_PROMPT = """You are the conversational Concept Forge component of EverSpark Forge.
@@ -162,17 +163,23 @@ class OllamaProvider:
             document = json.loads(response["message"]["content"])
         except (KeyError, TypeError, json.JSONDecodeError) as exc:
             raise OllamaError("Ollama returned an invalid subject JSON response") from exc
+        if not isinstance(document, dict):
+            raise OllamaError("Ollama returned a non-object subject JSON response")
+
+        # Identity and version sequencing are Orchestrator state, not model output.
+        # Small local models can echo an earlier revision from conversation context;
+        # always stamp the protected envelope before validating the editable content.
+        for protected_key in (
+            "schema_version",
+            "document_type",
+            "subject_id",
+            "revision",
+        ):
+            document[protected_key] = target[protected_key]
         try:
             validate_subject(document)
         except ValueError as exc:
             raise OllamaError(str(exc)) from exc
-        if document["subject_id"] != subject_id:
-            raise OllamaError("Ollama changed the protected subject_id")
-        if document["revision"] != expected_revision:
-            raise OllamaError(
-                f"Ollama returned revision {document['revision']}; "
-                f"expected {expected_revision}"
-            )
         return document
 
     def discuss(

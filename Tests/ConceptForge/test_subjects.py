@@ -122,6 +122,33 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not allowed"):
                 provider.generate_subject("Create", "ember-keeper")
 
+    def test_provider_stamps_orchestrator_owned_subject_metadata(self) -> None:
+        existing = new_subject("auto-subject", "Current Character")
+        existing["revision"] = 6
+        model_document = json.loads(json.dumps(existing))
+        model_document["schema_version"] = "model-owned"
+        model_document["document_type"] = "model-owned"
+        model_document["subject_id"] = "wrong-subject"
+        model_document["revision"] = 5
+        model_document["appearance"]["hair"]["color"] = "black"
+        provider = OllamaProvider(
+            {"base_url": "http://127.0.0.1:11434", "model": "test", "timeout": 1}
+        )
+        with patch.object(
+            provider,
+            "_post_json",
+            return_value={"message": {"content": json.dumps(model_document)}},
+        ):
+            result = provider.generate_subject(
+                "Keep her black hair", "auto-subject", existing
+            )
+
+        self.assertEqual(result["schema_version"], "1.0")
+        self.assertEqual(result["document_type"], "character_subject")
+        self.assertEqual(result["subject_id"], "auto-subject")
+        self.assertEqual(result["revision"], 7)
+        self.assertEqual(result["appearance"]["hair"]["color"], "black")
+
     def test_no_think_mode_is_added_to_system_prompt(self) -> None:
         provider = OllamaProvider(
             {
