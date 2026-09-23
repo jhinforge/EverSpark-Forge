@@ -136,7 +136,7 @@ class DirectDownloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             manager = self.make_manager(
-                root, FakeOpener(b"gguf-data", "Qwen Test.gguf"), run=fake_run
+                root, FakeOpener(b"GGUF-data", "Qwen Test.gguf"), run=fake_run
             )
             started = manager.start(
                 "concept_model",
@@ -165,7 +165,7 @@ class DirectDownloadTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            opener = FakeOpener(b"gguf-data", "model.gguf")
+            opener = FakeOpener(b"GGUF-data", "model.gguf")
             manager = self.make_manager(root, opener, run=flaky_run)
             started = manager.start(
                 "concept_model", "https://models.example/model", runtime_name="model-a"
@@ -177,6 +177,56 @@ class DirectDownloadTests(unittest.TestCase):
             self.assertEqual(completed["status"], "completed")
             self.assertEqual(len(opener.requests), 1)
             self.assertEqual(attempts, 2)
+
+    @patch("download_manager.shutil.which", return_value="/usr/bin/ollama")
+    def test_registration_error_shows_only_ollama_error(self, _which) -> None:
+        def failed_run(command, **_kwargs):
+            return subprocess.CompletedProcess(
+                command, 1, "", "\x1b[?25l\x1b[1Ggathering model components ⠋ \x1b[K\r"
+                'Error: unsupported tensor "output.weight" size overflows\n',
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            manager = self.make_manager(
+                Path(directory), FakeOpener(b"GGUF-data", "model.gguf"), run=failed_run
+            )
+            started = manager.start("concept_model", "https://models.example/model")
+            failed = self.wait_for_job(manager, started["job_id"])
+            self.assertEqual(
+                failed["error"],
+                'Ollama model registration failed: Error: unsupported tensor "output.weight" size overflows',
+            )
+
+    def test_rejects_non_gguf_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manager = self.make_manager(root, FakeOpener(b"<html>login</html>", "model.gguf"))
+            started = manager.start("concept_model", "https://models.example/model")
+            failed = self.wait_for_job(manager, started["job_id"])
+            self.assertIn("not a GGUF", failed["error"])
+            self.assertFalse((root / "concept/model.gguf").exists())
+
+    def test_rejects_mismatched_resume_range(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            opener = FakeOpener(b"GGUF-model", "model.gguf")
+            manager = self.make_manager(root, opener)
+            target = root / "concept/model.gguf"
+            target.parent.mkdir(parents=True)
+            digest = __import__("hashlib").sha256(b"https://models.example/model").hexdigest()[:12]
+            (target.parent / f".model.gguf.{digest}.part").write_bytes(b"GGUF")
+
+            def wrong_range(url, headers, timeout):
+                response = opener(url, headers, timeout)
+                if "Range" in headers:
+                    response.headers.replace_header("Content-Range", "bytes 0-5/10")
+                return response
+
+            manager._open_url = wrong_range
+            started = manager.start("concept_model", "https://models.example/model")
+            failed = self.wait_for_job(manager, started["job_id"])
+            self.assertIn("invalid resume range", failed["error"])
+            self.assertFalse(target.exists())
 
     def test_rejects_invalid_requests_before_starting_thread(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

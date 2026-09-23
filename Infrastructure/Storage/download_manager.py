@@ -28,6 +28,7 @@ IMAGE_KINDS = {
 RUNTIME_NAME_PATTERN = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._/-]*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?$"
 )
+ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 
 
 class DownloadError(RuntimeError):
@@ -259,6 +260,11 @@ class DirectDownloadManager:
                 response = self._request(request["url"], offset)
             status = int(getattr(response, "status", response.getcode()))
             append = offset > 0 and status == 206
+            if append:
+                content_range = str(response.headers.get("Content-Range", ""))
+                match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", content_range)
+                if not match or int(match.group(1)) != offset:
+                    raise DownloadError("The server returned an invalid resume range; retry the download")
             if offset and not append:
                 offset = 0
             total = self._total_size(response, offset if append else 0)
@@ -291,6 +297,10 @@ class DirectDownloadManager:
                 )
             if completed < 1:
                 raise DownloadError("The model download returned an empty file")
+            if request["kind"] == "concept_model":
+                with partial.open("rb") as model_file:
+                    if model_file.read(4) != b"GGUF":
+                        raise DownloadError("The downloaded file is not a GGUF model")
             partial.replace(destination)
             self._set_progress(job_id, completed, total or completed)
             request["filename"] = filename
@@ -346,7 +356,10 @@ class DirectDownloadManager:
         except OSError as exc:
             raise DownloadError(f"Could not start Ollama model registration: {exc}") from exc
         if completed.returncode != 0:
-            detail = (completed.stderr or completed.stdout or "unknown error").strip()
+            output = ANSI_ESCAPE.sub("", "\n".join(filter(None, (completed.stderr, completed.stdout))))
+            lines = [line.strip() for line in output.replace("\r", "\n").splitlines()]
+            errors = [line for line in lines if line.startswith("Error:")]
+            detail = errors[-1] if errors else next((line for line in reversed(lines) if line), "unknown error")
             raise DownloadError(f"Ollama model registration failed: {detail}")
 
     def _normalize_request(
