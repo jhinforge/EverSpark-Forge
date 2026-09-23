@@ -18,6 +18,14 @@ Use exactly these fields:
 {"model":"illustrious","positive_prompt":"...","negative_prompt":"...","count":1,"status":"over"}
 count is the number of images requested by the user and defaults to 1.
 Prompts should be suitable for an Illustrious/booru-style image workflow.
+Translate the user's intent into a complete, usable image prompt. When the user
+leaves visual details unspecified, add fitting image-quality, composition,
+framing, lighting, and background terms that help depict the requested subject.
+Choose details based on the request and conversation instead of repeating a
+fixed list of tags. Preserve all explicit user choices and constraints; do not
+invent another character or contradict the requested scene or style. Keep
+temporary scene and composition details in positive_prompt, not the persistent
+character identity. Put unwanted visual artifacts in negative_prompt.
 Do not use Markdown and do not add explanations outside the JSON object.
 """
 

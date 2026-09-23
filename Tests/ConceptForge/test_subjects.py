@@ -186,6 +186,8 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
             provider.generate_prompt("draw")
         system_prompt = post.call_args.args[1]["messages"][0]["content"]
         self.assertTrue(system_prompt.rstrip().endswith("/no_think"))
+        self.assertIn("composition", system_prompt)
+        self.assertIn("Preserve all explicit user choices", system_prompt)
 
 
 if __name__ == "__main__":

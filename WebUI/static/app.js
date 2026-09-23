@@ -974,6 +974,7 @@ async function generate() {
   if (state.pollTimer) clearInterval(state.pollTimer);
   hideNotice();
   appendConversation("user", message);
+  elements.scenePrompt.value = "";
   elements.generateButton.disabled = true;
   setGenerationState("Planning", "running");
   elements.resultStage.replaceChildren();
@@ -997,7 +998,6 @@ async function generate() {
         selection: generationSelection(),
       }),
     });
-    elements.scenePrompt.value = "";
     await Promise.all([loadCurrentSubject(), loadSubjects()]);
     const items = data.result?.items || [];
     if (!items.length) throw new Error("Orchestrator did not return any queued frames.");
