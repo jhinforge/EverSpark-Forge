@@ -32,6 +32,8 @@ class FakeRclone:
                 output = "flux.safetensors\n"
             elif source.endswith("/loras"):
                 output = "style.safetensors\n"
+            elif source.endswith("/vae"):
+                output = "flat.safetensors\nSDXL/illustration.safetensors\n"
             elif source.endswith("/manifests"):
                 output = "registry.ollama.ai/library/gemma3test/latest\n"
             else:
@@ -125,6 +127,22 @@ class R2StorageTests(unittest.TestCase):
             self.assertEqual(completed["progress"]["bytes_completed"], 11)
             self.assertEqual(completed["progress"]["bytes_total"], 11)
             self.assertTrue((root / "image/checkpoints/Hero.SAFETENSORS").is_file())
+
+    @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
+    def test_vae_pull_preserves_remote_subdirectory(self, _which) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake = FakeRclone()
+            manager = self.make_manager(root, fake)
+            resources = manager.resources()
+            self.assertEqual([item["name"] for item in resources["image"]["vae"]],
+                             ["flat.safetensors", "SDXL/illustration.safetensors"])
+            started = manager.start_pull("vae", "sdxl/ILLUSTRATION.safetensors")
+            job = self.wait_for_job(manager, started["job_id"])
+            self.assertEqual(job["status"], "completed")
+            self.assertTrue((root / "image/vae/SDXL/illustration.safetensors").is_file())
+            self.assertIn("/vae/SDXL/illustration.safetensors", fake.copies[0][0])
+            self.assertTrue(manager.resources()["image"]["vae"][1]["installed"])
 
     @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
     def test_concept_pull_copies_blobs_before_manifest(self, _which) -> None:

@@ -43,9 +43,12 @@ class BackupManager:
         for kind, directory in MODEL_DIRS.items():
             root = image_root / directory
             if root.is_dir():
-                for path in sorted(root.iterdir()):
-                    if path.is_file() and not path.is_symlink() and path.suffix.lower() in {".safetensors", ".ckpt"}:
-                        result[f"models/image/{directory}/{path.name}"] = path
+                paths = root.rglob("*") if kind == "vae" else root.iterdir()
+                for path in sorted(paths):
+                    if (path.is_file() and not path.is_symlink()
+                            and not any(parent.is_symlink() for parent in path.parents if parent != root.parent)
+                            and path.suffix.lower() in ({".safetensors", ".ckpt", ".pt"} if kind == "vae" else {".safetensors", ".ckpt"})):
+                        result[f"models/image/{directory}/{path.relative_to(root).as_posix()}"] = path
         concept_root = REPO_ROOT / "Data/Models/ConceptForge"
         if concept_root.is_dir():
             for path in sorted(concept_root.glob("*.gguf")):

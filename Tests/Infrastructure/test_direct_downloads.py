@@ -113,6 +113,19 @@ class DirectDownloadTests(unittest.TestCase):
             self.assertEqual(job["progress"]["percent"], 100.0)
             self.assertEqual(target.read_bytes(), payload)
 
+    def test_vae_download_keeps_explicit_sdxl_subdirectory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manager = self.make_manager(root, FakeOpener(b"VAE-data", "remote.safetensors"))
+            started = manager.start("vae", "https://models.example/download/1",
+                                    filename="SDXL/illustration.safetensors")
+            job = self.wait_for_job(manager, started["job_id"])
+            self.assertEqual(job["status"], "completed")
+            self.assertEqual((root / "image/vae/SDXL/illustration.safetensors").read_bytes(), b"VAE-data")
+            with self.assertRaises(DownloadError):
+                manager.start("vae", "https://models.example/download/2",
+                              filename="../outside.safetensors")
+
     def test_rejects_wrong_extension_without_installing_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

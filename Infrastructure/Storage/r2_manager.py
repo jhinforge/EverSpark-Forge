@@ -222,13 +222,15 @@ class R2StorageManager:
         image: dict[str, list[dict[str, Any]]] = {}
         for kind, directory in IMAGE_KINDS.items():
             remote = f"{self.settings.image_remote}/{directory}"
-            local_names = self._local_name_map(self.settings.image_root / directory)
+            nested = kind == "vae"
+            local_names = self._local_name_map(self.settings.image_root / directory, recursive=nested)
             image[kind] = [
                 {
                     "name": name,
                     "installed": name.casefold() in local_names,
                 }
-                for name in self.client.list_files(remote)
+                for name in self.client.list_files(remote, recursive=nested)
+                if self._safe_image_name(name, nested=nested)
             ]
 
         manifests_root = f"{self.settings.concept_remote}/manifests"
@@ -318,16 +320,17 @@ class R2StorageManager:
     def _pull_image_model(self, job_id: str, kind: str, requested: str) -> None:
         directory = IMAGE_KINDS[kind]
         remote_dir = f"{self.settings.image_remote}/{directory}"
-        available = self.client.list_files(remote_dir)
+        nested = kind == "vae"
+        available = self.client.list_files(remote_dir, recursive=nested)
         match = {name.casefold(): name for name in available}.get(requested.casefold())
         if not match:
             raise StorageError(f"Remote {kind} was not found: {requested}")
-        if PurePosixPath(match).name != match:
-            raise StorageError("Image model names must not contain directories")
+        if not self._safe_image_name(match, nested=nested):
+            raise StorageError(f"Unsafe remote image model path: {match}")
         remote_file = f"{remote_dir}/{match}"
         total_bytes = self.client.file_size(remote_file)
         self._set_progress(job_id, 0, 1, 0, total_bytes)
-        destination = self.settings.image_root / directory / match
+        destination = self.settings.image_root / directory / PurePosixPath(match)
         self.client.copy_file(
             remote_file,
             destination,
@@ -443,13 +446,18 @@ class R2StorageManager:
         return path
 
     @staticmethod
-    def _local_name_map(directory: Path) -> dict[str, str]:
+    def _safe_image_name(name: str, *, nested: bool) -> bool:
+        parts = name.split("/")
+        return bool(name) and all(part not in {"", ".", ".."} and "\\" not in part for part in parts) and (nested or len(parts) == 1)
+
+    @staticmethod
+    def _local_name_map(directory: Path, *, recursive: bool = False) -> dict[str, str]:
         if not directory.is_dir():
             return {}
         return {
-            path.name.casefold(): path.name
-            for path in directory.iterdir()
-            if path.is_file()
+            path.relative_to(directory).as_posix().casefold(): path.relative_to(directory).as_posix()
+            for path in (directory.rglob("*") if recursive else directory.iterdir())
+            if path.is_file() and not path.is_symlink()
         }
 
     @staticmethod

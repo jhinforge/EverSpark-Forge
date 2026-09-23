@@ -42,6 +42,9 @@ class BackupUploadTests(unittest.TestCase):
             image = root / "image/checkpoints/new.safetensors"
             image.parent.mkdir(parents=True)
             image.write_bytes(b"model")
+            vae = root / "image/vae/SDXL/custom.safetensors"
+            vae.parent.mkdir(parents=True)
+            vae.write_bytes(b"VAE-data")
             gguf = root / "Data/Models/ConceptForge/new.gguf"
             gguf.parent.mkdir(parents=True)
             gguf.write_bytes(b"GGUF-test")
@@ -60,7 +63,7 @@ class BackupUploadTests(unittest.TestCase):
                 manager.settings = replace(manager.settings, image_root=root / "image")
                 fake = FakeRclone()
                 manager.client = fake
-                names = ["models/image/checkpoints/new.safetensors", "models/concept/new.gguf", "outputs/sub/image.png"]
+                names = ["models/image/checkpoints/new.safetensors", "models/image/vae/SDXL/custom.safetensors", "models/concept/new.gguf", "outputs/sub/image.png"]
                 job = manager.start(names, memory=True)
                 for _ in range(200):
                     current = manager.job(job["job_id"])
@@ -69,6 +72,7 @@ class BackupUploadTests(unittest.TestCase):
                     time.sleep(.01)
                 self.assertEqual(current["status"], "completed", current["error"])
                 self.assertEqual(fake.remote["r:images/checkpoints/new.safetensors"], b"model")
+                self.assertEqual(fake.remote["r:images/vae/SDXL/custom.safetensors"], b"VAE-data")
                 self.assertEqual(fake.remote["r:backup/models/concept/new.gguf"], b"GGUF-test")
                 self.assertEqual(fake.remote["r:backup/outputs/sub/image.png"], b"PNG")
                 self.assertEqual(len([key for key in fake.remote if key.startswith("r:backup/memory/")]), 1)

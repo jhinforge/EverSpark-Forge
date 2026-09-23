@@ -111,6 +111,15 @@ def _safe_filename(value: str) -> str:
     return filename
 
 
+def _safe_vae_filename(value: str) -> str:
+    name = unquote(str(value or "").strip()).replace("\\", "/")
+    parts = name.split("/")
+    if (not name or name.startswith("/") or len(name) > 240
+            or any(part in {"", ".", ".."} or "\x00" in part for part in parts)):
+        raise DownloadError("A safe relative VAE filename is required")
+    return "/".join(parts)
+
+
 def _default_runtime_name(filename: str) -> str:
     stem = Path(filename).stem.casefold()
     normalized = re.sub(r"[^a-z0-9._-]+", "-", stem).strip("-._")
@@ -247,14 +256,15 @@ class DirectDownloadManager:
             header_name = ""
             if hasattr(response.headers, "get_filename"):
                 header_name = response.headers.get_filename() or ""
-            filename = _safe_filename(explicit_name or header_name or candidate_name)
+            filename = (_safe_vae_filename(explicit_name) if request["kind"] == "vae" and explicit_name
+                        else _safe_filename(explicit_name or header_name or candidate_name))
             destination = self._destination(request["kind"], filename)
             self._validate_extension(request["kind"], destination.suffix)
             if destination.exists():
                 raise DownloadError(f"A model with this filename already exists: {filename}")
             destination.parent.mkdir(parents=True, exist_ok=True)
             digest = hashlib.sha256(request["url"].encode("utf-8")).hexdigest()[:12]
-            partial = destination.with_name(f".{filename}.{digest}.part")
+            partial = destination.with_name(f".{destination.name}.{digest}.part")
             offset = partial.stat().st_size if partial.is_file() else 0
             if offset:
                 response.close()
@@ -375,7 +385,8 @@ class DirectDownloadManager:
         parsed = urlparse(normalized_url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise DownloadError("A valid http:// or https:// model URL is required")
-        normalized_filename = _safe_filename(filename) if str(filename).strip() else ""
+        normalized_filename = ((_safe_vae_filename(filename) if normalized_kind == "vae" else _safe_filename(filename))
+                               if str(filename).strip() else "")
         normalized_runtime = str(runtime_name).strip()
         if normalized_kind != "concept_model" and normalized_runtime:
             raise DownloadError("runtime_name is only valid for Concept Forge models")
