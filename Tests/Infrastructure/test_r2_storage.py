@@ -44,6 +44,8 @@ class FakeRclone:
                 command, 0, json.dumps({"count": 1, "bytes": 11}), ""
             )
         if action == "copyto":
+            if "--inplace" in command:
+                return subprocess.CompletedProcess(command, 1, "", "unknown flag: --inplace")
             destination = Path(command[3])
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(b"remote-data")
@@ -60,6 +62,8 @@ class SlowFakeRclone(FakeRclone):
                 command, 0, json.dumps({"count": 1, "bytes": 12}), ""
             )
         if action == "copyto":
+            if "--inplace" in command:
+                return subprocess.CompletedProcess(command, 1, "", "unknown flag: --inplace")
             source = command[2]
             destination = Path(command[3])
             destination.parent.mkdir(parents=True, exist_ok=True)

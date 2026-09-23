@@ -166,7 +166,6 @@ class RcloneClient:
                     "copyto",
                     remote_file,
                     str(partial),
-                    "--inplace",
                     timeout=24 * 60 * 60,
                 )
             except BaseException as exc:  # propagated after the worker joins
