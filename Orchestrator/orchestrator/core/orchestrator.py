@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Storage"))
 from r2_manager import R2StorageManager  # noqa: E402
 from download_manager import DirectDownloadManager  # noqa: E402
+from backup_manager import BackupManager  # noqa: E402
 
 
 class BusyError(RuntimeError):
@@ -30,6 +31,7 @@ class Orchestrator:
         self.runner = TaskRunner(config)
         self.storage = R2StorageManager(config)
         self.downloads = DirectDownloadManager(config)
+        self.backups = BackupManager(config)
         memory_config = config["memory"]
         self.memory = SQLiteMemoryStore(
             memory_config["database"],
@@ -202,6 +204,15 @@ class Orchestrator:
 
     def storage_resources(self) -> dict[str, Any]:
         return self.storage.resources()
+
+    def backup_resources(self) -> dict[str, Any]:
+        return self.backups.resources()
+
+    def start_backup(self, names: list[str], memory: bool = False) -> dict[str, Any]:
+        return self.backups.start(names, memory)
+
+    def backup_job(self, job_id: str = "") -> dict[str, Any] | None:
+        return self.backups.job(job_id)
 
     def start_storage_pull(self, kind: str, name: str) -> dict[str, Any]:
         return self.storage.start_pull(kind, name)

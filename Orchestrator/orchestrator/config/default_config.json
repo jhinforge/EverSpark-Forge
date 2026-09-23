@@ -34,6 +34,7 @@
       "config_file": "",
       "image_remote": "",
       "concept_remote": "",
+      "backup_remote": "",
       "timeout": 60
     }
   },

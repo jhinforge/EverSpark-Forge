@@ -75,6 +75,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                 200,
                 {"ok": True, "job": self.server.orchestrator.storage_job(job_id)},
             )
+        elif parsed.path == "/backup/resources":
+            try:
+                self._send(200, {"ok": True, **self.server.orchestrator.backup_resources()})
+            except StorageError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/backup/jobs":
+            job_id = parse_qs(parsed.query).get("job_id", [""])[0]
+            self._send(200, {"ok": True, "job": self.server.orchestrator.backup_job(job_id)})
         elif parsed.path == "/downloads/jobs":
             job_id = parse_qs(parsed.query).get("job_id", [""])[0]
             self._send(
@@ -162,6 +170,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/subjects/update",
             "/subjects/compile",
             "/storage/pull",
+            "/backup/upload",
             "/downloads",
             "/downloads/cancel",
             "/downloads/retry",
@@ -212,6 +221,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif request_path == "/storage/pull":
                 job = self.server.orchestrator.start_storage_pull(
                     str(payload.get("kind", "")), str(payload.get("name", ""))
+                )
+                self._send(202, {"ok": True, "job": job})
+            elif request_path == "/backup/upload":
+                job = self.server.orchestrator.start_backup(
+                    payload.get("names", []), payload.get("memory") is True
                 )
                 self._send(202, {"ok": True, "job": job})
             elif request_path == "/downloads":

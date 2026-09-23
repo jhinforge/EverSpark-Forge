@@ -485,6 +485,15 @@ class APITests(unittest.TestCase):
         def storage_job(self, job_id=""):
             return {"job_id": job_id or "job-1", "status": "completed"}
 
+        def backup_resources(self):
+            return {"enabled": True, "files": [{"name": "outputs/a.png", "bytes": 3}], "memory": True}
+
+        def start_backup(self, names, memory=False):
+            return {"job_id": "backup-1", "names": names, "memory": memory, "status": "queued"}
+
+        def backup_job(self, job_id=""):
+            return {"job_id": job_id or "backup-1", "status": "completed"}
+
         def start_download(self, kind, url, filename="", runtime_name=""):
             return {
                 "job_id": "download-1",
@@ -595,6 +604,19 @@ class APITests(unittest.TestCase):
         self.assertEqual(status, 202)
         self.assertEqual(started["job"]["kind"], "lora")
         status, job = self._request("/storage/jobs?job_id=job-1")
+        self.assertEqual(status, 200)
+        self.assertEqual(job["job"]["status"], "completed")
+
+    def test_backup_routes_use_the_infrastructure_boundary(self) -> None:
+        status, resources = self._request("/backup/resources")
+        self.assertEqual(status, 200)
+        self.assertEqual(resources["files"][0]["name"], "outputs/a.png")
+        status, started = self._request(
+            "/backup/upload", {"names": ["outputs/a.png"], "memory": True}
+        )
+        self.assertEqual(status, 202)
+        self.assertTrue(started["job"]["memory"])
+        status, job = self._request("/backup/jobs?job_id=backup-1")
         self.assertEqual(status, 200)
         self.assertEqual(job["job"]["status"], "completed")
 

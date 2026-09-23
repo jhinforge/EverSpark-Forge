@@ -122,6 +122,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         ("storage", "rclone", "concept_remote"),
     )
     _environment_override(
+        config, "EVERSPARK_BACKUP_REMOTE", ("storage", "rclone", "backup_remote")
+    )
+    _environment_override(
         config, "EVERSPARK_MEMORY_DATABASE", ("memory", "database")
     )
     _environment_override(

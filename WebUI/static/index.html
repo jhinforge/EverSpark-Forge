@@ -249,6 +249,28 @@
               </div>
             </div>
           </div>
+          <div class="storage-panel" id="backupPanel">
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">REMOTE BACKUP</p>
+                <h3>Upload local data</h3>
+                <p class="section-copy" id="backupSummary">Scan local models and outputs to choose what to upload.</p>
+              </div>
+              <button class="ghost-button" id="refreshBackupButton" type="button">Scan changes</button>
+            </div>
+            <div class="backup-actions">
+              <label><input id="backupMemory" type="checkbox"> Save a new Memory database snapshot</label>
+              <button class="secondary-button" id="startBackupButton" type="button">Upload selected</button>
+            </div>
+            <div id="backupFiles" class="backup-files"></div>
+            <div class="storage-progress hidden" id="backupProgress">
+              <progress id="backupProgressBar" max="100" value="0"></progress>
+              <div class="storage-progress-meta">
+                <span id="backupJobStatus"></span>
+                <span id="backupProgressDetail"></span>
+              </div>
+            </div>
+          </div>
           <div class="storage-panel direct-download-panel">
             <div class="storage-heading">
               <div>

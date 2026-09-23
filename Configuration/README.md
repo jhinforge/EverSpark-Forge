@@ -52,10 +52,17 @@ the private environment file using paths from the user's own rclone remote:
 EVERSPARK_STORAGE_BACKEND=rclone
 IMAGE_FORGE_RCLONE_REMOTE=remote:path/models_cold
 CONCEPT_FORGE_RCLONE_REMOTE=remote:path/.ollama/models
+EVERSPARK_BACKUP_REMOTE=remote:path/everspark-backups
 ```
 
 The Runtime page then scans Checkpoints, diffusion models, LoRAs, and Ollama
 manifests. Ollama identity files outside `models/` are deliberately ignored.
+The separate backup root enables manual upload of locally added image models,
+direct-download GGUF files, outputs, and timestamped SQLite Memory snapshots.
+Uploads never remove remote files. Image models go to the existing image remote
+and can be downloaded through the remote model picker. Original GGUF files,
+outputs, and Memory snapshots go to the separate backup root; restoring these
+backup files is not yet provided in the WebUI.
 
 Private files are normalized to ignored runtime locations:
 

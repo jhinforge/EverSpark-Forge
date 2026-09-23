@@ -8,6 +8,7 @@ const state = {
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
   storagePollJobId: null,
+  backupPollJobId: null,
   directDownloadPollJobId: null,
   directDownloadJob: null,
 };
@@ -57,6 +58,14 @@ const elements = {
   storageProgressBar: $("#storageProgressBar"),
   storageJobStatus: $("#storageJobStatus"),
   storageProgressDetail: $("#storageProgressDetail"),
+  backupSummary: $("#backupSummary"),
+  backupFiles: $("#backupFiles"),
+  backupMemory: $("#backupMemory"),
+  startBackupButton: $("#startBackupButton"),
+  backupProgress: $("#backupProgress"),
+  backupProgressBar: $("#backupProgressBar"),
+  backupJobStatus: $("#backupJobStatus"),
+  backupProgressDetail: $("#backupProgressDetail"),
   remoteCheckpointSelect: $("#remoteCheckpointSelect"),
   remoteDiffusionSelect: $("#remoteDiffusionSelect"),
   remoteLoraSelect: $("#remoteLoraSelect"),
@@ -335,6 +344,90 @@ async function loadRemoteStorage() {
   }
 }
 
+async function loadBackup() {
+  try {
+    const data = await api("/api/backup/resources");
+    elements.backupFiles.replaceChildren();
+    elements.startBackupButton.disabled = !data.enabled;
+    elements.backupMemory.disabled = !data.enabled || !data.memory;
+    elements.backupSummary.textContent = data.enabled
+      ? `${data.files.length} local files found. Checked files need upload; matching remote sizes are already backed up.`
+      : "Enable rclone storage and set EVERSPARK_BACKUP_REMOTE to upload backups.";
+    for (const file of data.files) {
+      const label = document.createElement("label");
+      label.className = "backup-file";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "backup-choice";
+      checkbox.value = file.name;
+      checkbox.checked = !file.backed_up;
+      const description = document.createElement("span");
+      description.textContent = `${file.name} · ${formatBytes(file.bytes)} · ${file.backed_up ? "same size remotely" : "needs upload"}`;
+      label.append(checkbox, description);
+      elements.backupFiles.append(label);
+    }
+    const active = (await api("/api/backup/jobs")).job;
+    if (active) {
+      renderBackupJob(active);
+      if (["queued", "running"].includes(active.status) && state.backupPollJobId !== active.job_id) {
+        void pollBackupJob(active.job_id);
+      }
+    }
+  } catch (error) {
+    elements.backupSummary.textContent = error.message;
+    elements.startBackupButton.disabled = true;
+  }
+}
+
+function renderBackupJob(job) {
+  const progress = job.progress || {};
+  elements.backupProgress.classList.remove("hidden");
+  elements.backupProgressBar.value = Number(progress.percent) || 0;
+  elements.backupJobStatus.textContent = `${job.status}: ${job.current || "preparing"}`;
+  elements.backupProgressDetail.textContent = `${progress.completed || 0}/${progress.total || 0} files · ${formatBytes(progress.bytes_completed || 0)} / ${formatBytes(progress.bytes_total || 0)}`;
+  if (job.status === "failed") elements.backupJobStatus.textContent = job.error || "Upload failed";
+}
+
+async function pollBackupJob(jobId) {
+  state.backupPollJobId = jobId;
+  try {
+    while (true) {
+      const job = (await api(`/api/backup/jobs?job_id=${encodeURIComponent(jobId)}`)).job;
+      if (!job) throw new Error("Backup job disappeared");
+      renderBackupJob(job);
+      if (["completed", "failed"].includes(job.status)) {
+        if (job.status === "completed") await loadBackup();
+        else showNotice(job.error || "Backup upload failed");
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  } catch (error) {
+    showNotice(error.message);
+  } finally {
+    state.backupPollJobId = null;
+    elements.startBackupButton.disabled = false;
+  }
+}
+
+async function startBackup() {
+  const names = $$(".backup-choice:checked").map((input) => input.value);
+  const memory = elements.backupMemory.checked;
+  if (!names.length && !memory) return showNotice("Select a file or Memory snapshot first.");
+  elements.startBackupButton.disabled = true;
+  try {
+    const data = await api("/api/backup/upload", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names, memory }),
+    });
+    elements.backupMemory.checked = false;
+    await pollBackupJob(data.job.job_id);
+  } catch (error) {
+    showNotice(error.message);
+    elements.startBackupButton.disabled = false;
+  }
+}
+
 function renderStorageJob(job) {
   const progress = job.progress || {};
   const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
@@ -521,7 +614,7 @@ function setView(name) {
   $("#viewEyebrow").textContent = viewCopy[name][0];
   $("#viewTitle").textContent = viewCopy[name][1];
   if (name === "history") loadHistory();
-  if (name === "runtime") Promise.all([loadRuntime(), loadRemoteStorage(), loadDirectDownload()]);
+  if (name === "runtime") Promise.all([loadRuntime(), loadRemoteStorage(), loadDirectDownload(), loadBackup()]);
 }
 
 function traitValues(document) {
@@ -1023,6 +1116,8 @@ function bindEvents() {
   elements.downloadOutputsButton.addEventListener("click", downloadOutputsArchive);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);
   $("#refreshStorageButton").addEventListener("click", loadRemoteStorage);
+  $("#refreshBackupButton").addEventListener("click", loadBackup);
+  elements.startBackupButton.addEventListener("click", startBackup);
   elements.imageDownloadForm.addEventListener("submit", (event) => {
     event.preventDefault();
     void startDirectDownload(
@@ -1056,7 +1151,7 @@ async function initialize() {
   bindEvents();
   setMode("discuss");
   renderSelectedSubject();
-  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadResources(), loadRemoteStorage(), loadDirectDownload()]);
+  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadResources(), loadRemoteStorage(), loadDirectDownload(), loadBackup()]);
   setInterval(loadRuntime, 20000);
 }
 
