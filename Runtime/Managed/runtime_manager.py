@@ -165,6 +165,27 @@ def _tail(path: Path, lines: int = 20) -> str:
     return "\n".join(content[-lines:])
 
 
+def _ensure_managed_vae_path() -> None:
+    """Upgrade the generated ComfyUI model paths without overwriting custom entries."""
+    path = REPO_ROOT / "Data/Runtime/ComfyUI/source/extra_model_paths.yaml"
+    if not path.is_file():
+        return
+    content = path.read_text(encoding="utf-8")
+    lines = content.splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if line.strip() == "everspark:" and not line.startswith((" ", "\t"))), None)
+    if start is None:
+        return
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].strip() and not lines[i].startswith((" ", "\t", "#"))), len(lines))
+    block = lines[start + 1:end]
+    expected = f"  base_path: {REPO_ROOT}/Data/Models/ImageForge"
+    if not any(line.strip() == expected.strip() for line in block):
+        return
+    if any(line.strip().startswith("vae:") for line in block):
+        return
+    lines.insert(end, "  vae: vae\n")
+    path.write_text("".join(lines), encoding="utf-8")
+
+
 def start_service(definition: ServiceDefinition) -> dict[str, Any]:
     state = _read_state(definition.name)
     if _state_is_live(state):
@@ -183,6 +204,8 @@ def start_service(definition: ServiceDefinition) -> dict[str, Any]:
         raise RuntimeManagerError(
             f"Start command is missing for {definition.name}: {command_path}"
         )
+    if definition.name == "image":
+        _ensure_managed_vae_path()
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / definition.log_file

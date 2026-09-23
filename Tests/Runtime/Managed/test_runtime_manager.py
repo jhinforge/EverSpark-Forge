@@ -24,6 +24,24 @@ def free_port() -> int:
 
 
 class RuntimeManagerTests(unittest.TestCase):
+    def test_existing_managed_comfy_config_gains_vae_without_losing_custom_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "Data/Runtime/ComfyUI/source/extra_model_paths.yaml"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                f"everspark:\n  base_path: {root}/Data/Models/ImageForge\n"
+                "  checkpoints: checkpoints\n  loras: loras\nother:\n  vae: external\n",
+                encoding="utf-8",
+            )
+            with patch.object(runtime_manager, "REPO_ROOT", root):
+                runtime_manager._ensure_managed_vae_path()
+                runtime_manager._ensure_managed_vae_path()
+            content = config.read_text(encoding="utf-8")
+            self.assertIn("  loras: loras\n  vae: vae\nother:", content)
+            self.assertIn("other:\n  vae: external", content)
+            self.assertEqual(content.count("  vae: vae"), 1)
+
     def test_configured_log_directory_is_resolved_from_repository(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

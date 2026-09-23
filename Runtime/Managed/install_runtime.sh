@@ -283,6 +283,7 @@ everspark:
   checkpoints: checkpoints
   diffusion_models: diffusion_models
   loras: loras
+  vae: vae
 EOF
 
 core_ok runtime.comfy.ready "Managed ComfyUI runtime is ready" \

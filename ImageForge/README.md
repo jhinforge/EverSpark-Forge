@@ -15,7 +15,7 @@ The current migrated slice contains:
 ComfyUI is an adapter rather than the module identity. A user workflow can be
 selected with `EVERSPARK_WORKFLOW_TEMPLATE`; importing or building a portable
 workflow remains independent from personal workflows. The managed runtime
-connects `Data/Models/ImageForge/checkpoints` through ComfyUI's
+connects `Data/Models/ImageForge/checkpoints`, `loras`, and `vae` through ComfyUI's
 `extra_model_paths.yaml` mechanism.
 
 ## Workflow registry
