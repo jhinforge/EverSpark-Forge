@@ -10,7 +10,7 @@ EverSpark Forge 发布的是源码。首次 `setup` 会联网安装托管运行�
 - 供安装程序和模型使用的可用磁盘空间；具体下载来源和目标位置可先用 `setup --plan` 查看。
 - 如果从自己的电脑访问云端 WebUI，需要能通过 SSH 连接这台机器，并知道云端机器的公网地址和 SSH 端口。
 
-镜像中的 CUDA 版本与 EverSpark 安装的 PyTorch CUDA 档位是两回事。当前源码会根据 **NVIDIA 驱动能力和 GPU 架构**自动选择 PyTorch `cu126` 或 `cu128`；只有无法读取驱动能力时才以基础镜像的 CUDA runtime 作为回退判断。Blackwell GPU 需要支持 CUDA 12.8 的驱动及 `cu128` 档位。当前安装脚本**没有 `cu121` 档位**，也不要求用户手动指定 wheel 地址。
+镜像中的 CUDA 版本与 EverSpark 安装的 PyTorch CUDA 档位是两回事。当前源码会根据 **NVIDIA 驱动能力和 GPU 架构**自动选择 PyTorch `cu126` 或 `cu128`；只有无法读取驱动能力时才以基础镜像的 CUDA runtime 作为回退判断。Blackwell GPU 需要支持 CUDA 12.8 的驱动及 `cu128` 档位。
 
 ## 2. 无私人配置：从源码启动
 
