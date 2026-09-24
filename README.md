@@ -1,5 +1,7 @@
 # EverSpark Forge · v0.1
 
+EverSpark Forge treats compute environments as disposable, while preserving workflows, configuration, and user-owned data as persistent state.
+
 EverSpark Forge is a personal AI infrastructure and orchestration system.
 It is designed to turn user intent into reusable, structured AI workflows
 without binding those workflows to one machine, one model provider, or one
