@@ -34,13 +34,40 @@ Without `.env`, storage stays on the machine running EverSpark and services bind
 
 ## 3. Access the cloud WebUI from your computer
 
+### First-time SSH key setup (optional)
+
+**Already able to SSH into this cloud machine from your computer? Skip to [Get and run the forwarding command](#get-and-run-the-forwarding-command).** Otherwise, open Windows PowerShell or a Linux/macOS terminal **on your own computer** and run:
+
+```bash
+ssh-keygen -t ed25519 -C "everspark-cloud"
+```
+
+Choose a location and passphrase at the prompts; first-time users can accept the default path. **Do not overwrite an existing private key** if prompted: use that key or choose another filename. This creates a private key such as `id_ed25519` and a public key ending in `.pub`. Display the **public key**:
+
+| Terminal on your computer | Command (default filename) |
+| --- | --- |
+| Windows PowerShell | `Get-Content "$HOME/.ssh/id_ed25519.pub"` |
+| Linux/macOS | `cat ~/.ssh/id_ed25519.pub` |
+
+Add the public key's **entire line** to your cloud environment's SSH public key settings. If it has no such setting, add it to the target account's `~/.ssh/authorized_keys` using that machine's administration method. **Keep the private key on your computer; never upload it to the cloud, paste it into a public key field, or commit it to the repository.**
+
+Test login from your own computer, substituting the actual username, public address, and mapped SSH port:
+
+```bash
+ssh -p 22 root@example.com
+```
+
+For a non-default key path, add `-i PATH_TO_PRIVATE_KEY` to the `ssh` command. If login fails, check the cloud environment's public address, mapped port, username, and registered public key. After successful login, type `exit` to return to your local terminal.
+
+### Get and run the forwarding command
+
 `./everspark start` prints access instructions. Print them again at any time:
 
 ```bash
 ./everspark access
 ```
 
-If the cloud environment supplies connection information the launcher recognizes, the output includes the complete SSH forwarding command. **Run that command on your own computer**, keep the SSH session open, and visit the local browser address shown (normally `http://127.0.0.1:8080`). The cloud machine's `127.0.0.1:8780` is not an address on your computer.
+If the cloud environment supplies connection information the launcher recognizes, the output includes the complete SSH forwarding command. **Run that command on your own computer**; add `-i PATH_TO_PRIVATE_KEY` to it if you use a non-default key file. Keep the SSH session open and visit the local browser address shown (normally `http://127.0.0.1:8080`). The cloud machine's `127.0.0.1:8780` is not an address on your computer.
 
 If the platform does not supply that information, set `EVERSPARK_SSH_HOST` and `EVERSPARK_SSH_PORT` in your private `.env` (and `EVERSPARK_SSH_USER` if needed), then rerun `./everspark access`. Forwarding requires SSH access to the machine.
 
