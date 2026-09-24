@@ -1,25 +1,26 @@
-# EverSpark Forge
+# EverSpark Forge · v0.1
 
 EverSpark Forge is a personal AI infrastructure and orchestration system.
 It is designed to turn user intent into reusable, structured AI workflows
 without binding those workflows to one machine, one model provider, or one
 execution backend.
 
-> [!IMPORTANT]
-> The source code is available for testing. A versioned public release has not
-> been published yet.
+**v0.1 is the first public source release.** EverSpark Forge can be installed
+from this repository on a supported Linux GPU machine. Models, configuration,
+generated outputs, and other personal data are managed separately from the
+source code.
 
 ## Product goal
 
-The intended user experience is:
+The basic workflow is:
 
 1. Clone the repository.
 2. Run one launcher command.
 3. Let EverSpark create its local directories and default configuration.
 4. Open the WebUI and start using the system.
 
-The default installation will require no R2 or Cloudflare configuration.
-External storage and public networking will remain optional integrations.
+The default installation requires no R2 or Cloudflare configuration. External
+storage and public networking are optional integrations.
 
 ## Default behavior
 
@@ -49,24 +50,23 @@ Top-level module names describe EverSpark capabilities. External tools such as
 ComfyUI, Ollama, R2, and Cloudflare belong inside adapters, providers, or
 backends rather than defining the architecture themselves.
 
-See [Docs/Architecture.md](Docs/Architecture.md) for the initial module
+See [Docs/Architecture.md](Docs/Architecture.md) for the module
 boundaries and data flow.
 
 ## Configuration model
 
-The initial configuration contract is defined in
+The default configuration is defined in
 [Configuration/default.yaml](Configuration/default.yaml).
 
-Configuration precedence will be:
+Optional integrations use private environment settings; see
+[Configuration/README.md](Configuration/README.md). Copy `.env.example` to
+`.env` only when those integrations are needed.
 
-1. Command-line arguments
-2. Environment variables
-3. User configuration
-4. Repository defaults
+## Quick start
 
-Copy `.env.example` to `.env` only when optional integrations are needed.
-
-## Current launcher
+The managed runtime targets Linux x86_64 with an NVIDIA GPU. Setup needs an
+internet connection for runtimes and models; run the plan first to review the
+downloads without changing the machine.
 
 ```bash
 git clone https://github.com/jhinforge/EverSpark-Forge.git
@@ -100,8 +100,8 @@ when its backend is enabled. When the rclone storage backend is explicitly
 enabled, setup installs rclone automatically; merely importing `rclone.conf`
 does not activate remote storage or install anything.
 
-When rclone storage is enabled, the Runtime page can scan and selectively
-download remote Checkpoints, diffusion models, LoRAs, and Ollama models. Image
+When rclone storage is enabled, the Storage page can scan and selectively
+download remote checkpoints, diffusion models, LoRAs, VAEs, and Ollama models. Image
 resources are written only into `Data/Models/ImageForge`; Concept resources are
 restored from Ollama manifests and content-addressed blobs into
 `Data/Models/ConceptForge/Ollama`. Legacy ComfyUI program files and Ollama
@@ -114,10 +114,8 @@ command to run on your local computer. Use `./everspark access` to print it
 again. On other Pod platforms, set `EVERSPARK_SSH_HOST` and
 `EVERSPARK_SSH_PORT`; the WebUI stays bound to localhost by default.
 
-The managed model foundation currently selects Qwen3 4B GGUF Q4_K_M for
-Concept Forge and Illustrious XL v1.0 for Image Forge. Inspect the download
-plan with `./everspark setup --plan`; run `./everspark setup` only when you are
-ready to download both models (roughly 9.5 GB total). A public, LoRA-free
+The default setup installs a usable Concept Forge model and an Image Forge
+checkpoint; both can be replaced with compatible models. A public, LoRA-free
 Illustrious API Format workflow is included for the initial generation path.
 The setup process also selects a pinned PyTorch 2.9.1 CUDA profile from the
 detected GPU architecture and NVIDIA driver capability; users do not choose a
@@ -130,7 +128,7 @@ multiple LoRAs per request without modifying the bundled workflow file.
 The Gallery can package the complete `Data/Outputs` tree into a timestamped ZIP
 and download it through the same WebUI connection.
 
-The Runtime page also includes a direct model downloader that works without R2.
+The Storage page also includes a direct model downloader that works without R2.
 Users can paste a public model URL, choose the Image Forge model type, or install
 a Concept Forge GGUF and have it registered with Ollama automatically. Downloads
 show byte progress, speed, ETA, cancellation, and retry state; incomplete files
@@ -146,28 +144,18 @@ uses an `everspark-backups` prefix. Local output files can be uploaded there.
 Character JSON and SQLite are uploaded and restored as verified batches. Restore
 saves the previous local data in `Data/Recovery` before replacing it.
 
-## Repository status
+## In v0.1
 
-- [x] Public repository created
-- [x] Initial names and module boundaries defined
-- [x] Local-first configuration contract added
-- [x] Configuration, logging, storage, and network foundation migrated
-- [x] Portable private configuration import and Tunnel lifecycle implemented
-- [x] Launcher foundation, initialization, and diagnostics implemented
-- [x] Existing v0.1 execution chain migrated across module boundaries
-- [x] Concept Forge Character Subject v1 schema implemented
-- [x] Working Memory v0 persistence migrated
-- [x] Managed default model catalog and installer implemented
-- [x] Image checkpoint discovery and deterministic fallback implemented
-- [x] Manual workflow, Checkpoint, LLM, and standard LoRA selection implemented
-- [x] Managed ComfyUI/Ollama installation and service lifecycle implemented
-- [x] Character Subject structured state and revision history implemented
-- [x] Conversation-derived automatic current subject implemented
-- [ ] Episodic memory implemented
-- [x] WebUI subject, generation, gallery, and runtime workflow implemented
-- [x] Direct Image Forge and Concept Forge model downloads implemented
-- [x] Manual model, output, and Memory snapshot uploads implemented
-- [ ] First public release
+- Discuss a character in the WebUI, reuse an existing subject, and generate
+  images through Concept Forge, Orchestrator, and Image Forge.
+- Select installed workflows, language models, checkpoints, VAEs, and LoRAs.
+- Download models by direct URL or from optional rclone storage; upload models
+  to mapped remote directories and back up outputs, character data, and memory.
+- Inspect runtime health, manage services through `./everspark`, and export the
+  output folder from the Gallery.
+
+Working and structured character memory are available in v0.1. Episodic memory
+is planned for a later release.
 
 ## License
 
