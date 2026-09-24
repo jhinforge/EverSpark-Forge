@@ -61,16 +61,18 @@ The default configuration is defined in
 [Configuration/default.yaml](Configuration/default.yaml).
 
 Optional integrations use private environment settings; see
-[Configuration/README.md](Configuration/README.md). Copy `.env.example` to
-`.env` only when those integrations are needed.
+[Configuration/README.md](Configuration/README.md). Use `.env.example` as a
+field reference; create a private `.env` containing only the settings you need.
 
 ## Quick start
 
-中文首次运行指南：[Docs/Getting-Started.zh-CN.md](Docs/Getting-Started.zh-CN.md)。
-中文配置指南：[Docs/Configuration.zh-CN.md](Docs/Configuration.zh-CN.md)。
-中文运行与数据指南：[Docs/Runtime-and-Data.zh-CN.md](Docs/Runtime-and-Data.zh-CN.md)。
-中文排障指南：[Docs/Troubleshooting.zh-CN.md](Docs/Troubleshooting.zh-CN.md)。
-中文架构指南：[Docs/Architecture.zh-CN.md](Docs/Architecture.zh-CN.md)。
+| Guide | English | 中文 |
+| --- | --- | --- |
+| First run | [Getting started](Docs/Getting-Started.md) | [首次运行](Docs/Getting-Started.zh-CN.md) |
+| Configuration | [Configuration](Docs/Configuration.md) | [配置指南](Docs/Configuration.zh-CN.md) |
+| Runtime and data | [Runtime and data](Docs/Runtime-and-Data.md) | [运行与数据](Docs/Runtime-and-Data.zh-CN.md) |
+| Troubleshooting | [Troubleshooting](Docs/Troubleshooting.md) | [排障指南](Docs/Troubleshooting.zh-CN.md) |
+| Architecture | [Architecture](Docs/Architecture.md) | [架构指南](Docs/Architecture.zh-CN.md) |
 
 The managed runtime targets Linux x86_64 with an NVIDIA GPU. Setup needs an
 internet connection for runtimes and models; run the plan first to review the
@@ -116,11 +118,12 @@ restored from Ollama manifests and content-addressed blobs into
 identity keys are never restored. Active transfers show bytes, percentage,
 speed, ETA, and file counts, and the page can resume monitoring after refresh.
 
-Open `http://127.0.0.1:8780` locally. On a Vast.ai Pod, `start` reads the
-platform-provided public IP and mapped SSH port and prints the complete tunnel
-command to run on your local computer. Use `./everspark access` to print it
-again. On other Pod platforms, set `EVERSPARK_SSH_HOST` and
-`EVERSPARK_SSH_PORT`; the WebUI stays bound to localhost by default.
+Open `http://127.0.0.1:8780` on the cloud machine. When the cloud environment
+provides connection information the launcher recognizes, `start` prints the
+SSH forwarding command to run on your own computer. Use `./everspark access`
+to print it again. Otherwise, set `EVERSPARK_SSH_HOST` and
+`EVERSPARK_SSH_PORT` in your private configuration; the WebUI stays bound to
+localhost by default.
 
 The default setup installs a usable Concept Forge model and an Image Forge
 checkpoint; both can be replaced with compatible models. A public, LoRA-free
