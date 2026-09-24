@@ -42,6 +42,7 @@ class TaskRunner:
         subject: CompiledSubject | None = None,
         selection: dict[str, Any] | None = None,
         saved_negative_prompt: str | None = None,
+        previous_positive_prompt: str = "",
     ) -> dict[str, Any]:
         selected = selection or {}
         workflow_id = self.workflow.selected_workflow_id(
@@ -59,9 +60,18 @@ class TaskRunner:
             if not resolved_llm:
                 raise TaskError(f"Selected LLM is unavailable: {llm_model}")
             llm_model = resolved_llm
+        prompt_history = list(history or [])
+        if previous_positive_prompt:
+            prompt_history.append({
+                "role": "assistant",
+                "content": "Previous complete positive prompt for this character (keep "
+                           "reusable user edits and suitable quality/style choices; "
+                           "replace scene and composition details according to the "
+                           "current request): " + previous_positive_prompt,
+            })
         plan = self._get_valid_plan(
             user_text,
-            history or [],
+            prompt_history,
             notify or (lambda _message: None),
             llm_model,
         )

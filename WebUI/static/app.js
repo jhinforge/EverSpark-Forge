@@ -725,7 +725,85 @@ function renderSubjectGrid() {
     meta.append(revision, updated);
 
     card.append(top, meta);
+    const inspect = document.createElement("button");
+    inspect.className = "text-button";
+    inspect.type = "button";
+    inspect.textContent = "View four JSON documents →";
+    const groups = document.createElement("div");
+    groups.className = "subject-documents hidden";
+    inspect.addEventListener("click", async () => {
+      if (!groups.classList.contains("hidden")) {
+        groups.classList.add("hidden");
+        inspect.textContent = "View four JSON documents →";
+        return;
+      }
+      inspect.disabled = true;
+      try {
+        const query = new URLSearchParams({ subject_id: item.subject_id });
+        const { bundle } = await api(`/api/subjects/bundle?${query}`);
+        renderSubjectDocuments(groups, bundle);
+        groups.classList.remove("hidden");
+        inspect.textContent = "Hide documents ↑";
+      } catch (error) {
+        showNotice(error.message);
+      } finally {
+        inspect.disabled = false;
+      }
+    });
+    card.append(inspect, groups);
     elements.subjectGrid.appendChild(card);
+  }
+}
+
+function renderSubjectDocuments(container, bundle) {
+  container.replaceChildren();
+  for (const [group, label] of [
+    ["subject", "Subject JSON"],
+    ["metadata", "Metadata JSON"],
+    ["positive_prompt", "Positive prompt JSON"],
+    ["negative_prompt", "Negative prompt JSON"],
+  ]) {
+    const section = document.createElement("section");
+    section.className = "subject-document";
+    const heading = document.createElement("h4");
+    heading.textContent = label;
+    const pre = document.createElement("pre");
+    pre.textContent = JSON.stringify(bundle[group], null, 2);
+    const form = document.createElement("form");
+    form.className = "subject-document-form";
+    const input = document.createElement("textarea");
+    input.required = true;
+    input.rows = 2;
+    input.placeholder = `Tell Concept Forge what to change in ${label.toLowerCase()}`;
+    input.setAttribute("aria-label", `Describe changes to ${label}`);
+    const submit = document.createElement("button");
+    submit.className = "secondary-button";
+    submit.type = "submit";
+    submit.textContent = "Ask model to update";
+    form.append(input, submit);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const instruction = input.value.trim();
+      if (!instruction) return;
+      submit.disabled = true;
+      try {
+        const data = await api("/api/subjects/revise", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject_id: bundle.subject_id, group, instruction }),
+        });
+        renderSubjectDocuments(container, data.bundle);
+        const revision = container.closest(".subject-card")?.querySelector(".subject-card-meta span");
+        if (revision) revision.textContent = `REVISION ${data.bundle.subject.revision}`;
+        if (state.selectedSubject?.subject_id === bundle.subject_id) await loadCurrentSubject();
+        hideNotice();
+      } catch (error) {
+        showNotice(error.message);
+        submit.disabled = false;
+      }
+    });
+    section.append(heading, pre, form);
+    container.appendChild(section);
   }
 }
 

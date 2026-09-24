@@ -73,6 +73,31 @@ class SubjectCompilerTests(unittest.TestCase):
 
 
 class OllamaSubjectBuilderTests(unittest.TestCase):
+    def test_subject_group_revision_receives_only_selected_template(self) -> None:
+        provider = OllamaProvider({"base_url": "http://127.0.0.1:11434", "model": "test"})
+        current = new_subject("test-character", "Test")
+        with patch.object(provider, "_post_json", return_value={
+            "message": {"content": json.dumps({"notes": "new note"})}
+        }) as post:
+            revised = provider.revise_subject_section("add note", "metadata", current)
+        self.assertEqual(revised["metadata"]["notes"], "new note")
+        self.assertEqual(revised["identity"], current["identity"])
+        self.assertNotIn("appearance", post.call_args.args[1]["messages"][1]["content"])
+
+    def test_prompt_revision_changes_only_requested_document(self) -> None:
+        provider = OllamaProvider({"base_url": "http://127.0.0.1:11434", "model": "test"})
+        with patch.object(provider, "_post_json", return_value={
+            "message": {"content": json.dumps({"negative_prompt": "bad anatomy, watermark"})}
+        }) as post:
+            result = provider.revise_prompt("add watermark", "negative_prompt", "bad anatomy")
+        self.assertEqual(result, "bad anatomy, watermark")
+        self.assertIn("bad anatomy", post.call_args.args[1]["messages"][1]["content"])
+        with patch.object(provider, "_post_json", return_value={
+            "message": {"content": json.dumps({"positive_prompt": "wrong key"})}
+        }):
+            with self.assertRaisesRegex(RuntimeError, "invalid prompt revision"):
+                provider.revise_prompt("add watermark", "negative_prompt", "bad anatomy")
+
     def test_subject_extraction_receives_user_and_model_conversation(self) -> None:
         document = new_subject("auto-subject", "Current Character")
         provider = OllamaProvider(

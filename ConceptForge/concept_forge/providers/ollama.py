@@ -26,6 +26,9 @@ fixed list of tags. Preserve all explicit user choices and constraints; do not
 invent another character or contradict the requested scene or style. Keep
 temporary scene and composition details in positive_prompt, not the persistent
 character identity. Put unwanted visual artifacts in negative_prompt.
+If a previous positive prompt is supplied in the conversation, preserve its
+reusable user changes where they fit. Update the scene and composition for the
+current request; the current user's choices take priority.
 Do not use Markdown and do not add explanations outside the JSON object.
 """
 
@@ -222,6 +225,75 @@ class OllamaProvider:
         if not reply:
             raise OllamaError("Ollama returned an empty discussion response")
         return reply
+
+    def revise_prompt(self, user_text: str, field: str, current: str, model: str = "") -> str:
+        if field not in {"positive_prompt", "negative_prompt"}:
+            raise ValueError("Unsupported prompt field")
+        response = self._post_json("/api/chat", {
+            "model": model.strip() or self.model,
+            "stream": False,
+            "format": "json",
+            "messages": [
+                {"role": "system", "content": self._system_prompt(
+                    f"Update only the complete {field} for an Illustrious image workflow. "
+                    f"Return one JSON object with exactly the key {field}. "
+                    "Apply the user's change while preserving unrelated prompt details. "
+                    "Do not add explanations or other JSON keys."
+                )},
+                {"role": "user", "content": json.dumps(
+                    {"current": current, "request": user_text}, ensure_ascii=False
+                )},
+            ],
+        })
+        try:
+            result = json.loads(response["message"]["content"])
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            raise OllamaError("Ollama returned invalid prompt revision JSON") from exc
+        if not isinstance(result, dict) or set(result) != {field} or not isinstance(result[field], str):
+            raise OllamaError("Ollama returned an invalid prompt revision")
+        return result[field].strip()
+
+    def revise_subject_section(
+        self, user_text: str, group: str, current: dict[str, Any], model: str = ""
+    ) -> dict[str, Any]:
+        if group not in {"subject", "metadata"}:
+            raise ValueError("Unsupported subject group")
+        target = (current["metadata"] if group == "metadata" else
+                  {key: value for key, value in current.items()
+                   if key in {"identity", "appearance", "wardrobe"}})
+        response = self._post_json("/api/chat", {
+            "model": model.strip() or self.model, "stream": False, "format": "json",
+            "messages": [
+                {"role": "system", "content": self._system_prompt(
+                    f"Revise only this character {group} JSON group. Return an object "
+                    "containing only the fields you changed, using the same types and "
+                    "field names as the supplied current group. Preserve all other values "
+                    "by omitting them. No Markdown or explanation."
+                )},
+                {"role": "user", "content": json.dumps(
+                    {"current": target, "request": user_text}, ensure_ascii=False
+                )},
+            ],
+        })
+        try:
+            patch = json.loads(response["message"]["content"])
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            raise OllamaError("Ollama returned invalid subject group JSON") from exc
+        if not isinstance(patch, dict):
+            raise OllamaError("Ollama returned a non-object subject group")
+        updated = json.loads(json.dumps(target, ensure_ascii=False))
+        try:
+            _merge_object(updated, patch)
+            candidate = json.loads(json.dumps(current, ensure_ascii=False))
+            if group == "metadata":
+                candidate["metadata"] = updated
+            else:
+                candidate.update(updated)
+            candidate["revision"] = current["revision"] + 1
+            validate_subject(candidate)
+        except ValueError as exc:
+            raise OllamaError(str(exc)) from exc
+        return candidate
 
     def list_models(self) -> list[str]:
         response = self._get_json("/api/tags")

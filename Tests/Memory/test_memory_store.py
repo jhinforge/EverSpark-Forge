@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 import json
+import sqlite3
 from pathlib import Path
 
 
@@ -27,8 +28,21 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
                 "positive_terms": ["solo"], "negative_terms": ["different hair color"],
                 "locked_traits": ["amber eyes"], "flexible_traits": ["lighting"],
             }
-            store.save_subject(document)
+            with sqlite3.connect(database) as connection:
+                connection.execute(
+                    "INSERT INTO subjects VALUES (?, ?, ?, ?, ?)",
+                    ("ember-keeper", 1, json.dumps(document), "now", "now"),
+                )
+                connection.execute(
+                    "INSERT INTO subject_revisions VALUES (?, ?, ?, ?)",
+                    ("ember-keeper", 1, json.dumps(document), "now"),
+                )
             reopened = SQLiteMemoryStore(str(database))
+            folder = reopened.subject_root / "ember-keeper"
+            self.assertEqual({path.name for path in folder.iterdir()}, {
+                "subject.json", "metadata.json", "positive_prompt.json", "negative_prompt.json",
+            })
+            self.assertNotIn("metadata", json.loads((folder / "subject.json").read_text()))
             self.assertNotIn("prompt_contract", reopened.get_subject("ember-keeper"))
             self.assertNotIn("prompt_contract", reopened.get_subject_revisions("ember-keeper")[0]["document"])
             self.assertEqual(reopened.get_subject_prompt("ember-keeper"), {
@@ -38,6 +52,24 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
             # Reopening must not overwrite a newer prompt record.
             reopened.save_subject_prompt("ember-keeper", "new", "keep this")
             self.assertEqual(SQLiteMemoryStore(str(database)).get_subject_prompt("ember-keeper")["negative_prompt"], "keep this")
+
+    def test_four_files_preserve_other_groups_across_updates_and_reopen(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "memory.db"
+            store = SQLiteMemoryStore(str(database))
+            document = json.loads((REPO_ROOT / "ConceptForge/Examples/character_subject.example.json").read_text())
+            store.save_subject(document)
+            store.save_subject_prompt("ember-keeper", "portrait, dramatic light", "bad anatomy")
+            changed = json.loads(json.dumps(document))
+            changed["revision"] = 2
+            changed["metadata"]["notes"] = "Updated by Concept Forge"
+            store.save_subject(changed)
+            reopened = SQLiteMemoryStore(str(database))
+            self.assertEqual(reopened.get_subject("ember-keeper")["metadata"]["notes"], "Updated by Concept Forge")
+            self.assertEqual(reopened.get_subject_prompt("ember-keeper"), {
+                "positive_prompt": "portrait, dramatic light", "negative_prompt": "bad anatomy",
+            })
+            self.assertEqual(len(reopened.get_subject_revisions("ember-keeper")), 2)
 
     def test_session_subject_is_automatic_stable_and_cleared_with_session(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

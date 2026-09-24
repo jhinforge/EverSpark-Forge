@@ -37,6 +37,8 @@ CONCEPT_FORGE_RCLONE_REMOTE=remote:path/.ollama/models
 
 Image Forge expects `checkpoints`, `diffusion_models`, `loras`, and `vae` below its
 root. Concept Forge expects standard Ollama `blobs` and `manifests` directories.
+Character documents in `Data/Subjects` are selectable for backup under
+`subjects/<subject_id>/`, alongside the SQLite Memory snapshot.
 
 ## Network
 

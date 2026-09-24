@@ -22,11 +22,17 @@ Forge interface and does not own Ollama HTTP behavior.
 
 The schema is stored at `Schemas/character_subject.v1.schema.json`. It contains
 only reusable character identity: identity, appearance, default wardrobe,
-and metadata. Positive and negative prompts are stored in a separate JSON
-document per subject in SQLite (`subject_prompts`). The initial negative prompt
+and metadata. Current data is stored under `Data/Subjects/<subject_id>/` as
+`subject.json`, `metadata.json`, `positive_prompt.json`, and `negative_prompt.json`.
+The prompt documents contain the complete last generated prompts, including
+scene details. SQLite retains subject indices, session links, task records, and
+revision history. Subjects can be viewed and revised by group through Concept
+Forge in the WebUI, without editing JSON by hand. The initial negative prompt
 is reused on later generations unless the user explicitly requests a negative
-prompt change. Existing v1 prompt contracts migrate on startup. Scene, pose, camera, and
-background remain request-level state and are not persisted into the subject.
+prompt change. The previous positive prompt is provided as context for the next
+generation to carry reusable edits forward while updating its scene. Existing
+SQLite subjects and v1 prompt contracts migrate on startup. Scene, pose, camera,
+and background remain request-level state and are not persisted into the subject.
 The schema is an internal contract, not a form the user is expected to fill.
 For v0.1, each conversation automatically owns one current subject. Discussion
 and generation turns both refresh it from the complete bounded context.

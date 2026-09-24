@@ -156,6 +156,17 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "revisions": revisions,
                 },
             )
+        elif parsed.path == "/subjects/bundle":
+            subject_id = parse_qs(parsed.query).get("subject_id", [""])[0]
+            if not subject_id:
+                self._send(400, {"ok": False, "error": "subject_id is required"})
+                return
+            try:
+                bundle = self.server.orchestrator.subject_bundle(subject_id)
+            except SubjectNotFoundError as exc:
+                self._send(404, {"ok": False, "error": str(exc)})
+                return
+            self._send(200, {"ok": True, "bundle": bundle})
         else:
             self._send(404, {"ok": False, "error": "Not found"})
 
@@ -168,6 +179,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/subjects",
             "/subjects/generate",
             "/subjects/update",
+            "/subjects/revise",
             "/subjects/compile",
             "/storage/pull",
             "/backup/upload",
@@ -218,6 +230,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                     raise ValueError("changes must be a JSON object")
                 updated = self.server.orchestrator.update_subject(subject_id, changes)
                 self._send(200, {"ok": True, "document": updated})
+            elif request_path == "/subjects/revise":
+                bundle = self.server.orchestrator.revise_subject_group(
+                    str(payload.get("subject_id", "")),
+                    str(payload.get("group", "")),
+                    str(payload.get("instruction", "")),
+                )
+                self._send(200, {"ok": True, "bundle": bundle})
             elif request_path == "/storage/pull":
                 job = self.server.orchestrator.start_storage_pull(
                     str(payload.get("kind", "")), str(payload.get("name", ""))

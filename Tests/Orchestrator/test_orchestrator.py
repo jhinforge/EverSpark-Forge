@@ -324,10 +324,38 @@ class BatchTests(unittest.TestCase):
 
 
 class SubjectIntegrationTests(unittest.TestCase):
+    def test_group_revisions_target_one_document_without_switching_session(self) -> None:
+        class FakeConcept:
+            def revise_subject_section(self, _text, group, existing):
+                result = json.loads(json.dumps(existing))
+                result["revision"] += 1
+                if group == "metadata":
+                    result["metadata"]["notes"] = "new note"
+                return result
+
+            def revise_prompt(self, _text, field, _current):
+                return "revised " + field
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = load_config()
+            config["memory"]["database"] = str(Path(directory) / "memory.db")
+            orchestrator = Orchestrator(config)
+            orchestrator.runner.concept = FakeConcept()
+            initial = new_subject("subject-a", "Subject A")
+            orchestrator.save_subject(initial)
+            metadata = orchestrator.revise_subject_group("subject-a", "metadata", "add a note")
+            self.assertEqual(metadata["metadata"]["notes"], "new note")
+            self.assertEqual(metadata["subject"]["appearance"]["hair"]["color"], "")
+            changed = orchestrator.revise_subject_group("subject-a", "positive_prompt", "improve quality")
+            self.assertEqual(changed["positive_prompt"]["positive_prompt"], "revised positive_prompt")
+            self.assertEqual(changed["negative_prompt"]["negative_prompt"], "")
+            self.assertEqual(orchestrator.get_subject("subject-a")["revision"], 2)
+
     def test_negative_prompt_stays_at_first_generation_until_explicit_change(self) -> None:
         class Concept:
             def __init__(self):
                 self.index = 0
+                self.histories = []
 
             def generate_subject(self, _text, subject_id, existing=None, **_kwargs):
                 document = new_subject(subject_id, "Character") if existing is None else existing.copy()
@@ -337,6 +365,7 @@ class SubjectIntegrationTests(unittest.TestCase):
 
             def generate_prompt(self, _text, _history):
                 self.index += 1
+                self.histories.append(_history)
                 return GenerationPlan("illustrious", "portrait", f"negative-{self.index}", 1, "over")
 
         class Workflow:
@@ -369,6 +398,7 @@ class SubjectIntegrationTests(unittest.TestCase):
             self.assertEqual(first["negative_prompt"], "negative-1")
             self.assertEqual(second["negative_prompt"], "negative-1")
             self.assertEqual(third["negative_prompt"], "negative-3")
+            self.assertIn("portrait", orchestrator.runner.concept.histories[1][-1]["content"])
             self.assertEqual(orchestrator.memory.get_subject_prompt(
                 orchestrator.get_session_subject("session")["subject_id"]
             )["negative_prompt"], "negative-3")
@@ -600,6 +630,17 @@ class APITests(unittest.TestCase):
         def get_subject(self, _subject_id):
             return self.document
 
+        def subject_bundle(self, subject_id):
+            return {"subject_id": subject_id, "subject": self.document,
+                    "metadata": self.document["metadata"],
+                    "positive_prompt": {"positive_prompt": "portrait"},
+                    "negative_prompt": {"negative_prompt": "bad anatomy"}}
+
+        def revise_subject_group(self, subject_id, group, instruction):
+            result = self.subject_bundle(subject_id)
+            result[group] = {"positive_prompt": instruction}
+            return result
+
         def list_subjects(self):
             return [{"subject_id": self.document["subject_id"]}]
 
@@ -669,6 +710,16 @@ class APITests(unittest.TestCase):
         status, job = self._request("/storage/jobs?job_id=job-1")
         self.assertEqual(status, 200)
         self.assertEqual(job["job"]["status"], "completed")
+
+    def test_subject_bundle_and_model_revision_routes(self) -> None:
+        status, bundle = self._request("/subjects/bundle?subject_id=subject-a")
+        self.assertEqual(status, 200)
+        self.assertEqual(bundle["bundle"]["negative_prompt"]["negative_prompt"], "bad anatomy")
+        status, updated = self._request("/subjects/revise", {
+            "subject_id": "subject-a", "group": "positive_prompt", "instruction": "add lighting",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(updated["bundle"]["positive_prompt"]["positive_prompt"], "add lighting")
 
     def test_backup_routes_use_the_infrastructure_boundary(self) -> None:
         status, resources = self._request("/backup/resources")

@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import secrets
+import shutil
 import sqlite3
+import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -17,6 +22,8 @@ class SQLiteMemoryStore:
         self.database = Path(database).expanduser()
         self.max_history_messages = max(0, int(max_history_messages))
         self.database.parent.mkdir(parents=True, exist_ok=True)
+        self.subject_root = ((self.database.parent.parent if self.database.parent.name == "Memory" else self.database.parent) / "Subjects")
+        self._subject_lock = threading.RLock()
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
@@ -89,6 +96,13 @@ class SQLiteMemoryStore:
                     document TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS subject_prompt_revisions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    subject_id TEXT NOT NULL,
+                    document TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
                 """
             )
             task_columns = {
@@ -127,22 +141,100 @@ class SQLiteMemoryStore:
                         "UPDATE subject_revisions SET document = ? WHERE subject_id = ? AND revision = ?",
                         (json.dumps(document, ensure_ascii=False), subject_id, revision),
                     )
+            # Existing SQLite subjects are migrated once; completed folders become
+            # the source of current content. SQLite retains revision history.
+            for subject_id, revision, raw in connection.execute("SELECT subject_id, revision, document FROM subjects").fetchall():
+                folder = self._subject_dir(subject_id)
+                previous = self.subject_root / f".subject-prev-{subject_id}"
+                if previous.is_dir():
+                    if folder.is_dir() and self._read_folder(folder)[0]["revision"] == revision:
+                        shutil.rmtree(previous)
+                    else:
+                        if folder.exists():
+                            shutil.rmtree(folder)
+                        os.replace(previous, folder)
+                if folder.is_dir() and self._read_folder(folder)[0]["revision"] == revision:
+                    continue
+                if folder.exists():
+                    shutil.rmtree(folder)
+                prompt_row = connection.execute(
+                    "SELECT document FROM subject_prompts WHERE subject_id = ?", (subject_id,)
+                ).fetchone()
+                prompts = json.loads(prompt_row[0]) if prompt_row else {}
+                self._write_subject_files(json.loads(raw), prompts)
+
+    def _subject_dir(self, subject_id: str) -> Path:
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", subject_id):
+            raise ValueError("Invalid subject_id for storage")
+        return self.subject_root / subject_id
+
+    @staticmethod
+    def _read_folder(folder: Path) -> tuple[dict[str, Any], dict[str, str]]:
+        subject = json.loads((folder / "subject.json").read_text(encoding="utf-8"))
+        subject["metadata"] = json.loads((folder / "metadata.json").read_text(encoding="utf-8"))
+        positive = json.loads((folder / "positive_prompt.json").read_text(encoding="utf-8"))
+        negative = json.loads((folder / "negative_prompt.json").read_text(encoding="utf-8"))
+        if not isinstance(positive.get("positive_prompt"), str) or not isinstance(negative.get("negative_prompt"), str):
+            raise ValueError("Subject prompt files must contain strings")
+        return subject, {"positive_prompt": positive["positive_prompt"], "negative_prompt": negative["negative_prompt"]}
+
+    def _write_subject_files(self, document: dict[str, Any], prompts: dict[str, str]) -> Path | None:
+        folder = self._subject_dir(document["subject_id"])
+        self.subject_root.mkdir(parents=True, exist_ok=True)
+        previous = self.subject_root / f".subject-prev-{document['subject_id']}"
+        if previous.exists():
+            raise RuntimeError(f"Subject update recovery is required: {previous}")
+        stage = Path(tempfile.mkdtemp(prefix=".subject-stage-", dir=self.subject_root))
+        try:
+            files = {
+                "subject.json": {key: value for key, value in document.items() if key != "metadata"},
+                "metadata.json": document["metadata"],
+                "positive_prompt.json": {"positive_prompt": prompts.get("positive_prompt", "")},
+                "negative_prompt.json": {"negative_prompt": prompts.get("negative_prompt", "")},
+            }
+            for name, payload in files.items():
+                (stage / name).write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            if folder.exists():
+                os.replace(folder, previous)
+            os.replace(stage, folder)
+            return previous if previous.exists() else None
+        except Exception:
+            shutil.rmtree(stage, ignore_errors=True)
+            if previous.exists() and not folder.exists():
+                os.replace(previous, folder)
+            raise
 
     def get_subject_prompt(self, subject_id: str) -> dict[str, str] | None:
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT document FROM subject_prompts WHERE subject_id = ?", (subject_id,)
-            ).fetchone()
-        return json.loads(row[0]) if row else None
+        with self._subject_lock:
+            folder = self._subject_dir(subject_id)
+            if folder.is_dir():
+                return self._read_folder(folder)[1]
+            with self._connect() as connection:
+                row = connection.execute(
+                    "SELECT document FROM subject_prompts WHERE subject_id = ?", (subject_id,)
+                ).fetchone()
+            return json.loads(row[0]) if row else None
 
     def save_subject_prompt(self, subject_id: str, positive: str, negative: str) -> dict[str, str]:
         document = {"positive_prompt": positive, "negative_prompt": negative}
-        with self._connect() as connection:
-            connection.execute(
-                "INSERT INTO subject_prompts VALUES (?, ?, ?) "
-                "ON CONFLICT(subject_id) DO UPDATE SET document = excluded.document, updated_at = excluded.updated_at",
-                (subject_id, json.dumps(document, ensure_ascii=False), datetime.now(timezone.utc).isoformat()),
-            )
+        with self._subject_lock:
+            subject = self.get_subject(subject_id)
+            if subject is None:
+                raise ValueError(f"Subject not found: {subject_id}")
+            previous = self._write_subject_files(subject, document)
+            try:
+                with self._connect() as connection:
+                    connection.execute(
+                        "INSERT INTO subject_prompt_revisions(subject_id, document, created_at) VALUES (?, ?, ?)",
+                        (subject_id, json.dumps(document, ensure_ascii=False), datetime.now(timezone.utc).isoformat()),
+                    )
+            except Exception:
+                shutil.rmtree(self._subject_dir(subject_id))
+                if previous:
+                    os.replace(previous, self._subject_dir(subject_id))
+                raise
+            if previous:
+                shutil.rmtree(previous)
         return document
 
     def get_history(self, session_id: str) -> list[dict[str, str]]:
@@ -285,7 +377,7 @@ class SQLiteMemoryStore:
                 "DELETE FROM session_subjects WHERE session_id = ?", (session_id,)
             )
 
-    def save_subject(self, document: dict[str, Any]) -> dict[str, Any]:
+    def save_subject(self, document: dict[str, Any], prompts: dict[str, str] | None = None) -> dict[str, Any]:
         if not isinstance(document, dict):
             raise ValueError("Subject document must be an object")
         subject_id = document.get("subject_id")
@@ -299,19 +391,28 @@ class SQLiteMemoryStore:
             document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT revision, created_at FROM subjects WHERE subject_id = ?",
-                (subject_id,),
-            ).fetchone()
-            expected_revision = 1 if row is None else int(row[0]) + 1
-            if revision != expected_revision:
-                raise SubjectRevisionConflictError(
-                    f"Subject {subject_id!r} requires revision {expected_revision}; "
-                    f"received {revision}"
-                )
-            created_at = now if row is None else str(row[1])
-            connection.execute(
+        with self._subject_lock:
+            folder = self._subject_dir(subject_id)
+            previous: Path | None = None
+            had_folder = folder.exists()
+            wrote_folder = False
+            try:
+                with self._connect() as connection:
+                    row = connection.execute(
+                        "SELECT revision, created_at FROM subjects WHERE subject_id = ?",
+                        (subject_id,),
+                    ).fetchone()
+                    expected_revision = 1 if row is None else int(row[0]) + 1
+                    if revision != expected_revision:
+                        raise SubjectRevisionConflictError(
+                            f"Subject {subject_id!r} requires revision {expected_revision}; "
+                            f"received {revision}"
+                        )
+                    created_at = now if row is None else str(row[1])
+                    current_prompts = prompts if prompts is not None else (self.get_subject_prompt(subject_id) if had_folder else {})
+                    previous = self._write_subject_files(document, current_prompts or {})
+                    wrote_folder = True
+                    connection.execute(
                 """
                 INSERT INTO subjects(subject_id, revision, document, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?)
@@ -320,25 +421,42 @@ class SQLiteMemoryStore:
                     document = excluded.document,
                     updated_at = excluded.updated_at
                 """,
-                (subject_id, revision, serialized, created_at, now),
-            )
-            connection.execute(
+                        (subject_id, revision, serialized, created_at, now),
+                    )
+                    connection.execute(
                 """
                 INSERT INTO subject_revisions(subject_id, revision, document, created_at)
                 VALUES (?, ?, ?, ?)
                 """,
-                (subject_id, revision, serialized, now),
-            )
+                        (subject_id, revision, serialized, now),
+                    )
+                    if prompts is not None:
+                        connection.execute(
+                            "INSERT INTO subject_prompt_revisions(subject_id, document, created_at) VALUES (?, ?, ?)",
+                            (subject_id, json.dumps(prompts, ensure_ascii=False), now),
+                        )
+            except Exception:
+                if wrote_folder and folder.exists():
+                    shutil.rmtree(folder)
+                if previous and previous.exists():
+                    os.replace(previous, folder)
+                raise
+            if previous:
+                shutil.rmtree(previous)
         return document
 
     def get_subject(self, subject_id: str) -> dict[str, Any] | None:
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT document FROM subjects WHERE subject_id = ?", (subject_id,)
-            ).fetchone()
-        if row is None:
-            return None
-        return json.loads(row[0])
+        with self._subject_lock:
+            with self._connect() as connection:
+                row = connection.execute(
+                    "SELECT document FROM subjects WHERE subject_id = ?", (subject_id,)
+                ).fetchone()
+            if row is None:
+                return None
+            folder = self._subject_dir(subject_id)
+            if folder.is_dir():
+                return self._read_folder(folder)[0]
+            return json.loads(row[0])
 
     def list_subjects(self) -> list[dict[str, Any]]:
         with self._connect() as connection:

@@ -28,6 +28,7 @@ class BackupManager:
         self.client = RcloneClient(self.settings, run=run)
         self.remote = str(config.get("storage", {}).get("rclone", {}).get("backup_remote") or "").strip().rstrip("/")
         self.memory_path = Path(config["memory"]["database"]).resolve()
+        self.subject_root = (self.memory_path.parent.parent if self.memory_path.parent.name == "Memory" else self.memory_path.parent) / "Subjects"
         self._lock = threading.Lock()
         self._jobs: dict[str, dict[str, Any]] = {}
         self._active = ""
@@ -54,6 +55,12 @@ class BackupManager:
             for path in sorted(concept_root.glob("*.gguf")):
                 if path.is_file() and not path.is_symlink():
                     result[f"models/concept/{path.name}"] = path
+        if self.subject_root.is_dir():
+            for path in sorted(self.subject_root.glob("*/*.json")):
+                if (path.is_file() and not path.is_symlink()
+                        and not path.parent.is_symlink()
+                        and not path.parent.name.startswith(".")):
+                    result[f"subjects/{path.relative_to(self.subject_root).as_posix()}"] = path
         output_root = REPO_ROOT / "Data/Outputs"
         if output_root.is_dir():
             for path in sorted(output_root.rglob("*")):

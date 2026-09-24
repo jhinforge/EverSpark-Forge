@@ -186,6 +186,13 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     ],
                 },
             )
+        elif parsed.path == "/subjects/bundle":
+            self._json(200, {"ok": True, "bundle": {
+                "subject_id": "ember-keeper", "subject": self.subject(),
+                "metadata": self.subject()["metadata"],
+                "positive_prompt": {"positive_prompt": "portrait"},
+                "negative_prompt": {"negative_prompt": "bad anatomy"},
+            }})
         elif parsed.path == "/subjects/current":
             self._json(200, {"ok": True, "session_id": query.get("session_id", [""])[0], "document": self.subject()})
         elif parsed.path == "/memory/history":
@@ -263,6 +270,11 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
         elif self.path == "/subjects/generate":
             type(self).revision += 1
             self._json(201, {"ok": True, "document": self.subject()})
+        elif self.path == "/subjects/revise":
+            self._json(200, {"ok": True, "bundle": {
+                "subject_id": payload["subject_id"],
+                payload["group"]: {payload["group"]: payload["instruction"]},
+            }})
         elif self.path == "/storage/pull":
             self._json(
                 202,
@@ -458,6 +470,14 @@ class WebUIIntegrationTests(unittest.TestCase):
             "/api/subjects/current?session_id=session-a"
         )
         self.assertEqual(current["document"]["subject_id"], "ember-keeper")
+
+    def test_subject_group_routes_are_available_in_webui(self) -> None:
+        _, viewed = self.request_json("/api/subjects/bundle?subject_id=ember-keeper")
+        self.assertEqual(viewed["bundle"]["positive_prompt"]["positive_prompt"], "portrait")
+        _, revised = self.request_json("/api/subjects/revise", {
+            "subject_id": "ember-keeper", "group": "negative_prompt", "instruction": "remove watermark",
+        })
+        self.assertEqual(revised["bundle"]["negative_prompt"]["negative_prompt"], "remove watermark")
 
     def test_image_proxy_rejects_parent_paths(self) -> None:
         with self.assertRaises(HTTPError) as caught:

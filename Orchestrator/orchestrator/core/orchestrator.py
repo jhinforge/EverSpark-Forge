@@ -66,6 +66,7 @@ class Orchestrator:
                 text,
                 history,
                 llm_model=str(selected.get("llm", "")),
+                persist=False,
             )
             saved_prompts = self.memory.get_subject_prompt(document["subject_id"])
             compiled_subject = compile_subject(document)
@@ -84,13 +85,20 @@ class Orchestrator:
                 subject=compiled_subject,
                 selection=selected,
                 saved_negative_prompt=(saved_prompts["negative_prompt"]
-                                       if saved_prompts and not changes_negative else None),
+                                       if saved_prompts and saved_prompts["negative_prompt"] and not changes_negative else None),
+                previous_positive_prompt=(saved_prompts["positive_prompt"]
+                                          if saved_prompts else ""),
             )
-            self.memory.save_subject_prompt(
-                document["subject_id"],
-                result["positive_prompt"],
-                result["negative_prompt"],
-            )
+            latest = self.memory.get_subject(document["subject_id"])
+            if latest is not None and latest == document:
+                self.memory.save_subject_prompt(
+                    document["subject_id"], result["positive_prompt"], result["negative_prompt"]
+                )
+            else:
+                self.memory.save_subject(document, {
+                    "positive_prompt": result["positive_prompt"],
+                    "negative_prompt": result["negative_prompt"],
+                })
             self.memory.record_success(session, text, result)
             return {"ok": True, "notices": notices, "result": result}
         finally:
@@ -139,6 +147,7 @@ class Orchestrator:
         history: list[dict[str, str]],
         assistant_reply: str = "",
         llm_model: str = "",
+        persist: bool = True,
     ) -> dict[str, Any]:
         subject_id = self.memory.get_or_create_session_subject_id(session_id)
         existing = self.memory.get_subject(subject_id)
@@ -152,7 +161,7 @@ class Orchestrator:
             comparable_existing = {**existing, "revision": document["revision"]}
             if comparable_existing == document:
                 return existing
-        return self.memory.save_subject(document)
+        return self.memory.save_subject(document) if persist else document
 
     def get_session_subject(self, session_id: str) -> dict[str, Any] | None:
         session = normalize_unicode(session_id).strip()
@@ -200,6 +209,43 @@ class Orchestrator:
             raise SubjectNotFoundError(f"Subject not found: {normalized}")
         return document
 
+    def subject_bundle(self, subject_id: str) -> dict[str, Any]:
+        document = self.get_subject(subject_id)
+        prompts = self.memory.get_subject_prompt(document["subject_id"]) or {}
+        return {
+            "subject_id": document["subject_id"],
+            "subject": {key: value for key, value in document.items() if key != "metadata"},
+            "metadata": document["metadata"],
+            "positive_prompt": {"positive_prompt": prompts.get("positive_prompt", "")},
+            "negative_prompt": {"negative_prompt": prompts.get("negative_prompt", "")},
+        }
+
+    def revise_subject_group(self, subject_id: str, group: str, instruction: str) -> dict[str, Any]:
+        text = normalize_unicode(instruction).strip()
+        if not text:
+            raise ValueError("Describe the change to make")
+        if group not in {"subject", "metadata", "positive_prompt", "negative_prompt"}:
+            raise ValueError("Unknown subject group")
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("Orchestrator is already running one task")
+        try:
+            current = self.get_subject(subject_id)
+            if group in {"positive_prompt", "negative_prompt"}:
+                prompts = self.memory.get_subject_prompt(subject_id) or {}
+                value = self.runner.concept.revise_prompt(text, group, prompts.get(group, ""))
+                self.memory.save_subject_prompt(
+                    subject_id,
+                    value if group == "positive_prompt" else prompts.get("positive_prompt", ""),
+                    value if group == "negative_prompt" else prompts.get("negative_prompt", ""),
+                )
+            else:
+                generated = self.runner.concept.revise_subject_section(text, group, current)
+                if {**current, "revision": generated["revision"]} != generated:
+                    self.memory.save_subject(validate_subject(generated))
+            return self.subject_bundle(subject_id)
+        finally:
+            self._task_lock.release()
+
     def list_subjects(self) -> list[dict[str, Any]]:
         return self.memory.list_subjects()
 
@@ -215,7 +261,7 @@ class Orchestrator:
         return {
             "subject_id": compiled.subject_id,
             "revision": compiled.revision,
-            "positive_prompt": prompts["positive_prompt"] if prompts else compiled.positive_prompt,
+            "positive_prompt": prompts["positive_prompt"] if prompts and prompts["positive_prompt"] else compiled.positive_prompt,
             "negative_prompt": prompts["negative_prompt"] if prompts else "",
         }
 

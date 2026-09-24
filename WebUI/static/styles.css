@@ -260,6 +260,14 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .subject-card-actions { display: flex; gap: 8px; margin-top: 13px; }
 .subject-card-actions button { flex: 1; padding: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); background: transparent; font-size: 10px; }
 .subject-card-actions button:hover { color: var(--text); border-color: var(--line-strong); }
+.subject-grid .subject-card { grid-column: 1 / -1; }
+.subject-documents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.subject-documents.hidden { display: none; }
+.subject-document { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, .025); }
+.subject-document h4 { margin-bottom: 9px; font-size: 13px; }
+.subject-document pre { max-height: 230px; overflow: auto; padding: 10px; border-radius: 8px; background: rgba(0, 0, 0, .16); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.subject-document-form { display: grid; gap: 8px; margin-top: 12px; }
+.subject-document-form textarea { width: 100%; resize: vertical; }
 .empty-collection { grid-column: 1 / -1; padding: 70px 24px; border: 1px dashed var(--line); border-radius: 15px; color: var(--muted); text-align: center; }
 
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
@@ -354,6 +362,7 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
   .subject-rail { min-height: auto; }
   .subject-empty { min-height: 240px; }
   .runtime-grid, .setup-steps, .storage-resource-grid, .direct-download-grid { grid-template-columns: 1fr; }
+  .subject-documents { grid-template-columns: 1fr; }
   .generation-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

@@ -189,6 +189,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/subjects/revisions": lambda: self._proxy_orchestrator_get(
                 "/subjects/revisions", parsed.query
             ),
+            "/api/subjects/bundle": lambda: self._proxy_orchestrator_get(
+                "/subjects/bundle", parsed.query
+            ),
             "/api/subjects/current": lambda: self._proxy_orchestrator_get(
                 "/subjects/current", parsed.query
             ),
@@ -214,6 +217,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         upstream_paths = {
             "/api/subjects/generate": "/subjects/generate",
             "/api/subjects/update": "/subjects/update",
+            "/api/subjects/revise": "/subjects/revise",
             "/api/subjects/compile": "/subjects/compile",
         }
         try:

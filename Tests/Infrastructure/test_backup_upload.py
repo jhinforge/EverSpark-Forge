@@ -45,6 +45,9 @@ class BackupUploadTests(unittest.TestCase):
             vae = root / "image/vae/SDXL/custom.safetensors"
             vae.parent.mkdir(parents=True)
             vae.write_bytes(b"VAE-data")
+            subject = root / "Subjects/subject-1/subject.json"
+            subject.parent.mkdir(parents=True)
+            subject.write_text('{"identity": {}}', encoding="utf-8")
             gguf = root / "Data/Models/ConceptForge/new.gguf"
             gguf.parent.mkdir(parents=True)
             gguf.write_bytes(b"GGUF-test")
@@ -63,7 +66,7 @@ class BackupUploadTests(unittest.TestCase):
                 manager.settings = replace(manager.settings, image_root=root / "image")
                 fake = FakeRclone()
                 manager.client = fake
-                names = ["models/image/checkpoints/new.safetensors", "models/image/vae/SDXL/custom.safetensors", "models/concept/new.gguf", "outputs/sub/image.png"]
+                names = ["models/image/checkpoints/new.safetensors", "models/image/vae/SDXL/custom.safetensors", "models/concept/new.gguf", "outputs/sub/image.png", "subjects/subject-1/subject.json"]
                 job = manager.start(names, memory=True)
                 for _ in range(200):
                     current = manager.job(job["job_id"])
@@ -75,6 +78,7 @@ class BackupUploadTests(unittest.TestCase):
                 self.assertEqual(fake.remote["r:images/vae/SDXL/custom.safetensors"], b"VAE-data")
                 self.assertEqual(fake.remote["r:backup/models/concept/new.gguf"], b"GGUF-test")
                 self.assertEqual(fake.remote["r:backup/outputs/sub/image.png"], b"PNG")
+                self.assertEqual(fake.remote["r:backup/subjects/subject-1/subject.json"], b'{"identity": {}}')
                 self.assertEqual(len([key for key in fake.remote if key.startswith("r:backup/memory/")]), 1)
                 self.assertTrue(all(not key.endswith(".partial") for key in fake.remote))
                 self.assertTrue(all(item["backed_up"] for item in manager.resources()["files"]))
