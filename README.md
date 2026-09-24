@@ -64,6 +64,8 @@ Optional integrations use private environment settings; see
 
 ## Quick start
 
+中文首次运行指南：[Docs/Getting-Started.zh-CN.md](Docs/Getting-Started.zh-CN.md)。
+
 The managed runtime targets Linux x86_64 with an NVIDIA GPU. Setup needs an
 internet connection for runtimes and models; run the plan first to review the
 downloads without changing the machine.
