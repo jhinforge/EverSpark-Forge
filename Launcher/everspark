@@ -25,6 +25,7 @@ Usage:
   ./everspark restart [all|concept|image|orchestrator|webui]
   ./everspark status [all|concept|image|orchestrator|webui]
   ./everspark access [--json]
+  ./everspark share [start|status|stop]
   ./everspark models <plan|status|download|import-concept>
   ./everspark doctor
   ./everspark image <command>
@@ -100,6 +101,7 @@ case "${module,,}" in
   stop)
     target="${1:-all}"
     if [ "$target" = "all" ] || [ "$target" = "webui" ]; then
+      python3 "${REPO_ROOT}/Runtime/Managed/quick_tunnel.py" stop
       bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/stop_tunnel.sh"
     fi
     exec python3 "${REPO_ROOT}/Runtime/Managed/runtime_manager.py" stop "$target"
@@ -109,10 +111,14 @@ case "${module,,}" in
     python3 "${REPO_ROOT}/Runtime/Managed/runtime_manager.py" status "$target"
     if [ "$target" = "all" ] || [ "$target" = "webui" ]; then
       bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/check_tunnel.sh"
+      python3 "${REPO_ROOT}/Runtime/Managed/quick_tunnel.py" status
     fi
     ;;
   access)
     exec python3 "${REPO_ROOT}/Runtime/Managed/access_info.py" "$@"
+    ;;
+  share)
+    exec python3 "${REPO_ROOT}/Runtime/Managed/quick_tunnel.py" "$@"
     ;;
   image)
     run_handler "Image Forge" "${REPO_ROOT}/ImageForge/cli.sh" "$@"

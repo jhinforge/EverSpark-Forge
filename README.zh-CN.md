@@ -18,6 +18,8 @@ EverSpark Forge 是一个自托管 AI 创作平台：它把模型、工作流、
 
 默认模式使用当前机器上的本地存储，WebUI 仅监听本机地址；**不需要 R2、Cloudflare 或私人配置文件**。启用了可选后端却没有正确配置时，启动会给出错误，不会悄悄切换成其他后端。
 
+临时演示时也可在 WebUI 启动后运行 `./everspark share`，无需 SSH 转发、Cloudflare 账号或隧道配置即可获得临时公网链接；结束时运行 `./everspark share stop`。WebUI 目前没有登录验证，持有链接的人可以操作页面。详见[首次运行指南](Docs/Getting-Started.zh-CN.md)。
+
 ## 快速开始
 
 首发运行环境为**云端 Linux x86_64 + NVIDIA GPU**，需要联网安装运行时和下载模型。作者完成全量测试时使用的基础镜像是 `nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04`；本地 Windows 运行尚未验证。先运行计划命令查看下载来源与目标：

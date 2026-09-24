@@ -127,6 +127,11 @@ to print it again. Otherwise, set `EVERSPARK_SSH_HOST` and
 `EVERSPARK_SSH_PORT` in your private configuration; the WebUI stays bound to
 localhost by default.
 
+For a short demo without SSH forwarding, run `./everspark share` after the
+WebUI starts. It creates a temporary public URL without a Cloudflare account
+or configuration file. Use `./everspark share stop` when finished; the WebUI
+does not have login protection. See [Getting Started](Docs/Getting-Started.md).
+
 The default setup installs a usable Concept Forge model and an Image Forge
 checkpoint; both can be replaced with compatible models. A public, LoRA-free
 Illustrious API Format workflow is included for the initial generation path.

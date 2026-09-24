@@ -34,6 +34,16 @@ cd EverSpark-Forge
 
 ## 3. 从自己的电脑访问云端 WebUI
 
+### 不用 SSH：临时链接
+
+在云端机器运行 `./everspark start` 并确认服务就绪后，执行：
+
+```bash
+./everspark share
+```
+
+在自己的电脑上打开输出的 `https://*.trycloudflare.com` 链接。此模式不需要 `.env`、Cloudflare 账号、域名、SSH 密钥或隧道凭据。如果尚未安装 `cloudflared`，命令会使用现有安装器（需要 root 权限）。运行 `./everspark access` 或 `./everspark share status` 可再次查看链接；`./everspark share stop` 或 `./everspark stop` 可关闭。重启后链接可能变化。如果 `~/.cloudflared/config.yaml` 或 `config.yml` 已存在，临时链接可能无法创建。WebUI 当前没有登录验证：获得链接的人都可以操作页面，请仅用于短时间测试或演示。
+
 ### 第一次使用 SSH：准备密钥（可跳过）
 
 **已经能从自己的电脑用 SSH 登录这台云端机器？直接跳到下方的[查看并运行转发命令](#查看并运行转发命令)。** 如果还没有密钥，可在**自己的电脑**上打开 Windows PowerShell 或 Linux/macOS 终端，运行：

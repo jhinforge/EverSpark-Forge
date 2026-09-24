@@ -105,8 +105,11 @@ def build_access_info(values: Mapping[str, str]) -> dict[str, object]:
         ]
         command = " ".join(shlex.quote(item) for item in arguments)
 
+    from quick_tunnel import status as quick_tunnel_status
+
+    quick_link = quick_tunnel_status()
     return {
-        "ready": command is not None,
+        "ready": command is not None or quick_link is not None,
         "provider": "vast" if values.get("VAST_TCP_PORT_22") else "custom",
         "pod_url": f"http://127.0.0.1:{webui_port}",
         "local_url": f"http://127.0.0.1:{local_port}",
@@ -114,6 +117,7 @@ def build_access_info(values: Mapping[str, str]) -> dict[str, object]:
         "ssh_port": ssh_port,
         "ssh_user": user,
         "command": command,
+        "quick_url": quick_link["url"] if quick_link else None,
     }
 
 
@@ -124,7 +128,9 @@ def render_access_info(info: Mapping[str, object]) -> str:
         f"  Inside this machine: {info['pod_url']}",
         "",
     ]
-    if info["ready"]:
+    if info.get("quick_url"):
+        lines.extend([f"  Temporary public link: {info['quick_url']}", ""])
+    if info["command"]:
         lines.extend(
             [
                 "Run this on your local computer:",
@@ -134,7 +140,7 @@ def render_access_info(info: Mapping[str, object]) -> str:
                 f"  {info['local_url']}",
             ]
         )
-    else:
+    elif not info.get("quick_url"):
         missing = []
         if info["ssh_host"] is None:
             missing.append("SSH host")
@@ -147,6 +153,7 @@ def render_access_info(info: Mapping[str, object]) -> str:
                 "  ./everspark access",
             ]
         )
+    lines.extend(["", "For an optional temporary link without SSH: ./everspark share"])
     return "\n".join(lines)
 
 

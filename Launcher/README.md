@@ -61,6 +61,20 @@ build the SSH tunnel command automatically. Print the instructions again with:
 ./everspark access
 ```
 
+For a short demo without SSH or private configuration, start an optional
+Cloudflare Quick Tunnel after WebUI is healthy:
+
+```bash
+./everspark share
+./everspark share status
+./everspark share stop
+```
+
+`share` installs `cloudflared` when missing (root required), prints a temporary
+public URL, and does not need a Cloudflare account. Only run it when you want
+to expose WebUI; there is no application login. `./everspark stop` closes the
+managed temporary link as well.
+
 Other platforms can provide `EVERSPARK_SSH_HOST` and `EVERSPARK_SSH_PORT`.
 The browser-side port defaults to 8080 and can be changed with
 `EVERSPARK_LOCAL_WEBUI_PORT`.

@@ -8,7 +8,7 @@ EverSpark Forge ships as source code. The first `setup` installs managed runtime
 
 - Linux x86_64 with an NVIDIA GPU, network access, `bash`, `python3`, and `git`.
 - Space for runtimes and models; inspect sources and destinations with `setup --plan` first.
-- For browser access from your own computer, SSH access to the cloud machine and its public address and SSH port.
+- Browser access from your own computer can use SSH forwarding or an optional temporary Cloudflare link.
 
 The base image's CUDA version differs from the PyTorch CUDA build installed by EverSpark. The source selects `cu126` or `cu128` from **NVIDIA driver capability and GPU architecture**; it consults the base image CUDA runtime only if driver capability cannot be read. Blackwell GPUs require a driver supporting CUDA 12.8 and the `cu128` profile.
 
@@ -33,6 +33,24 @@ cd EverSpark-Forge
 Without `.env`, storage stays on the machine running EverSpark and services bind to localhost by default. On that machine, open `http://127.0.0.1:8780`.
 
 ## 3. Access the cloud WebUI from your computer
+
+### Temporary link without SSH
+
+On the cloud machine, after `./everspark start` succeeds, run:
+
+```bash
+./everspark share
+```
+
+Open the printed `https://*.trycloudflare.com` URL on your computer. This
+optional Quick Tunnel requires no `.env`, Cloudflare account, domain, SSH key,
+or tunnel credentials. If `cloudflared` is missing, the command uses the
+existing installer (which requires root). View the link again with
+`./everspark access` or `./everspark share status`; close it with
+`./everspark share stop` or `./everspark stop`. The link changes when restarted.
+Quick Tunnels may fail when `~/.cloudflared/config.yaml` or `config.yml`
+already exists. The WebUI has no login protection: anyone holding this URL can
+use it. Use this option for short tests or demos, not public deployment.
 
 ### First-time SSH key setup (optional)
 
