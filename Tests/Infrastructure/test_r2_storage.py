@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import threading
 import sys
 import tempfile
 import time
@@ -117,7 +118,41 @@ def enabled_config(config_file: Path) -> dict:
     }
 
 
+class SlowListing(FakeRclone):
+    def __init__(self):
+        super().__init__()
+        self.release = threading.Event()
+
+    def __call__(self, command, **kwargs):
+        if command[1] == "lsf":
+            self.release.wait(3)
+        return super().__call__(command, **kwargs)
+
+
 class R2StorageTests(unittest.TestCase):
+    @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
+    def test_remote_scan_returns_immediately_then_exposes_result(self, _which) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            conf = Path(directory) / "rclone.conf"
+            conf.write_text("[r2-assets]\ntype = s3\n")
+            slow = SlowListing()
+            manager = R2StorageManager(enabled_config(conf), run=slow)
+            try:
+                started = manager.start_scan()
+                self.assertEqual(started["status"], "running")
+                self.assertIsNone(started["result"])
+                self.assertEqual(manager.start_scan()["status"], "running")
+            finally:
+                slow.release.set()
+            for _ in range(100):
+                result = manager.scan_status()
+                if result["status"] != "running":
+                    break
+                time.sleep(.01)
+            self.assertEqual(result["status"], "completed", result["error"])
+            self.assertTrue(result["result"]["enabled"])
+            self.assertEqual(manager.start_scan()["status"], "running")
+
     @patch("r2_manager.shutil.which", return_value="/usr/bin/ollama")
     def test_remote_gguf_registers_with_ollama_and_failed_registration_can_retry(self, _which) -> None:
         with tempfile.TemporaryDirectory() as directory:

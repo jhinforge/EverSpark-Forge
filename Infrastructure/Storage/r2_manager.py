@@ -219,6 +219,38 @@ class R2StorageManager:
         self._lock = threading.Lock()
         self._jobs: dict[str, dict[str, Any]] = {}
         self._active_job = ""
+        self._scan_lock = threading.Lock()
+        self._scan_state: dict[str, Any] = {"status": "idle", "error": "", "result": None}
+        self._scan_id = ""
+
+    def scan_status(self) -> dict[str, Any]:
+        with self._scan_lock:
+            return dict(self._scan_state)
+
+    def start_scan(self) -> dict[str, Any]:
+        # Return immediately; remote listings may exceed a reverse proxy's timeout.
+        with self._scan_lock:
+            if self._scan_state["status"] == "running":
+                return dict(self._scan_state)
+            self._scan_id = uuid.uuid4().hex
+            scan_id = self._scan_id
+            self._scan_state = {"status": "running", "error": "", "result": self._scan_state["result"]}
+        threading.Thread(target=self._run_scan, args=(scan_id,), name="everspark-r2-scan", daemon=True).start()
+        return self.scan_status()
+
+    def _run_scan(self, scan_id: str) -> None:
+        try:
+            result = self.resources()
+        except Exception as exc:
+            with self._scan_lock:
+                if scan_id != self._scan_id:
+                    return
+                self._scan_state = {"status": "failed", "error": str(exc), "result": self._scan_state["result"]}
+        else:
+            with self._scan_lock:
+                if scan_id != self._scan_id:
+                    return
+                self._scan_state = {"status": "completed", "error": "", "result": result}
 
     def resources(self) -> dict[str, Any]:
         if not self.settings.enabled:
@@ -233,7 +265,11 @@ class R2StorageManager:
 
     def save_paths(self, mapping: dict[str, Any]) -> dict[str, Any]:
         self.client.validate()
-        return self.paths.save(mapping)
+        result = self.paths.save(mapping)
+        with self._scan_lock:
+            self._scan_id = ""
+            self._scan_state = {"status": "idle", "error": "", "result": None}
+        return result
 
     def _scan_resources(self) -> dict[str, Any]:
         image: dict[str, list[dict[str, Any]]] = {}

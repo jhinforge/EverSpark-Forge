@@ -636,6 +636,12 @@ class APITests(unittest.TestCase):
                 "concept": {"models": []},
             }
 
+        def storage_scan(self):
+            return {"status": "completed", "error": "", "result": self.storage_resources()}
+
+        def start_storage_scan(self):
+            return {"status": "running", "error": "", "result": None}
+
         def start_storage_pull(self, kind, name):
             return {"job_id": "job-1", "kind": kind, "name": name, "status": "queued"}
 
@@ -773,6 +779,12 @@ class APITests(unittest.TestCase):
         self.assertEqual(current["document"]["subject_id"], "subject-a")
 
     def test_storage_routes_use_the_infrastructure_boundary(self) -> None:
+        status, scan = self._request("/storage/scan")
+        self.assertEqual(status, 200)
+        self.assertEqual(scan["status"], "completed")
+        status, queued = self._request("/storage/scan", {})
+        self.assertEqual(status, 202)
+        self.assertEqual(queued["status"], "running")
         status, resources = self._request("/storage/resources")
         self.assertEqual(status, 200)
         self.assertTrue(resources["enabled"])

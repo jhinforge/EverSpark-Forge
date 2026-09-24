@@ -176,6 +176,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/storage/resources": lambda: self._proxy_orchestrator_get(
                 "/storage/resources", parsed.query
             ),
+            "/api/storage/scan": lambda: self._proxy_orchestrator_get("/storage/scan"),
             "/api/storage/jobs": lambda: self._proxy_orchestrator_get(
                 "/storage/jobs", parsed.query
             ),
@@ -235,6 +236,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._conversation(payload)
             elif path == "/api/conversation/clear":
                 self._proxy_orchestrator_post("/memory/clear", payload)
+            elif path == "/api/storage/scan":
+                self._proxy_orchestrator_post("/storage/scan", payload)
             elif path == "/api/storage/pull":
                 self._proxy_orchestrator_post("/storage/pull", payload)
             elif path == "/api/storage/paths":

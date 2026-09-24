@@ -15,6 +15,7 @@ const state = {
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
   storagePollJobId: null,
+  remoteScanTimer: null,
   backupPollJobId: null,
   directDownloadPollJobId: null,
   directDownloadJob: null,
@@ -70,6 +71,7 @@ const elements = {
   addLoraButton: $("#addLoraButton"),
   selectedLoras: $("#selectedLoras"),
   storageSummary: $("#storageSummary"),
+  refreshStorageButton: $("#refreshStorageButton"),
   storageProgress: $("#storageProgress"),
   storageProgressBar: $("#storageProgressBar"),
   storageJobStatus: $("#storageJobStatus"),
@@ -124,6 +126,7 @@ async function api(path, options = {}) {
   try {
     data = await response.json();
   } catch (_error) {
+    if (response.status === 524) throw new Error(t("Cloudflare timed out waiting for the server (HTTP 524). Check the Storage scan status or retry over SSH."));
     throw new Error(t("Invalid server response (HTTP {status})", { status: response.status }));
   }
   if (!response.ok || data.ok === false) {
@@ -350,9 +353,23 @@ function updateStorageButtons() {
   });
 }
 
-async function loadRemoteStorage() {
+async function loadRemoteStorage(force = false) {
+  if (state.remoteScanTimer) { window.clearTimeout(state.remoteScanTimer); state.remoteScanTimer = null; }
   try {
-    const data = await api("/api/storage/resources");
+    let scan = await api("/api/storage/scan");
+    if (force || scan.status === "idle") {
+      scan = await api("/api/storage/scan", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: "{}" });
+    }
+    elements.refreshStorageButton.disabled = scan.status === "running";
+    if (scan.status === "failed") throw new Error(scan.error || t("Remote scan failed"));
+    if (scan.status === "running") {
+      uiText(elements.storageSummary, "Scanning remote model directories…");
+      state.remoteScanTimer = window.setTimeout(() => { void loadRemoteStorage(); }, 3000);
+      if (!scan.result) return;
+    }
+    const data = scan.result;
+    if (!data) throw new Error(t("Remote scan returned no data"));
     state.remoteStorage = data;
     const image = data.image || {};
     fillRemoteSelect(elements.remoteCheckpointSelect, image.checkpoint || []);
@@ -373,7 +390,7 @@ async function loadRemoteStorage() {
       elements.dataBackupPath.value = configured.backup_remote || "";
       state.pathsLoaded = true;
     }
-    uiText(elements.storageSummary, data.enabled
+    if (scan.status !== "running") uiText(elements.storageSummary, data.enabled
       ? "R2 is connected. Downloads are selective and never restore the legacy ComfyUI runtime."
       : "Remote storage is disabled in local mode. Configure the rclone backend to enable it.");
     updateStorageButtons();
@@ -390,6 +407,7 @@ async function loadRemoteStorage() {
     }
   } catch (error) {
     state.remoteStorage = null;
+    elements.refreshStorageButton.disabled = false;
     i18n.unbind(elements.storageSummary);
     elements.storageSummary.textContent = error.message;
     $$(".storage-pull-button").forEach((button) => { button.disabled = true; });
@@ -412,7 +430,7 @@ async function saveRemotePaths(event) {
     await api("/api/storage/paths", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paths }) });
     showNotice(t("Remote mappings saved."), "success");
-    await Promise.all([loadRemoteStorage(), loadBackup(), loadRestorePoints()]);
+    await Promise.all([loadRemoteStorage(true), loadBackup(), loadRestorePoints()]);
   } catch (error) { showNotice(error.message); }
 }
 
@@ -1470,7 +1488,7 @@ function bindEvents() {
   elements.downloadDataButton.addEventListener("click", downloadDataArchive);
   elements.restoreDataButton.addEventListener("click", restoreDataArchive);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);
-  $("#refreshStorageButton").addEventListener("click", loadRemoteStorage);
+  elements.refreshStorageButton.addEventListener("click", () => { void loadRemoteStorage(true); });
   $("#refreshBackupButton").addEventListener("click", loadBackup);
   elements.startBackupButton.addEventListener("click", startBackup);
   elements.imageDownloadForm.addEventListener("submit", (event) => {

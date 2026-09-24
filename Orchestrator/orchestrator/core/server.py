@@ -69,6 +69,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 )
             except StorageError as exc:
                 self._send(400, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/storage/scan":
+            self._send(200, {"ok": True, **self.server.orchestrator.storage_scan()})
         elif parsed.path == "/storage/jobs":
             job_id = parse_qs(parsed.query).get("job_id", [""])[0]
             self._send(
@@ -188,6 +190,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/subjects/select",
             "/subjects/compile",
             "/storage/pull",
+            "/storage/scan",
             "/storage/paths",
             "/backup/upload",
             "/backup/restore",
@@ -252,6 +255,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     str(payload.get("session_id", "")), str(payload.get("subject_id", ""))
                 )
                 self._send(200, {"ok": True, "document": subject})
+            elif request_path == "/storage/scan":
+                self._send(202, {"ok": True, **self.server.orchestrator.start_storage_scan()})
             elif request_path == "/storage/pull":
                 job = self.server.orchestrator.start_storage_pull(
                     str(payload.get("kind", "")), str(payload.get("name", ""))

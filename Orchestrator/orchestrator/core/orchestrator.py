@@ -327,6 +327,12 @@ class Orchestrator:
         finally:
             self._task_lock.release()
 
+    def storage_scan(self) -> dict[str, Any]:
+        return self.storage.scan_status()
+
+    def start_storage_scan(self) -> dict[str, Any]:
+        return self.storage.start_scan()
+
     def backup_resources(self) -> dict[str, Any]:
         return self.backups.resources()
 

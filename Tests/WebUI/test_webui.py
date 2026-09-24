@@ -130,6 +130,10 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     "concept": {"models": [{"name": "gemma3test:latest", "installed": False}]},
                 },
             )
+        elif parsed.path == "/storage/scan":
+            self._json(200, {"ok": True, "status": "completed", "error": "", "result": {
+                "enabled": True, "image": {"checkpoint": [{"name": "remote.safetensors"}]},
+                "concept": {"models": []}}})
         elif parsed.path == "/storage/jobs":
             self._json(
                 200,
@@ -283,6 +287,8 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
         elif self.path == "/subjects/select":
             self._json(200, {"ok": True, "document": self.subject(),
                              "session_id": payload["session_id"]})
+        elif self.path == "/storage/scan":
+            self._json(202, {"ok": True, "status": "running", "error": "", "result": None})
         elif self.path == "/storage/pull":
             self._json(
                 202,
@@ -460,6 +466,14 @@ class WebUIIntegrationTests(unittest.TestCase):
             },
         )
         self.assertEqual(MockUpstreamHandler.received_task["selection"], selection)
+
+    def test_remote_scan_is_proxied_without_waiting_for_model_listing(self) -> None:
+        status, started = self.request_json("/api/storage/scan", {})
+        self.assertEqual(status, 202)
+        self.assertEqual(started["status"], "running")
+        status, polled = self.request_json("/api/storage/scan")
+        self.assertEqual(status, 200)
+        self.assertEqual(polled["result"]["image"]["checkpoint"][0]["name"], "remote.safetensors")
 
     def test_remote_storage_routes_are_proxied(self) -> None:
         status, resources = self.request_json("/api/storage/resources")
