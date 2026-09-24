@@ -36,6 +36,10 @@
             <span class="nav-icon">↺</span>
             Gallery
           </button>
+          <button class="nav-item" data-view="storage" type="button">
+            <span class="nav-icon">▣</span>
+            Storage
+          </button>
           <button class="nav-item" data-view="runtime" type="button">
             <span class="nav-icon">⌁</span>
             Runtime
@@ -214,6 +218,28 @@
             <button class="ghost-button" id="refreshRuntimeButton" type="button">Run checks</button>
           </div>
           <div class="runtime-grid" id="runtimeGrid"></div>
+          <div class="setup-panel">
+            <div>
+              <p class="section-kicker">FIRST RUN</p>
+              <h3>Bring each layer online</h3>
+            </div>
+            <ol class="setup-steps">
+              <li><span>1</span><div><strong>Install runtime and models</strong><code>./everspark setup</code></div></li>
+              <li><span>2</span><div><strong>Start every local service</strong><code>./everspark start</code></div></li>
+              <li><span>3</span><div><strong>Verify readiness</strong><code>./everspark status</code></div></li>
+            </ol>
+            <p class="setup-note">Image generation also needs a configured Image Forge adapter and workflow. Optional remote storage and Cloudflare networking remain disabled until explicitly enabled.</p>
+          </div>
+        </section>
+
+        <section class="view" id="storageView" data-view-panel="storage">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">MODELS & DATA</p>
+              <h2>Storage</h2>
+              <p class="section-copy">Install models, pull from remote storage, and back up local data.</p>
+            </div>
+          </div>
           <div class="storage-panel">
             <div class="storage-heading">
               <div>
@@ -344,18 +370,6 @@
                 <button class="ghost-button hidden" id="retryDirectDownload" type="button">Retry</button>
               </div>
             </div>
-          </div>
-          <div class="setup-panel">
-            <div>
-              <p class="section-kicker">FIRST RUN</p>
-              <h3>Bring each layer online</h3>
-            </div>
-            <ol class="setup-steps">
-              <li><span>1</span><div><strong>Install runtime and models</strong><code>./everspark setup</code></div></li>
-              <li><span>2</span><div><strong>Start every local service</strong><code>./everspark start</code></div></li>
-              <li><span>3</span><div><strong>Verify readiness</strong><code>./everspark status</code></div></li>
-            </ol>
-            <p class="setup-note">Image generation also needs a configured Image Forge adapter and workflow. Optional remote storage and Cloudflare networking remain disabled until explicitly enabled.</p>
           </div>
         </section>
       </main>

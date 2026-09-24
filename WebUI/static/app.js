@@ -92,6 +92,7 @@ const viewCopy = {
   forge: ["WORKSPACE / FORGE", "Turn an idea into an image."],
   subjects: ["WORKSPACE / SUBJECTS", "Build identity that persists."],
   history: ["WORKSPACE / GALLERY", "Review the latest outputs."],
+  storage: ["WORKSPACE / STORAGE", "Manage models and backups."],
   runtime: ["WORKSPACE / RUNTIME", "Know what is ready."],
 };
 
@@ -623,7 +624,8 @@ function setView(name) {
   $("#viewEyebrow").textContent = viewCopy[name][0];
   $("#viewTitle").textContent = viewCopy[name][1];
   if (name === "history") loadHistory();
-  if (name === "runtime") Promise.all([loadRuntime(), loadRemoteStorage(), loadDirectDownload(), loadBackup()]);
+  if (name === "runtime") loadRuntime();
+  if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup()]);
 }
 
 function traitValues(document) {

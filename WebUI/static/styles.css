@@ -361,7 +361,7 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
   .app-shell { display: block; }
   .sidebar { position: fixed; z-index: 20; top: auto; bottom: 0; width: 100%; height: 64px; padding: 8px 12px; border-top: 1px solid var(--line); border-right: 0; }
   .brand, .sidebar-bottom { display: none; }
-  .nav { grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 0; }
+  .nav { grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 0; }
   .nav-item, .nav-item:not(.active) { min-height: 46px; font-size: 9px; grid-template-columns: 1fr; gap: 1px; text-align: center; }
   .nav-item.active { box-shadow: inset 0 -2px 0 var(--ember); }
   .nav-icon { font-size: 15px; }
