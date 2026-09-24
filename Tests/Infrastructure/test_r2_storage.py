@@ -78,6 +78,31 @@ class SlowFakeRclone(FakeRclone):
         return super().__call__(command, **kwargs)
 
 
+class TreeRclone(FakeRclone):
+    def __init__(self, files: dict[str, bytes]):
+        super().__init__()
+        self.files = files
+
+    def __call__(self, command, **kwargs):
+        action, source = command[1], command[2]
+        if action == "lsf":
+            names = [path.removeprefix(source + "/") for path in self.files if path.startswith(source + "/")]
+            if "-R" not in command:
+                names = [name for name in names if "/" not in name]
+            return subprocess.CompletedProcess(command, 0, "\n".join(names) + "\n" if names else "", "")
+        if action == "size":
+            if source not in self.files:
+                return subprocess.CompletedProcess(command, 1, "", "missing")
+            return subprocess.CompletedProcess(command, 0, json.dumps({"bytes": len(self.files[source])}), "")
+        if action == "copyto":
+            dest = Path(command[3]); dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(self.files[source]); self.copies.append((source, str(dest)))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if action == "cat":
+            return subprocess.CompletedProcess(command, 0, self.files[source].decode(), "")
+        return super().__call__(command, **kwargs)
+
+
 def enabled_config(config_file: Path) -> dict:
     return {
         "storage": {
@@ -93,6 +118,55 @@ def enabled_config(config_file: Path) -> dict:
 
 
 class R2StorageTests(unittest.TestCase):
+    @patch("r2_manager.shutil.which", return_value="/usr/bin/ollama")
+    def test_remote_gguf_registers_with_ollama_and_failed_registration_can_retry(self, _which) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            conf = root / "rclone.conf"
+            conf.write_text("[r2-assets]\ntype = s3\n")
+            model = "r2-assets:ollama-forge/.ollama/models/sample.gguf"
+            fake = TreeRclone({model: b"GGUF"})
+            with patch("r2_manager.REPO_ROOT", root), patch("r2_manager.subprocess.run") as create:
+                create.return_value = subprocess.CompletedProcess([], 1, "", "Error: invalid GGUF")
+                manager = R2StorageManager(enabled_config(conf), run=fake)
+                manager.settings = replace(manager.settings, image_root=root / "image", concept_root=root / "concept/Ollama")
+                item = next(item for item in manager.resources()["concept"]["models"] if item["format"] == "gguf")
+                started = manager.start_pull("concept_model", item["id"])
+                self.assertEqual(self.wait_for_job(manager, started["job_id"])["status"], "failed")
+                self.assertFalse(manager.resources()["concept"]["models"][-1]["installed"])
+                create.return_value = subprocess.CompletedProcess([], 0, "", "")
+                started = manager.start_pull("concept_model", item["id"])
+                self.assertEqual(self.wait_for_job(manager, started["job_id"])["status"], "completed")
+                self.assertEqual((root / "concept/sample.gguf").read_bytes(), b"GGUF")
+                self.assertEqual(len(fake.copies), 1)
+                self.assertEqual(create.call_args.args[0][1:3], ["create", "sample"])
+
+    @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
+    def test_union_scan_tracks_physical_source_and_manual_directory(self, _which) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            conf = root / "rclone.conf"
+            conf.write_text("[r2-assets]\ntype = s3\n[models]\ntype = union\n"
+                            "upstreams = r2-assets:bucket/models_cold:ro r2-assets:bucket/ComfyUI/models:ro\n")
+            config = enabled_config(conf)
+            config["storage"]["rclone"]["image_remote"] = "models:"
+            fake = TreeRclone({
+                "r2-assets:bucket/models_cold/loras/styles/hero.safetensors": b"model",
+                "r2-assets:bucket/ComfyUI/models/vae/SDXL/custom.safetensors": b"VAE",
+                "r2-assets:bucket/other/renamed/unique.safetensors": b"extra",
+            })
+            manager = R2StorageManager(config, run=fake)
+            manager.settings = replace(manager.settings, image_root=root / "image", concept_root=root / "concept")
+            manager.paths.save({"image_manual": {"checkpoint": ["r2-assets:bucket/other/renamed"]}})
+            resources = manager.resources()
+            lora = resources["image"]["lora"][0]
+            self.assertEqual(lora["source"], "r2-assets:bucket/models_cold/loras")
+            self.assertEqual(lora["name"], "styles/hero.safetensors")
+            self.assertEqual(resources["image"]["checkpoint"][0]["name"], "unique.safetensors")
+            started = manager.start_pull("lora", lora["id"])
+            self.assertEqual(self.wait_for_job(manager, started["job_id"])["status"], "completed")
+            self.assertEqual((root / "image/loras/styles/hero.safetensors").read_bytes(), b"model")
+
     def make_manager(self, root: Path, fake: FakeRclone) -> R2StorageManager:
         config_file = root / "rclone.conf"
         config_file.write_text("[r2-assets]\ntype = s3\n", encoding="utf-8")

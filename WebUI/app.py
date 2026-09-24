@@ -180,6 +180,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
             "/api/backup/resources": lambda: self._proxy_orchestrator_get("/backup/resources"),
             "/api/backup/jobs": lambda: self._proxy_orchestrator_get("/backup/jobs", parsed.query),
+            "/api/backup/restore-points": lambda: self._proxy_orchestrator_get("/backup/restore-points"),
             "/api/downloads/jobs": lambda: self._proxy_orchestrator_get(
                 "/downloads/jobs", parsed.query
             ),
@@ -230,8 +231,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._proxy_orchestrator_post("/memory/clear", payload)
             elif path == "/api/storage/pull":
                 self._proxy_orchestrator_post("/storage/pull", payload)
+            elif path == "/api/storage/paths":
+                self._proxy_orchestrator_post("/storage/paths", payload)
             elif path == "/api/backup/upload":
                 self._proxy_orchestrator_post("/backup/upload", payload)
+            elif path == "/api/backup/restore":
+                self._proxy_orchestrator_post("/backup/restore", payload)
             elif path == "/api/downloads":
                 self._proxy_orchestrator_post("/downloads", payload)
             elif path == "/api/downloads/cancel":

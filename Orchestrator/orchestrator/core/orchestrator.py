@@ -177,10 +177,20 @@ class Orchestrator:
         session = normalize_unicode(session_id).strip()
         if not session:
             raise ValueError("session_id cannot be empty")
-        self.memory.clear_session(session)
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("Orchestrator is busy")
+        try:
+            self.memory.clear_session(session)
+        finally:
+            self._task_lock.release()
 
     def save_subject(self, document: dict[str, Any]) -> dict[str, Any]:
-        return self.memory.save_subject(validate_subject(document))
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("Orchestrator is busy")
+        try:
+            return self.memory.save_subject(validate_subject(document))
+        finally:
+            self._task_lock.release()
 
     def generate_subject(self, subject_id: str, user_text: str) -> dict[str, Any]:
         normalized = normalize_unicode(subject_id).strip()
@@ -189,16 +199,26 @@ class Orchestrator:
             raise ValueError("subject_id cannot be empty")
         if not text:
             raise ValueError("Subject description cannot be empty")
-        existing = self.memory.get_subject(normalized)
-        document = self.runner.concept.generate_subject(text, normalized, existing)
-        return self.memory.save_subject(document)
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("Orchestrator is busy")
+        try:
+            existing = self.memory.get_subject(normalized)
+            document = self.runner.concept.generate_subject(text, normalized, existing)
+            return self.memory.save_subject(document)
+        finally:
+            self._task_lock.release()
 
     def update_subject(
         self, subject_id: str, changes: dict[str, Any]
     ) -> dict[str, Any]:
-        current = self.get_subject(subject_id)
-        updated = update_subject(current, changes)
-        return self.memory.save_subject(updated)
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("Orchestrator is busy")
+        try:
+            current = self.get_subject(subject_id)
+            updated = update_subject(current, changes)
+            return self.memory.save_subject(updated)
+        finally:
+            self._task_lock.release()
 
     def get_subject(self, subject_id: str) -> dict[str, Any]:
         normalized = normalize_unicode(subject_id).strip()
@@ -274,8 +294,18 @@ class Orchestrator:
     def backup_resources(self) -> dict[str, Any]:
         return self.backups.resources()
 
-    def start_backup(self, names: list[str], memory: bool = False) -> dict[str, Any]:
-        return self.backups.start(names, memory)
+    def restore_points(self) -> list[dict[str, Any]]:
+        return self.backups.restore_points()
+
+    def start_restore(self, batch_id: str) -> dict[str, Any]:
+        return self.backups.start_restore(batch_id, self._task_lock, self.memory._subject_lock)
+
+    def save_storage_paths(self, mapping: dict[str, Any]) -> dict[str, Any]:
+        return self.storage.save_paths(mapping)
+
+    def start_backup(self, names: list[str], memory: bool = False,
+                     targets: dict[str, str] | None = None) -> dict[str, Any]:
+        return self.backups.start(names, memory, targets)
 
     def backup_job(self, job_id: str = "") -> dict[str, Any] | None:
         return self.backups.job(job_id)

@@ -581,8 +581,18 @@ class APITests(unittest.TestCase):
         def backup_resources(self):
             return {"enabled": True, "files": [{"name": "outputs/a.png", "bytes": 3}], "memory": True}
 
-        def start_backup(self, names, memory=False):
-            return {"job_id": "backup-1", "names": names, "memory": memory, "status": "queued"}
+        def start_backup(self, names, memory=False, targets=None):
+            return {"job_id": "backup-1", "names": names, "memory": memory,
+                    "targets": targets, "status": "queued"}
+
+        def save_storage_paths(self, mapping):
+            return mapping
+
+        def restore_points(self):
+            return [{"id": "a" * 32, "files": 5, "subjects": 1}]
+
+        def start_restore(self, batch_id):
+            return {"job_id": "restore-1", "id": batch_id, "status": "queued"}
 
         def backup_job(self, job_id=""):
             return {"job_id": job_id or "backup-1", "status": "completed"}
@@ -733,6 +743,15 @@ class APITests(unittest.TestCase):
         status, job = self._request("/backup/jobs?job_id=backup-1")
         self.assertEqual(status, 200)
         self.assertEqual(job["job"]["status"], "completed")
+        status, paths = self._request("/storage/paths", {"paths": {"concept_manual": ["r:models"]}})
+        self.assertEqual(status, 200)
+        self.assertEqual(paths["paths"]["concept_manual"], ["r:models"])
+        status, points = self._request("/backup/restore-points")
+        self.assertEqual(status, 200)
+        self.assertEqual(points["points"][0]["subjects"], 1)
+        status, restore = self._request("/backup/restore", {"id": "a" * 32})
+        self.assertEqual(status, 202)
+        self.assertEqual(restore["job"]["status"], "queued")
 
     def test_direct_download_routes_use_the_infrastructure_boundary(self) -> None:
         status, started = self._request(

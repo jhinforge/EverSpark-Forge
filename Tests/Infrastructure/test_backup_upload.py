@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+import json
+import threading
 import sys
 import tempfile
 import time
@@ -26,6 +28,16 @@ class FakeRclone:
             raise StorageError("missing")
         return len(self.remote[name])
 
+    def list_files(self, root, *, recursive=False, max_depth=0):
+        return [name.removeprefix(root + "/") for name in self.remote if name.startswith(root + "/")]
+
+    def read_json(self, name):
+        return json.loads(self.remote[name])
+
+    def copy_file(self, remote, local, known_size=None, **_kwargs):
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_bytes(self.remote[remote])
+
     def run(self, action, *arguments, **_kwargs):
         if action == "copyto":
             self.remote[arguments[1]] = Path(arguments[0]).read_bytes()
@@ -36,6 +48,51 @@ class FakeRclone:
 
 
 class BackupUploadTests(unittest.TestCase):
+    def test_union_upload_requires_physical_target_and_does_not_overwrite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_file = root / "rclone.conf"
+            config_file.write_text("[r2]\ntype = s3\n[models]\ntype = union\n"
+                                   "upstreams = r2:bucket/cold:ro r2:bucket/live:ro\n")
+            config = {"storage": {"backend": "rclone", "rclone": {
+                "enabled": True, "config_file": str(config_file), "image_remote": "models:",
+                "concept_remote": "r2:bucket/ollama"}}, "memory": {"database": str(root / "memory.db")}}
+            (root / "memory.db").touch()
+            image = root / "image/loras/fresh.safetensors"
+            image.parent.mkdir(parents=True)
+            image.write_bytes(b"fresh")
+            with patch("backup_manager.REPO_ROOT", root), patch("backup_manager.shutil.which", return_value="/usr/bin/rclone"):
+                manager = BackupManager(config)
+                manager.settings = replace(manager.settings, image_root=root / "image")
+                manager.client = FakeRclone()
+                name = "models/image/loras/fresh.safetensors"
+                targets = manager._targets(name)
+                self.assertEqual(targets, ["r2:bucket/cold/loras/fresh.safetensors",
+                                           "r2:bucket/live/loras/fresh.safetensors"])
+                with self.assertRaisesRegex(StorageError, "Choose an upload destination"):
+                    manager.start([name])
+                with self.assertRaisesRegex(StorageError, "not mapped"):
+                    manager.start([name], targets={name: "models:loras/fresh.safetensors"})
+                started = manager.start([name], targets={name: targets[0]})
+                for _ in range(100):
+                    result = manager.job(started["job_id"])
+                    if result["status"] in {"completed", "failed"}:
+                        break
+                    time.sleep(.01)
+                self.assertEqual(result["status"], "completed", result["error"])
+                self.assertEqual(manager.client.remote[targets[0]], b"fresh")
+                image.write_bytes(b"different-size")
+                with self.assertRaisesRegex(StorageError, "union remote"):
+                    manager.paths.save({"image_upload": {"lora": "models:loras"}})
+                started = manager.start([name], targets={name: targets[0]})
+                for _ in range(100):
+                    result = manager.job(started["job_id"])
+                    if result["status"] in {"completed", "failed"}:
+                        break
+                    time.sleep(.01)
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(manager.client.remote[targets[0]], b"fresh")
+
     def test_uploads_selected_image_gguf_output_and_consistent_memory_snapshot(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -47,7 +104,9 @@ class BackupUploadTests(unittest.TestCase):
             vae.write_bytes(b"VAE-data")
             subject = root / "Subjects/subject-1/subject.json"
             subject.parent.mkdir(parents=True)
-            subject.write_text('{"identity": {}}', encoding="utf-8")
+            subject.write_text('{"subject_id":"subject-1","revision":1,"identity":{}}', encoding="utf-8")
+            for name in ("metadata", "positive_prompt", "negative_prompt"):
+                (subject.parent / f"{name}.json").write_text("{}", encoding="utf-8")
             gguf = root / "Data/Models/ConceptForge/new.gguf"
             gguf.parent.mkdir(parents=True)
             gguf.write_bytes(b"GGUF-test")
@@ -58,6 +117,10 @@ class BackupUploadTests(unittest.TestCase):
             with sqlite3.connect(database) as connection:
                 connection.execute("CREATE TABLE message (value TEXT)")
                 connection.execute("INSERT INTO message VALUES ('saved')")
+                connection.execute("CREATE TABLE subjects (subject_id TEXT, revision INTEGER, document TEXT)")
+                connection.execute("INSERT INTO subjects VALUES (?,?,?)", ("subject-1", 1,
+                                    json.dumps({**json.loads(subject.read_text()), "metadata": {}})))
+                connection.execute("CREATE TABLE subject_prompt_revisions (id INTEGER PRIMARY KEY, subject_id TEXT, document TEXT)")
             config = {"storage": {"backend": "rclone", "rclone": {
                 "enabled": True, "image_remote": "r:images", "concept_remote": "r:ollama",
                 "backup_remote": "r:backup"}}, "memory": {"database": str(database)}}
@@ -76,12 +139,36 @@ class BackupUploadTests(unittest.TestCase):
                 self.assertEqual(current["status"], "completed", current["error"])
                 self.assertEqual(fake.remote["r:images/checkpoints/new.safetensors"], b"model")
                 self.assertEqual(fake.remote["r:images/vae/SDXL/custom.safetensors"], b"VAE-data")
-                self.assertEqual(fake.remote["r:backup/models/concept/new.gguf"], b"GGUF-test")
+                self.assertEqual(fake.remote["r:backup/everspark-gguf/new.gguf"], b"GGUF-test")
                 self.assertEqual(fake.remote["r:backup/outputs/sub/image.png"], b"PNG")
-                self.assertEqual(fake.remote["r:backup/subjects/subject-1/subject.json"], b'{"identity": {}}')
-                self.assertEqual(len([key for key in fake.remote if key.startswith("r:backup/memory/")]), 1)
+                self.assertEqual(fake.remote[f"r:backup/data_sets/{job['job_id']}/subjects/subject-1/subject.json"], subject.read_bytes())
+                self.assertIn(f"r:backup/data_sets/{job['job_id']}/manifest.json", fake.remote)
                 self.assertTrue(all(not key.endswith(".partial") for key in fake.remote))
-                self.assertTrue(all(item["backed_up"] for item in manager.resources()["files"]))
+                self.assertTrue(all(item["backed_up"] for item in manager.resources()["files"] if not item["name"].startswith("subjects/")))
+                self.assertEqual(manager.restore_points()[0]["subjects"], 1)
+                subject.write_text('{"revision":99}', encoding="utf-8")
+                with sqlite3.connect(database) as connection:
+                    connection.execute("UPDATE message SET value='changed'")
+                restore = manager.start_restore(job["job_id"], threading.Lock(), threading.RLock())
+                for _ in range(200):
+                    restored = manager.job(restore["job_id"])
+                    if restored["status"] in {"completed", "failed"}:
+                        break
+                    time.sleep(.01)
+                self.assertEqual(restored["status"], "completed", restored["error"])
+                self.assertIn('"revision":1', subject.read_text())
+                with sqlite3.connect(database) as connection:
+                    self.assertEqual(connection.execute("SELECT value FROM message").fetchone()[0], "saved")
+                bad = f"r:backup/data_sets/{job['job_id']}/subjects/subject-1/subject.json"
+                fake.remote[bad] = b"changed"  # Same batch can no longer be trusted.
+                failed = manager.start_restore(job["job_id"], threading.Lock(), threading.RLock())
+                for _ in range(200):
+                    stopped = manager.job(failed["job_id"])
+                    if stopped["status"] in {"completed", "failed"}:
+                        break
+                    time.sleep(.01)
+                self.assertEqual(stopped["status"], "failed")
+                self.assertIn('"revision":1', subject.read_text())
                 with self.assertRaises(StorageError):
                     manager.start(["../../.env"])
 

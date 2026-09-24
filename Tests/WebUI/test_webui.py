@@ -140,6 +140,8 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+        elif parsed.path == "/backup/restore-points":
+            self._json(200, {"ok": True, "points": [{"id": "a" * 32, "subjects": 1, "files": 5}]})
         elif parsed.path == "/downloads/jobs":
             self._json(
                 200,
@@ -288,6 +290,10 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+        elif self.path == "/storage/paths":
+            self._json(200, {"ok": True, "paths": payload["paths"]})
+        elif self.path == "/backup/restore":
+            self._json(202, {"ok": True, "job": {"id": payload["id"], "status": "queued"}})
         elif self.path in {"/downloads", "/downloads/retry", "/downloads/cancel"}:
             self._json(
                 202,
@@ -442,6 +448,13 @@ class WebUIIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(status, 202)
         self.assertEqual(started["job"]["job_id"], "storage-job-1")
+        _, saved = self.request_json("/api/storage/paths", {"paths": {"concept_manual": ["r:llms"]}})
+        self.assertEqual(saved["paths"]["concept_manual"], ["r:llms"])
+        _, points = self.request_json("/api/backup/restore-points")
+        self.assertEqual(points["points"][0]["subjects"], 1)
+        status, restored = self.request_json("/api/backup/restore", {"id": "a" * 32})
+        self.assertEqual(status, 202)
+        self.assertEqual(restored["job"]["id"], "a" * 32)
 
     def test_direct_download_routes_are_proxied(self) -> None:
         status, started = self.request_json(

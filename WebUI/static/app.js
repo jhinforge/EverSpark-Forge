@@ -4,6 +4,7 @@ const state = {
   mode: "discuss",
   resources: { workflows: [], checkpoints: [], vaes: [], loras: [], llms: [], defaults: {} },
   remoteStorage: null,
+  pathsLoaded: false,
   selectedLoras: [],
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
@@ -67,6 +68,13 @@ const elements = {
   backupProgressBar: $("#backupProgressBar"),
   backupJobStatus: $("#backupJobStatus"),
   backupProgressDetail: $("#backupProgressDetail"),
+  remotePathsForm: $("#remotePathsForm"),
+  conceptSourcePath: $("#conceptSourcePath"),
+  conceptUploadPath: $("#conceptUploadPath"),
+  dataBackupPath: $("#dataBackupPath"),
+  restorePointSelect: $("#restorePointSelect"),
+  startRestoreButton: $("#startRestoreButton"),
+  refreshRestoreButton: $("#refreshRestoreButton"),
   remoteCheckpointSelect: $("#remoteCheckpointSelect"),
   remoteDiffusionSelect: $("#remoteDiffusionSelect"),
   remoteLoraSelect: $("#remoteLoraSelect"),
@@ -295,8 +303,8 @@ function fillRemoteSelect(select, items) {
   }
   for (const item of items) {
     const option = document.createElement("option");
-    option.value = item.name;
-    option.textContent = `${item.name}${item.installed ? " · installed" : ""}`;
+    option.value = item.id || item.name;
+    option.textContent = `${item.name}${item.source ? ` · ${item.source}` : ""}${item.installed ? " · installed" : ""}`;
     option.dataset.installed = item.installed ? "true" : "false";
     select.appendChild(option);
   }
@@ -332,6 +340,19 @@ async function loadRemoteStorage() {
     fillRemoteSelect(elements.remoteLoraSelect, image.lora || []);
     fillRemoteSelect(elements.remoteVaeSelect, image.vae || []);
     fillRemoteSelect(elements.remoteConceptSelect, data.concept?.models || []);
+    if (!state.pathsLoaded && data.paths) {
+      const configured = data.paths.configured || {};
+      $$("[data-path-kind]").forEach((input) => {
+        const kind = input.dataset.pathKind;
+        input.value = input.dataset.pathField === "source"
+          ? (configured.image_manual?.[kind] || []).join(", ")
+          : (configured.image_upload?.[kind] || "");
+      });
+      elements.conceptSourcePath.value = (configured.concept_manual || []).join(", ");
+      elements.conceptUploadPath.value = configured.concept_upload || "";
+      elements.dataBackupPath.value = configured.backup_remote || "";
+      state.pathsLoaded = true;
+    }
     elements.storageSummary.textContent = data.enabled
       ? "R2 is connected. Downloads are selective and never restore the legacy ComfyUI runtime."
       : "Remote storage is disabled in local mode. Configure the rclone backend to enable it.";
@@ -354,6 +375,26 @@ async function loadRemoteStorage() {
   }
 }
 
+async function saveRemotePaths(event) {
+  event.preventDefault();
+  const paths = { image_manual: {}, image_upload: {}, concept_manual: [],
+    concept_upload: elements.conceptUploadPath.value.trim(),
+    backup_remote: elements.dataBackupPath.value.trim() };
+  const split = (text) => text.split(/[,\n]+/).map((value) => value.trim()).filter(Boolean);
+  $$("[data-path-kind]").forEach((input) => {
+    const kind = input.dataset.pathKind;
+    if (input.dataset.pathField === "source") paths.image_manual[kind] = split(input.value);
+    else if (input.value.trim()) paths.image_upload[kind] = input.value.trim();
+  });
+  paths.concept_manual = split(elements.conceptSourcePath.value);
+  try {
+    await api("/api/storage/paths", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }) });
+    showNotice("Remote mappings saved.", "success");
+    await Promise.all([loadRemoteStorage(), loadBackup(), loadRestorePoints()]);
+  } catch (error) { showNotice(error.message); }
+}
+
 async function loadBackup() {
   try {
     const data = await api("/api/backup/resources");
@@ -361,8 +402,8 @@ async function loadBackup() {
     elements.startBackupButton.disabled = !data.enabled;
     elements.backupMemory.disabled = !data.enabled || !data.memory;
     elements.backupSummary.textContent = data.enabled
-      ? `${data.files.length} local files found. Checked files need upload; matching remote sizes are already backed up.`
-      : "Enable rclone storage and set EVERSPARK_BACKUP_REMOTE to upload backups.";
+      ? `${data.files.length} local files found. Data backup target: ${data.remote}. Character JSON and SQLite are saved together.`
+      : "Enable rclone storage to upload backups.";
     for (const file of data.files) {
       const label = document.createElement("label");
       label.className = "backup-file";
@@ -374,6 +415,22 @@ async function loadBackup() {
       const description = document.createElement("span");
       description.textContent = `${file.name} · ${formatBytes(file.bytes)} · ${file.backed_up ? "same size remotely" : "needs upload"}`;
       label.append(checkbox, description);
+      if (file.targets?.length) {
+        const target = document.createElement("select");
+        target.className = "backup-target";
+        target.setAttribute("aria-label", `Upload destination for ${file.name}`);
+        for (const path of file.targets) {
+          const option = document.createElement("option"); option.value = path; option.textContent = path;
+          target.append(option);
+        }
+        label.append(target);
+      } else if (file.name.startsWith("models/image/")) {
+        const hint = document.createElement("span");
+        hint.textContent = "No writable target: set a category upload path above.";
+        label.append(hint);
+        checkbox.checked = false;
+        checkbox.disabled = true;
+      }
       elements.backupFiles.append(label);
     }
     const active = (await api("/api/backup/jobs")).job;
@@ -422,13 +479,15 @@ async function pollBackupJob(jobId) {
 
 async function startBackup() {
   const names = $$(".backup-choice:checked").map((input) => input.value);
+  const targets = Object.fromEntries($$(".backup-choice:checked").map((input) =>
+    [input.value, input.closest("label")?.querySelector(".backup-target")?.value || ""]));
   const memory = elements.backupMemory.checked;
   if (!names.length && !memory) return showNotice("Select a file or Memory snapshot first.");
   elements.startBackupButton.disabled = true;
   try {
     const data = await api("/api/backup/upload", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ names, memory }),
+      body: JSON.stringify({ names, memory, targets }),
     });
     elements.backupMemory.checked = false;
     await pollBackupJob(data.job.job_id);
@@ -436,6 +495,34 @@ async function startBackup() {
     showNotice(error.message);
     elements.startBackupButton.disabled = false;
   }
+}
+
+async function loadRestorePoints() {
+  try {
+    const { points } = await api("/api/backup/restore-points");
+    elements.restorePointSelect.replaceChildren();
+    for (const point of points) {
+      const option = document.createElement("option"); option.value = point.id;
+      option.textContent = `${point.created_at || point.id} · ${point.subjects} characters · ${formatBytes(point.bytes)}`;
+      elements.restorePointSelect.append(option);
+    }
+    elements.startRestoreButton.disabled = !points.length;
+  } catch (error) {
+    elements.startRestoreButton.disabled = true;
+    if (state.remoteStorage?.enabled) showNotice(error.message);
+  }
+}
+
+async function startRestore() {
+  const id = elements.restorePointSelect.value;
+  if (!id || !window.confirm("Replace local character JSON and SQLite with this backup? Current data will be kept in Data/Recovery. Restart EverSpark after restore.")) return;
+  elements.startRestoreButton.disabled = true;
+  try {
+    const data = await api("/api/backup/restore", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    await pollBackupJob(data.job.job_id);
+  } catch (error) { showNotice(error.message); }
+  finally { elements.startRestoreButton.disabled = false; }
 }
 
 function renderStorageJob(job) {
@@ -625,7 +712,7 @@ function setView(name) {
   $("#viewTitle").textContent = viewCopy[name][1];
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
-  if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup()]);
+  if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadRestorePoints()]);
 }
 
 function traitValues(document) {
@@ -1227,6 +1314,9 @@ function bindEvents() {
   elements.cancelDirectDownload.addEventListener("click", cancelDirectDownload);
   elements.retryDirectDownload.addEventListener("click", retryDirectDownload);
   $$(".storage-pull-button").forEach((button) => button.addEventListener("click", () => pullRemoteResource(button)));
+  elements.remotePathsForm.addEventListener("submit", saveRemotePaths);
+  elements.refreshRestoreButton.addEventListener("click", loadRestorePoints);
+  elements.startRestoreButton.addEventListener("click", startRestore);
   [elements.remoteCheckpointSelect, elements.remoteDiffusionSelect, elements.remoteLoraSelect, elements.remoteVaeSelect, elements.remoteConceptSelect]
     .forEach((select) => select.addEventListener("change", updateStorageButtons));
   $("#dismissNotice").addEventListener("click", hideNotice);

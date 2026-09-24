@@ -28,17 +28,31 @@ R2 is enabled by selecting an rclone-backed storage mode and supplying an
 existing rclone configuration. Missing or invalid remote configuration is a
 startup error after the backend has been explicitly enabled.
 
-The two remote values point to resource roots, not buckets in general:
+The two remote values point to scan roots, not fixed bucket names:
 
 ```text
 IMAGE_FORGE_RCLONE_REMOTE=remote:path/models_cold
 CONCEPT_FORGE_RCLONE_REMOTE=remote:path/.ollama/models
 ```
 
-Image Forge expects `checkpoints`, `diffusion_models`, `loras`, and `vae` below its
-root. Concept Forge expects standard Ollama `blobs` and `manifests` directories.
-Character documents in `Data/Subjects` are selectable for backup under
-`subjects/<subject_id>/`, alongside the SQLite Memory snapshot.
+Storage discovers nested `checkpoints`, `diffusion_models`, `loras`, and `vae`
+folders below the Image Forge root and preserves subdirectories inside them.
+Ollama scans native `manifests` plus `blobs` models and independent GGUF files.
+The Storage page can also save manual source folders and per-category writable
+upload folders in the private `model_paths.json` beside `rclone.conf`. Union
+remotes can be scanned; uploads resolve to their physical upstreams and never
+write to a union. If several upload roots exist, select one for each file.
+
+`EVERSPARK_BACKUP_REMOTE` specifies an optional writable data backup directory;
+without it, the first image source bucket gets an `everspark-backups` prefix.
+No empty R2 folder needs to be created in advance. The Storage page can override
+the directory. Image models upload to their mapped category folder. GGUF files
+upload to a separate discoverable `everspark-gguf` folder by default. Output
+files upload to the data backup directory. Character JSON and SQLite are
+snapshotted as a complete `data_sets/<id>/` batch. The manifest is uploaded
+last; Restore lists complete batches, verifies hashes and SQLite integrity,
+and keeps replaced local data under `Data/Recovery/<id>/` before switching.
+Restart EverSpark after restoring data.
 
 ## Network
 

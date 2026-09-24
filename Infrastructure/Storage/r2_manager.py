@@ -36,6 +36,7 @@ class StorageSettings:
     concept_remote: str
     image_root: Path
     concept_root: Path
+    backup_remote: str = ""
     timeout: int = 60
 
     @classmethod
@@ -60,6 +61,7 @@ class StorageSettings:
             concept_remote=_clean_remote(str(rclone.get("concept_remote") or "")),
             image_root=(REPO_ROOT / "Data/Models/ImageForge").resolve(),
             concept_root=(REPO_ROOT / "Data/Models/ConceptForge/Ollama").resolve(),
+            backup_remote=_clean_remote(str(rclone.get("backup_remote") or "")),
             timeout=int(rclone.get("timeout", 60)),
         )
 
@@ -122,10 +124,15 @@ class RcloneClient:
             raise StorageError(f"rclone failed: {detail}")
         return completed.stdout
 
-    def list_files(self, remote: str, *, recursive: bool = False) -> list[str]:
+    def list_files(self, remote: str, *, recursive: bool = False, max_depth: int = 0,
+                   exclude_blobs: bool = False) -> list[str]:
         arguments = ["lsf", remote, "--files-only"]
         if recursive:
             arguments.append("-R")
+        if max_depth:
+            arguments.extend(["--max-depth", str(max_depth)])
+        if exclude_blobs:
+            arguments.extend(["--exclude", "**/blobs/**", "--exclude", "/blobs/**"])
         output = self.run(*arguments)
         return [line.strip().removesuffix("/") for line in output.splitlines() if line.strip()]
 
@@ -206,6 +213,9 @@ class R2StorageManager:
     ):
         self.settings = StorageSettings.from_config(config)
         self.client = RcloneClient(self.settings, run=run)
+        from remote_paths import RemotePathMap
+        self.paths = RemotePathMap(self.settings)
+        self.ollama_url = str(config.get("concept_forge", {}).get("providers", {}).get("ollama", {}).get("base_url", "http://127.0.0.1:11434"))
         self._lock = threading.Lock()
         self._jobs: dict[str, dict[str, Any]] = {}
         self._active_job = ""
@@ -219,41 +229,68 @@ class R2StorageManager:
                 "concept": {"models": []},
             }
         self.client.validate()
-        image: dict[str, list[dict[str, Any]]] = {}
-        for kind, directory in IMAGE_KINDS.items():
-            remote = f"{self.settings.image_remote}/{directory}"
-            nested = kind == "vae"
-            local_names = self._local_name_map(self.settings.image_root / directory, recursive=nested)
-            image[kind] = [
-                {
-                    "name": name,
-                    "installed": name.casefold() in local_names,
-                }
-                for name in self.client.list_files(remote, recursive=nested)
-                if self._safe_image_name(name, nested=nested)
-            ]
+        return self._scan_resources()
 
-        manifests_root = f"{self.settings.concept_remote}/manifests"
+    def save_paths(self, mapping: dict[str, Any]) -> dict[str, Any]:
+        self.client.validate()
+        return self.paths.save(mapping)
+
+    def _scan_resources(self) -> dict[str, Any]:
+        image: dict[str, list[dict[str, Any]]] = {}
+        image_roots = self.paths.image_roots(self.client)
+        for kind, directory in IMAGE_KINDS.items():
+            nested = True
+            local_names = self._local_name_map(self.settings.image_root / directory, recursive=nested)
+            image[kind] = []
+            for remote in image_roots[kind]:
+                for name in self.client.list_files(remote, recursive=nested):
+                    if (self._safe_image_name(name, nested=nested)
+                            and PurePosixPath(name).suffix.casefold() in ({".safetensors", ".ckpt", ".pt"} if kind == "vae" else {".safetensors", ".ckpt"})):
+                        image[kind].append({"name": name, "id": f"{remote}::{name}", "source": remote,
+                                            "installed": name.casefold() in local_names})
+            image[kind].sort(key=lambda item: (item["name"].casefold(), item["source"]))
+
         concept_models = []
-        for path in self.client.list_files(manifests_root, recursive=True):
-            self._safe_remote_relative(path)
-            model_name = self._ollama_model_name(path)
-            if not model_name:
-                continue
-            local_manifest = self.settings.concept_root / "manifests" / PurePosixPath(path)
-            concept_models.append(
-                {
-                    "name": model_name,
-                    "manifest": path,
-                    "installed": local_manifest.is_file(),
-                }
-            )
+        native_roots, gguf_roots = self.paths.concept_roots(self.client)
+        for root in native_roots:
+            manifests_root = f"{root}/manifests"
+            try:
+                paths = self.client.list_files(manifests_root, recursive=True)
+            except StorageError as exc:
+                if not any(word in str(exc).casefold() for word in ("not found", "directory not found")):
+                    raise
+                paths = []
+            for path in paths:
+                self._safe_remote_relative(path)
+                model_name = self._ollama_model_name(path)
+                if not model_name:
+                    continue
+                local_manifest = self.settings.concept_root / "manifests" / PurePosixPath(path)
+                concept_models.append({"name": model_name, "id": f"{root}::manifest::{path}",
+                                       "source": root, "format": "ollama", "installed": local_manifest.is_file()})
+        for root in gguf_roots:
+            for path in self.client.list_files(root, recursive=True, max_depth=5, exclude_blobs=True):
+                if not self._safe_image_name(path, nested=True) or not path.casefold().endswith(".gguf"):
+                    continue
+                local = self.settings.concept_root.parent / PurePosixPath(path).name
+                marker = REPO_ROOT / "Data/Runtime/Models/Imports" / f"{local.name}.registered.json"
+                registered = False
+                if local.is_file() and marker.is_file():
+                    try:
+                        registered = json.loads(marker.read_text()).get("size") == local.stat().st_size
+                    except (ValueError, OSError):
+                        pass
+                concept_models.append({"name": PurePosixPath(path).name, "id": f"{root}::gguf::{path}",
+                                       "source": root, "format": "gguf", "installed": registered})
         concept_models.sort(key=lambda item: item["name"].casefold())
         return {
             "enabled": True,
             "backend": "rclone",
             "image": image,
             "concept": {"models": concept_models},
+            "paths": {"discovered": image_roots, "configured": self.paths.read(),
+                      "backup_remote": self.paths.backup_root(), "concept_native": native_roots,
+                      "concept_gguf": gguf_roots},
         }
 
     def start_pull(self, kind: str, name: str) -> dict[str, Any]:
@@ -319,18 +356,23 @@ class R2StorageManager:
 
     def _pull_image_model(self, job_id: str, kind: str, requested: str) -> None:
         directory = IMAGE_KINDS[kind]
-        remote_dir = f"{self.settings.image_remote}/{directory}"
-        nested = kind == "vae"
-        available = self.client.list_files(remote_dir, recursive=nested)
-        match = {name.casefold(): name for name in available}.get(requested.casefold())
-        if not match:
+        nested = True
+        entries = self._scan_resources()["image"][kind]
+        selected = next((item for item in entries if item["id"] == requested), None)
+        if selected is None:
+            matches = [item for item in entries if item["name"].casefold() == requested.casefold()]
+            selected = matches[0] if len(matches) == 1 else None
+        if not selected:
             raise StorageError(f"Remote {kind} was not found: {requested}")
+        remote_dir, match = selected["source"], selected["name"]
         if not self._safe_image_name(match, nested=nested):
             raise StorageError(f"Unsafe remote image model path: {match}")
         remote_file = f"{remote_dir}/{match}"
         total_bytes = self.client.file_size(remote_file)
         self._set_progress(job_id, 0, 1, 0, total_bytes)
         destination = self.settings.image_root / directory / PurePosixPath(match)
+        if destination.exists():
+            raise StorageError(f"A local {kind} with this name already exists: {match}")
         self.client.copy_file(
             remote_file,
             destination,
@@ -342,15 +384,18 @@ class R2StorageManager:
         self._set_progress(job_id, 1, 1, total_bytes, total_bytes)
 
     def _pull_concept_model(self, job_id: str, requested: str) -> None:
-        manifests_root = f"{self.settings.concept_remote}/manifests"
-        paths = self.client.list_files(manifests_root, recursive=True)
-        models = {
-            self._ollama_model_name(self._safe_remote_relative(path)).casefold(): path
-            for path in paths
-        }
-        manifest_path = models.get(requested.casefold())
-        if not manifest_path:
+        models = self._scan_resources()["concept"]["models"]
+        selected = next((item for item in models if item["id"] == requested), None)
+        if selected is None:
+            matches = [item for item in models if item["name"].casefold() == requested.casefold()]
+            selected = matches[0] if len(matches) == 1 else None
+        if not selected:
             raise StorageError(f"Remote Concept Forge model was not found: {requested}")
+        if selected["format"] == "gguf":
+            self._pull_gguf(job_id, selected)
+            return
+        manifest_path = selected["id"].split("::manifest::", 1)[1]
+        manifests_root = f"{selected['source']}/manifests"
         manifest_remote = f"{manifests_root}/{manifest_path}"
         manifest = self.client.read_json(manifest_remote)
         digests = self._manifest_digests(manifest)
@@ -360,7 +405,7 @@ class R2StorageManager:
             destination = self.settings.concept_root / "blobs" / blob_name
             transfers.append(
                 (
-                    f"{self.settings.concept_remote}/blobs/{blob_name}",
+                    f"{selected['source']}/blobs/{blob_name}",
                     destination,
                     destination.is_file() and destination.stat().st_size > 0,
                 )
@@ -386,23 +431,55 @@ class R2StorageManager:
                     remote,
                     destination,
                     progress=lambda current, _total, base=base_bytes: self._set_progress(
-                        job_id,
-                        completed_files,
-                        total_files,
-                        base + current,
-                        total_bytes,
+                        job_id, completed_files, total_files, base + current, total_bytes,
                     ),
                     known_size=size,
                 )
             completed_files += 1
             completed_bytes += size
-            self._set_progress(
-                job_id,
-                completed_files,
-                total_files,
-                completed_bytes,
-                total_bytes,
-            )
+            self._set_progress(job_id, completed_files, total_files, completed_bytes, total_bytes)
+
+    def _pull_gguf(self, job_id: str, selected: dict[str, Any]) -> None:
+        from download_manager import _default_runtime_name, RUNTIME_NAME_PATTERN, ANSI_ESCAPE
+        from urllib.parse import urlparse
+
+        source = f"{selected['source']}/{selected['id'].split('::gguf::', 1)[1]}"
+        filename = PurePosixPath(selected["name"]).name
+        destination = self.settings.concept_root.parent / filename
+        size = self.client.file_size(source)
+        if destination.exists() and destination.stat().st_size != size:
+            raise StorageError(f"A different GGUF file already exists: {filename}")
+        self._set_progress(job_id, 0, 1, size if destination.exists() else 0, size)
+        if not destination.exists():
+            self.client.copy_file(source, destination,
+                                  progress=lambda completed, total: self._set_progress(job_id, 0, 1, completed, total),
+                                  known_size=size)
+        self._set_progress(job_id, 1, 1, size, size)
+        name = _default_runtime_name(filename)
+        if not RUNTIME_NAME_PATTERN.fullmatch(name):
+            raise StorageError("Invalid GGUF runtime name")
+        executable = shutil.which("ollama")
+        if not executable:
+            raise StorageError("Ollama is not installed; run ./everspark setup first")
+        modelfile_dir = REPO_ROOT / "Data/Runtime/Models/Imports"
+        modelfile_dir.mkdir(parents=True, exist_ok=True)
+        modelfile = modelfile_dir / f"{job_id}.Modelfile"
+        modelfile.write_text(f"FROM {json.dumps(str(destination))}\nPARAMETER num_ctx 8192\n", encoding="utf-8")
+        with self._lock:
+            self._jobs[job_id]["status"] = "registering"
+        environment = os.environ.copy()
+        parsed = urlparse(self.ollama_url)
+        if parsed.hostname:
+            environment["OLLAMA_HOST"] = f"{parsed.hostname}:{parsed.port or 11434}"
+        completed = subprocess.run([executable, "create", name, "-f", str(modelfile)],
+                                   check=False, capture_output=True, text=True, env=environment)
+        if completed.returncode:
+            output = ANSI_ESCAPE.sub("", "\n".join(filter(None, (completed.stderr, completed.stdout))))
+            lines = [line.strip() for line in output.replace("\r", "\n").splitlines()]
+            errors = [line for line in lines if line.startswith("Error:")]
+            raise StorageError("Ollama registration failed: " + (errors[-1] if errors else (lines[-1] if lines else "unknown error")))
+        marker = modelfile_dir / f"{filename}.registered.json"
+        marker.write_text(json.dumps({"name": name, "size": size}) + "\n", encoding="utf-8")
 
     @staticmethod
     def _manifest_digests(manifest: dict[str, Any]) -> list[str]:

@@ -137,14 +137,15 @@ a Concept Forge GGUF and have it registered with Ollama automatically. Downloads
 show byte progress, speed, ETA, cancellation, and retry state; incomplete files
 are never exposed to the model scanners.
 
-When rclone storage is enabled, set `EVERSPARK_BACKUP_REMOTE` to a separate
-remote directory to enable manual uploads from Runtime. Scan local Image Forge
-models, downloaded Concept Forge GGUF files, and outputs; select the files to
-upload. A Memory selection creates a consistent timestamped SQLite snapshot.
-Image models are uploaded to `IMAGE_FORGE_RCLONE_REMOTE` for the existing remote
-model picker. GGUF source files, outputs, and Memory snapshots are uploaded
-under `EVERSPARK_BACKUP_REMOTE`. Uploads do not delete remote data. Restoration
-of those GGUF/output/Memory backups in the WebUI is planned, not yet available.
+The Storage page discovers nested remote model directories from configured
+rclone roots. Users can save manual paths when directory names differ and select
+physical upload destinations when multiple paths match. Directly downloaded
+image models go back to the chosen image model directory; GGUF source files go
+to a separately discoverable GGUF directory. `EVERSPARK_BACKUP_REMOTE` optionally
+sets a writable data backup location; by default the first image source bucket
+uses an `everspark-backups` prefix. Local output files can be uploaded there.
+Character JSON and SQLite are uploaded and restored as verified batches. Restore
+saves the previous local data in `Data/Recovery` before replacing it.
 
 ## Repository status
 

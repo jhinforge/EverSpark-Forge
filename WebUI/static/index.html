@@ -284,6 +284,29 @@
               </div>
             </div>
           </div>
+          <div class="storage-panel">
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">REMOTE PATHS</p>
+                <h3>Directory mappings</h3>
+                <p class="section-copy">Automatic discovery searches model folders within the configured remotes. Add manual source directories when names differ. Upload targets must be writable physical remotes, not a union.</p>
+              </div>
+            </div>
+            <form id="remotePathsForm" class="remote-path-form">
+              <label>Checkpoint source <input data-path-kind="checkpoint" data-path-field="source" placeholder="r2-assets:bucket/custom-checkpoints"></label>
+              <label>Checkpoint upload target <input data-path-kind="checkpoint" data-path-field="upload" placeholder="r2-assets:bucket/models/checkpoints"></label>
+              <label>Diffusion source <input data-path-kind="diffusion_model" data-path-field="source" placeholder="r2-assets:bucket/custom-diffusion"></label>
+              <label>Diffusion upload target <input data-path-kind="diffusion_model" data-path-field="upload" placeholder="r2-assets:bucket/models/diffusion_models"></label>
+              <label>LoRA source <input data-path-kind="lora" data-path-field="source" placeholder="r2-assets:bucket/custom-loras"></label>
+              <label>LoRA upload target <input data-path-kind="lora" data-path-field="upload" placeholder="r2-assets:bucket/models/loras"></label>
+              <label>VAE source <input data-path-kind="vae" data-path-field="source" placeholder="r2-assets:bucket/custom-vae"></label>
+              <label>VAE upload target <input data-path-kind="vae" data-path-field="upload" placeholder="r2-assets:bucket/models/vae"></label>
+              <label>Ollama/GGUF source <input id="conceptSourcePath" placeholder="r2-assets:bucket/llms"></label>
+              <label>GGUF upload target <input id="conceptUploadPath" placeholder="r2-assets:bucket/everspark-gguf"></label>
+              <label>Data backup target <input id="dataBackupPath" placeholder="Default: bucket/everspark-backups"></label>
+              <button class="secondary-button" type="submit">Save mapping and scan</button>
+            </form>
+          </div>
           <div class="storage-panel" id="backupPanel">
             <div class="storage-heading">
               <div>
@@ -304,6 +327,14 @@
                 <span id="backupJobStatus"></span>
                 <span id="backupProgressDetail"></span>
               </div>
+            </div>
+            <div class="storage-heading restore-heading">
+              <div><h3>Restore character data</h3><p class="section-copy">Restore one complete batch of character JSON and Memory SQLite. Current data is saved under Data/Recovery before replacement. Restart EverSpark after restoring.</p></div>
+              <button class="ghost-button" id="refreshRestoreButton" type="button">Find restore points</button>
+            </div>
+            <div class="backup-actions">
+              <select id="restorePointSelect" aria-label="Data restore point"></select>
+              <button class="secondary-button" id="startRestoreButton" type="button">Restore selected batch</button>
             </div>
           </div>
           <div class="storage-panel direct-download-panel">

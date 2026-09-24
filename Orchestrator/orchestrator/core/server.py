@@ -83,6 +83,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/backup/jobs":
             job_id = parse_qs(parsed.query).get("job_id", [""])[0]
             self._send(200, {"ok": True, "job": self.server.orchestrator.backup_job(job_id)})
+        elif parsed.path == "/backup/restore-points":
+            try:
+                self._send(200, {"ok": True, "points": self.server.orchestrator.restore_points()})
+            except StorageError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
         elif parsed.path == "/downloads/jobs":
             job_id = parse_qs(parsed.query).get("job_id", [""])[0]
             self._send(
@@ -182,7 +187,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/subjects/revise",
             "/subjects/compile",
             "/storage/pull",
+            "/storage/paths",
             "/backup/upload",
+            "/backup/restore",
             "/downloads",
             "/downloads/cancel",
             "/downloads/retry",
@@ -242,10 +249,17 @@ class RequestHandler(BaseHTTPRequestHandler):
                     str(payload.get("kind", "")), str(payload.get("name", ""))
                 )
                 self._send(202, {"ok": True, "job": job})
+            elif request_path == "/storage/paths":
+                paths = self.server.orchestrator.save_storage_paths(payload.get("paths", {}))
+                self._send(200, {"ok": True, "paths": paths})
             elif request_path == "/backup/upload":
                 job = self.server.orchestrator.start_backup(
-                    payload.get("names", []), payload.get("memory") is True
+                    payload.get("names", []), payload.get("memory") is True,
+                    payload.get("targets", {}),
                 )
+                self._send(202, {"ok": True, "job": job})
+            elif request_path == "/backup/restore":
+                job = self.server.orchestrator.start_restore(str(payload.get("id", "")))
                 self._send(202, {"ok": True, "job": job})
             elif request_path == "/downloads":
                 job = self.server.orchestrator.start_download(

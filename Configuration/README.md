@@ -55,14 +55,14 @@ CONCEPT_FORGE_RCLONE_REMOTE=remote:path/.ollama/models
 EVERSPARK_BACKUP_REMOTE=remote:path/everspark-backups
 ```
 
-The Runtime page then scans Checkpoints, diffusion models, LoRAs, and Ollama
-manifests. Ollama identity files outside `models/` are deliberately ignored.
-The separate backup root enables manual upload of locally added image models,
-direct-download GGUF files, outputs, and timestamped SQLite Memory snapshots.
-Uploads never remove remote files. Image models go to the existing image remote
-and can be downloaded through the remote model picker. Original GGUF files,
-outputs, and Memory snapshots go to the separate backup root; restoring these
-backup files is not yet provided in the WebUI.
+The Storage page discovers model directories within the configured scan roots.
+Manual source paths and physical upload targets can be saved there for unusual
+layouts; they live beside the imported `rclone.conf` in private data. A union
+remote is suitable for scanning but uploads require a writable source remote.
+`EVERSPARK_BACKUP_REMOTE` is optional: without it, data backups use
+`everspark-backups` in the first image source bucket. Model upload targets can
+be selected in Storage. Character JSON and SQLite are backed up and restored
+together as verified batches. Uploads never delete remote files.
 
 Private files are normalized to ignored runtime locations:
 
