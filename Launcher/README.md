@@ -54,8 +54,9 @@ Managed services share one lifecycle entry point:
 ```
 
 After all services (or WebUI alone) start, the launcher prints local access
-instructions. On Vast.ai it uses `PUBLIC_IPADDR` and `VAST_TCP_PORT_22` to
-build the SSH tunnel command automatically. Print the instructions again with:
+instructions. When the cloud environment provides a recognized public address
+and mapped SSH port, it builds the SSH forwarding command automatically.
+Print the instructions again with:
 
 ```bash
 ./everspark access

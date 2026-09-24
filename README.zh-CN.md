@@ -36,7 +36,7 @@ cd EverSpark-Forge
 
 `setup` 创建被 Git 忽略的 `Data/` 目录，安装托管运行时，下载起步模型并准备生成路径；`start` 按依赖顺序启动 Concept Forge、Image Forge、Orchestrator 和 WebUI。没有 `.env` 时，模型、输出和记忆保存在运行 EverSpark 的机器上。
 
-在云端机器上可以访问 `http://127.0.0.1:8780`。如需在自己的电脑上打开 WebUI，运行 `./everspark access`，然后**在自己的电脑上**执行它打印的 SSH 转发命令，保持连接并访问输出的本地浏览器地址。云端环境如果未提供可识别的连接信息，可在私人配置中设置 `EVERSPARK_SSH_HOST` 与 `EVERSPARK_SSH_PORT`。详细步骤见[首次运行指南](Docs/Getting-Started.zh-CN.md)。
+在云端机器上可以访问 `http://127.0.0.1:8780`。如需在自己的电脑上打开 WebUI，可在云端运行 `./everspark share` 获得临时链接，结束时运行 `./everspark share stop`；或运行 `./everspark access`，然后**在自己的电脑上**执行它打印的 SSH 转发命令。云端环境如果未提供可识别的 SSH 连接信息，可在私人配置中设置 `EVERSPARK_SSH_HOST` 与 `EVERSPARK_SSH_PORT`。详细步骤见[首次运行指南](Docs/Getting-Started.zh-CN.md)。
 
 ## 文档
 

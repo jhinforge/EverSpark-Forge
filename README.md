@@ -120,17 +120,18 @@ restored from Ollama manifests and content-addressed blobs into
 identity keys are never restored. Active transfers show bytes, percentage,
 speed, ETA, and file counts, and the page can resume monitoring after refresh.
 
-Open `http://127.0.0.1:8780` on the cloud machine. When the cloud environment
-provides connection information the launcher recognizes, `start` prints the
-SSH forwarding command to run on your own computer. Use `./everspark access`
-to print it again. Otherwise, set `EVERSPARK_SSH_HOST` and
-`EVERSPARK_SSH_PORT` in your private configuration; the WebUI stays bound to
-localhost by default.
+Open `http://127.0.0.1:8780` on the cloud machine. To access WebUI on your own
+computer, run `./everspark share` on the cloud machine for an optional temporary
+link and stop it with `./everspark share stop` when finished. Alternatively,
+when the cloud environment provides recognized connection information, `start`
+prints an SSH forwarding command to run on your computer. Use
+`./everspark access` to print it again. Otherwise set `EVERSPARK_SSH_HOST` and
+`EVERSPARK_SSH_PORT` privately; WebUI stays bound to localhost by default.
 
-For a short demo without SSH forwarding, run `./everspark share` after the
-WebUI starts. It creates a temporary public URL without a Cloudflare account
-or configuration file. Use `./everspark share stop` when finished; the WebUI
-does not have login protection. See [Getting Started](Docs/Getting-Started.md).
+The temporary link needs no SSH key, Cloudflare account, or configuration file,
+but it requires `cloudflared` and outbound connectivity. Its automatic install
+requires root. WebUI has no login protection, so use this link for short tests
+or demos. See [Getting started](Docs/Getting-Started.md).
 
 The default setup installs a usable Concept Forge model and an Image Forge
 checkpoint; both can be replaced with compatible models. A public, LoRA-free

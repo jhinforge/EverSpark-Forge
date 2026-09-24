@@ -25,6 +25,7 @@ From the repository root:
 1. On the cloud machine, run `./everspark status webui`. If stopped, run `./everspark start`; if startup fails, inspect `Data/Logs/webui-service.log`.
 2. If `http://127.0.0.1:8780` opens **on the cloud machine** but not on your computer, run `./everspark access`. Execute its SSH forwarding command **on your computer**, keep the SSH session open, and visit the printed local address (normally `http://127.0.0.1:8080`).
 3. If no complete command is shown, verify the public SSH address and port. If necessary, configure `EVERSPARK_SSH_HOST` and `EVERSPARK_SSH_PORT` privately, then rerun `./everspark access`.
+4. For a temporary link, run `./everspark share status`. If none is running, run `./everspark share` on the cloud machine and open the printed URL. If an existing link fails, check WebUI readiness, whether sharing is still running, and connectivity from the cloud machine to Cloudflare. Restarting sharing may change the URL.
 
 The default WebUI listens only on localhost. The cloud machine's `127.0.0.1:8780` is not your computer's remote address.
 
@@ -61,9 +62,11 @@ Run `./everspark doctor`. rclone needs valid `rclone.conf`, image and Concept mo
 
 For outputs, choose **Outputs folder** to upload the whole directory. Character restore handles batch snapshots of character JSON and Memory SQLite and requires the prompted restart. It does not restore output images or models. See [Runtime and data](Runtime-and-Data.md).
 
-## 8. Tunnel enabled but inaccessible publicly
+## 8. Temporary link or Named Tunnel inaccessible publicly
 
-First verify WebUI locally on the cloud machine at `http://127.0.0.1:8780` and with `./everspark status webui`. Check Tunnel with `./everspark status`, then the UUID, hostname, credential file, and `CF_LOCAL_PORT` in your private settings. The latter must match the WebUI port at import. Inspect Tunnel-related logs under `Data/Logs/`. SSH forwarding is sufficient if you simply need browser access from your computer.
+**Temporary link from `./everspark share`:** On the cloud machine, run `./everspark status webui` and `./everspark share status`. For startup failures, read the command error and `Data/Logs/quick-tunnel.log` (or your `EVERSPARK_LOG_DIR`). Check WebUI health and outbound Cloudflare connectivity. Installing a missing `cloudflared` needs root and download access. Quick Tunnel is rejected when `~/.cloudflared/config.yaml` or `config.yml` exists for this user; check whether another Tunnel relies on that configuration before temporarily moving it. The temporary link does not use Named Tunnel settings such as `CF_TUNNEL_UUID`.
+
+**Configured Named Tunnel:** First verify WebUI locally on the cloud machine at `http://127.0.0.1:8780` and with `./everspark status webui`. Check Tunnel with `./everspark status`, then the UUID, hostname, credential file, and `CF_LOCAL_PORT` in your private settings. The latter must match the WebUI port at import. Inspect Tunnel-related logs under `Data/Logs/`. SSH forwarding works for access from your own computer; a temporary link can serve a short demo without Named Tunnel configuration. Stop the public link with `./everspark share stop` when finished; the WebUI has no login protection.
 
 ## Filing an issue
 

@@ -8,7 +8,7 @@ EverSpark Forge 发布的是源码。首次 `setup` 会联网安装托管运行�
 
 - 一台可使用 NVIDIA GPU 的 Linux x86_64 机器，具有网络连接，以及 `bash`、`python3`、`git`。
 - 供安装程序和模型使用的可用磁盘空间；具体下载来源和目标位置可先用 `setup --plan` 查看。
-- 如果从自己的电脑访问云端 WebUI，需要能通过 SSH 连接这台机器，并知道云端机器的公网地址和 SSH 端口。
+- 从自己的电脑访问云端 WebUI 可选用临时链接；如果选择 SSH 转发，则需要云端机器的公网地址、SSH 端口和登录权限。
 
 镜像中的 CUDA 版本与 EverSpark 安装的 PyTorch CUDA 档位是两回事。当前源码会根据 **NVIDIA 驱动能力和 GPU 架构**自动选择 PyTorch `cu126` 或 `cu128`；只有无法读取驱动能力时才以基础镜像的 CUDA runtime 作为回退判断。Blackwell GPU 需要支持 CUDA 12.8 的驱动及 `cu128` 档位。
 
@@ -42,7 +42,7 @@ cd EverSpark-Forge
 ./everspark share
 ```
 
-在自己的电脑上打开输出的 `https://*.trycloudflare.com` 链接。此模式不需要 `.env`、Cloudflare 账号、域名、SSH 密钥或隧道凭据。如果尚未安装 `cloudflared`，命令会使用现有安装器（需要 root 权限）。运行 `./everspark access` 或 `./everspark share status` 可再次查看链接；`./everspark share stop` 或 `./everspark stop` 可关闭。重启后链接可能变化。如果 `~/.cloudflared/config.yaml` 或 `config.yml` 已存在，临时链接可能无法创建。WebUI 当前没有登录验证：获得链接的人都可以操作页面，请仅用于短时间测试或演示。
+在自己的电脑上打开输出的 `https://*.trycloudflare.com` 链接。此模式不需要 `.env`、Cloudflare 账号、域名、SSH 密钥或隧道凭据；但云端机器必须能连接 Cloudflare。如果尚未安装 `cloudflared`，命令会使用现有安装器（需要 root 权限及下载网络）。运行 `./everspark access` 或 `./everspark share status` 可再次查看链接；`./everspark share stop` 或 `./everspark stop` 可关闭。重新启动共享后链接可能变化。如果 `~/.cloudflared/config.yaml` 或 `config.yml` 已存在，临时链接会被拒绝；错误详情见 `Data/Logs/quick-tunnel.log`（自定义日志目录时以 `EVERSPARK_LOG_DIR` 为准）。WebUI 当前没有登录验证：获得链接的人都可以操作页面，请仅用于短时间测试或演示。
 
 ### 第一次使用 SSH：准备密钥（可跳过）
 
@@ -120,6 +120,8 @@ ssh -p 22 root@example.com
 ```bash
 ./everspark status
 ./everspark access
+./everspark share status
+./everspark share stop
 ./everspark restart image
 ./everspark stop
 ```

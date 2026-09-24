@@ -27,6 +27,7 @@
 1. 在云端机器运行 `./everspark status webui`，检查 WebUI 是否健康。未启动时运行 `./everspark start`；启动失败则查看 `Data/Logs/webui-service.log`。
 2. 如果云端机器可以打开 `http://127.0.0.1:8780`，但自己的电脑打不开，运行 `./everspark access`，在**自己的电脑**执行输出的 SSH 转发命令，并保持 SSH 会话连接。浏览器打开输出的本地地址，默认 `http://127.0.0.1:8080`。
 3. 如果 `access` 没有给出完整命令，确认 SSH 公网地址和端口；必要时在私人配置中设置 `EVERSPARK_SSH_HOST`、`EVERSPARK_SSH_PORT`，再运行 `./everspark access`。
+4. 如果选用临时链接，先运行 `./everspark share status`；未启动时在云端机器运行 `./everspark share`，打开命令输出的链接。已有链接打不开时检查 WebUI 是否仍就绪、共享进程是否仍在，以及云端机器能否访问 Cloudflare；关闭后重新运行 `share` 可能得到不同链接。
 
 默认 WebUI 仅监听本机地址。不要将云端机器的 `127.0.0.1:8780` 直接填进自己电脑的浏览器，并期待它连接远端。
 
@@ -65,11 +66,13 @@
 
 上传输出时选择 **Outputs folder**；它会按整个输出目录处理，无须逐张选择。角色恢复只针对成批保存的角色 JSON 与 Memory SQLite；恢复后按页面提示重启 EverSpark。输出图片和模型不会随角色恢复按钮一并取回。数据的位置及迁移步骤见[运行时与数据生命周期](Runtime-and-Data.zh-CN.md)。
 
-## 8. 启用了 Tunnel，但外网打不开
+## 8. 临时链接或 Named Tunnel 在外网打不开
 
-先确认本地 WebUI 正常：在云端机器访问 `http://127.0.0.1:8780`，并检查 `./everspark status webui`。之后运行 `./everspark status` 检查 Tunnel。确认私人配置中的 Tunnel UUID、域名、凭据文件及 `CF_LOCAL_PORT`；导入时后者必须与 WebUI 端口一致。查看 `Data/Logs/` 中与 Tunnel 相关的日志。
+**使用 `./everspark share` 的临时链接：** 在云端机器运行 `./everspark status webui` 和 `./everspark share status`。启动失败先看命令报错及 `Data/Logs/quick-tunnel.log`（自定义日志目录时检查 `EVERSPARK_LOG_DIR`）。确认 WebUI 健康、云端机器可连接 Cloudflare；如尚未安装 `cloudflared`，自动安装需要 root 权限和下载网络。当前用户主目录下存在 `~/.cloudflared/config.yaml` 或 `config.yml` 时，临时链接会被拒绝；如要临时移开配置文件，应先确认自己没有依赖该配置运行的隧道。临时链接不使用 `CF_TUNNEL_UUID` 等 Named Tunnel 配置。
 
-如果只是希望从自己的电脑访问云端机器，SSH 转发即可，不要求先启用 Tunnel。
+**使用已配置的 Named Tunnel：** 先确认本地 WebUI 正常：在云端机器访问 `http://127.0.0.1:8780`，并检查 `./everspark status webui`。之后运行 `./everspark status` 检查 Tunnel。确认私人配置中的 Tunnel UUID、域名、凭据文件及 `CF_LOCAL_PORT`；导入时后者必须与 WebUI 端口一致。查看 `Data/Logs/` 中与 Tunnel 相关的日志。
+
+如果只是希望从自己的电脑访问云端机器，可用 SSH 转发；短时间演示可选临时链接，不要求配置 Named Tunnel。临时公网链接没有登录保护，使用完运行 `./everspark share stop`。
 
 ## 提交 Issue 时附什么
 

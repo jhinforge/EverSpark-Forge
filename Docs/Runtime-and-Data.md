@@ -10,7 +10,7 @@ Clone source → setup installs runtimes and starter models → start services
              → export or upload as needed → install and restore elsewhere
 ```
 
-`./everspark setup --plan` lists downloads and destinations without changing the machine. `setup` creates runtime directories, installs managed ComfyUI and Ollama, configures Python and model paths, and prepares starter models. `start` launches Concept Forge, Image Forge, Orchestrator, and WebUI in order; `status` checks health. Services bind to localhost by default. For cloud access, use the SSH forwarding instructions from `./everspark access`.
+`./everspark setup --plan` lists downloads and destinations without changing the machine. `setup` creates runtime directories, installs managed ComfyUI and Ollama, configures Python and model paths, and prepares starter models. `start` launches Concept Forge, Image Forge, Orchestrator, and WebUI in order; `status` checks health. Services bind to localhost by default. For cloud access, use the SSH forwarding instructions from `./everspark access`, or opt in to a temporary public URL with `./everspark share` after WebUI starts. Stop sharing with `./everspark share stop` after the demo; the link does not back up any data.
 
 Process identities and state are recorded under `Data/Runtime/Services/`. `./everspark stop` stops launcher-managed services; a healthy service started externally is marked external and is not treated as a launcher-owned process.
 

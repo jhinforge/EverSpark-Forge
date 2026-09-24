@@ -6,7 +6,7 @@
 
 从源码直接运行 `./everspark setup` 和 `./everspark start` 即可。默认使用本地存储，各服务监听本机地址；R2/rclone 和 Cloudflare Tunnel 不会自动启用。模型、输出、记忆及运行数据保存在仓库下被 Git 忽略的 `Data/` 目录。即使没有远程存储，也可以在 WebUI 的 Storage 页面通过公开直链下载兼容模型。
 
-云端访问默认通过 SSH 转发，按 `./everspark access` 输出的说明操作。不需要为了访问 WebUI 而先配置 Cloudflare。
+从自己的电脑访问云端 WebUI 可用 `./everspark access` 输出的 SSH 转发命令；短时间演示还可在启动 WebUI 后运行 `./everspark share`，获得临时公网链接。后者无需 SSH 密钥、`.env`、Cloudflare 账号或 Named Tunnel 凭据，但会主动公开当前无登录验证的 WebUI，使用完运行 `./everspark share stop`。两种方式均不要求配置下文的 Named Tunnel，详情见[首次运行指南](Getting-Started.zh-CN.md)。
 
 ## 2. 私人配置文件是什么
 
@@ -81,7 +81,9 @@ EVERSPARK_BACKUP_REMOTE=myremote:path/to/everspark-backups
 
 不设置时，程序会尝试在第一个图片模型来源桶下使用 `everspark-backups` 前缀。输出目录按整个文件夹同步；角色 JSON 与 SQLite 按成批快照上传与恢复。上传不会删除远程已有文件。导入并安装后运行 `./everspark doctor`，检查 rclone 配置和扫描根目录能否访问。
 
-## 6. 接入 Cloudflare Tunnel（可选）
+## 6. 接入 Cloudflare Named Tunnel（可选）
+
+以下是使用自己的域名和凭据的持久入口；临时 `./everspark share` 链接无需导入这些文件，也不会仅因运行 `./everspark start` 自动开启。
 
 如果已经拥有 Named Tunnel，把 `<CF_TUNNEL_UUID>.json` 与 `env.txt` 一起放入导入目录，并在环境文件中提供完整设置：
 

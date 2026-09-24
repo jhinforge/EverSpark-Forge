@@ -10,7 +10,7 @@
        → 按需导出或上传 → 在新机器重新安装并恢复
 ```
 
-`./everspark setup --plan` 先列出下载来源与目标，不改动机器。`./everspark setup` 创建运行目录，安装托管的 ComfyUI 与 Ollama，配置 Python 环境、模型路径并准备起步模型。`./everspark start` 依次启动 Concept Forge、Image Forge、Orchestrator、WebUI；`./everspark status` 返回服务的健康状态。默认只监听本机地址，云端机器可通过 `./everspark access` 给出的 SSH 转发方式访问 WebUI。
+`./everspark setup --plan` 先列出下载来源与目标，不改动机器。`./everspark setup` 创建运行目录，安装托管的 ComfyUI 与 Ollama，配置 Python 环境、模型路径并准备起步模型。`./everspark start` 依次启动 Concept Forge、Image Forge、Orchestrator、WebUI；`./everspark status` 返回服务的健康状态。默认只监听本机地址；云端访问可用 `./everspark access` 给出的 SSH 转发命令，或在 WebUI 启动后主动运行 `./everspark share` 获得临时公网链接。后者需要在结束演示时运行 `./everspark share stop`，链接本身不替代数据备份。
 
 服务状态与进程身份记录在 `Data/Runtime/Services/`。`./everspark stop` 停止启动器管理的服务；对原本就在运行、由其他人或程序启动的健康服务，启动器会标为外部服务，不把它当作自己的进程停止。
 

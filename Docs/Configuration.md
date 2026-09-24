@@ -4,7 +4,7 @@ This guide covers the default local mode, private configuration, models, remote 
 
 ## 1. Without configuration files
 
-Run `./everspark setup` and `./everspark start` from source. Storage stays local, services bind to localhost, and R2/rclone and Cloudflare Tunnel remain disabled. Models, outputs, memory, and runtime files live under the Git-ignored `Data/` directory. The WebUI **Storage** page can download compatible models from public direct URLs without remote storage. For cloud access use SSH forwarding as printed by `./everspark access`; Cloudflare is optional.
+Run `./everspark setup` and `./everspark start` from source. Storage stays local, services bind to localhost, and R2/rclone and Cloudflare Tunnel remain disabled. Models, outputs, memory, and runtime files live under the Git-ignored `Data/` directory. The WebUI **Storage** page can download compatible models from public direct URLs without remote storage. For cloud access, use SSH forwarding as printed by `./everspark access`, or run `./everspark share` after WebUI starts for a temporary public link. The latter needs no SSH key, `.env`, Cloudflare account, or Named Tunnel credentials, but exposes a WebUI with no login protection. Close it with `./everspark share stop`. Neither option requires the Named Tunnel below; see [Getting started](Getting-Started.md).
 
 ## 2. Private environment files
 
@@ -71,7 +71,9 @@ EVERSPARK_BACKUP_REMOTE=myremote:path/to/everspark-backups
 
 Otherwise the system attempts an `everspark-backups` prefix in the first image model source bucket. Outputs synchronize as a whole folder; character JSON and SQLite are uploaded and restored in verified batch snapshots. Uploads do not delete existing remote files. After importing and installing, run `./everspark doctor` to check remote access.
 
-## 6. Cloudflare Tunnel (optional)
+## 6. Cloudflare Named Tunnel (optional)
+
+The following persistent entry point uses your own hostname and credentials. The temporary `./everspark share` link does not import these files and does not start automatically with `./everspark start`.
 
 For an existing Named Tunnel, import `<CF_TUNNEL_UUID>.json` with `env.txt` and complete settings:
 

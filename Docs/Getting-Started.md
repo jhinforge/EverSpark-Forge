@@ -44,13 +44,16 @@ On the cloud machine, after `./everspark start` succeeds, run:
 
 Open the printed `https://*.trycloudflare.com` URL on your computer. This
 optional Quick Tunnel requires no `.env`, Cloudflare account, domain, SSH key,
-or tunnel credentials. If `cloudflared` is missing, the command uses the
-existing installer (which requires root). View the link again with
+or tunnel credentials; the cloud machine must still reach Cloudflare. If
+`cloudflared` is missing, the command uses the existing installer (which
+requires root and network access for the download). View the link again with
 `./everspark access` or `./everspark share status`; close it with
-`./everspark share stop` or `./everspark stop`. The link changes when restarted.
-Quick Tunnels may fail when `~/.cloudflared/config.yaml` or `config.yml`
-already exists. The WebUI has no login protection: anyone holding this URL can
-use it. Use this option for short tests or demos, not public deployment.
+`./everspark share stop` or `./everspark stop`. A new sharing session may have
+a different URL. Quick Tunnel startup is rejected if `~/.cloudflared/config.yaml`
+or `config.yml` exists. For failure details check `Data/Logs/quick-tunnel.log`
+(or `EVERSPARK_LOG_DIR` when configured). The WebUI has no login protection:
+anyone holding this URL can use it. Use this option for short tests or demos,
+not public deployment.
 
 ### First-time SSH key setup (optional)
 
@@ -128,6 +131,8 @@ If `doctor` reports remote paths or credentials, fix the enabled backend before 
 ```bash
 ./everspark status
 ./everspark access
+./everspark share status
+./everspark share stop
 ./everspark restart image
 ./everspark stop
 ```

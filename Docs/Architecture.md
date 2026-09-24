@@ -64,7 +64,7 @@ Managed setup prepares a usable starter path but does not require a particular p
 
 `./everspark setup` installs managed runtimes and prepares models. `./everspark start` launches Concept Forge, Image Forge, Orchestrator, and WebUI in order. Runtime checks processes, health endpoints, GPU, and logs; WebUI **Runtime** displays readiness.
 
-Local mode needs no remote storage, and public direct model downloads work independently. When rclone is enabled, Orchestrator uses Infrastructure storage to scan and pull remote models, upload outputs, and create and restore character snapshots. Users initiate uploads; outputs are selected as a whole folder, and character JSON and Memory SQLite are restored as a batch. Cloudflare Tunnel is an optional WebUI entry point; SSH forwarding also works with the default localhost binding.
+Local mode needs no remote storage, and public direct model downloads work independently. When rclone is enabled, Orchestrator uses Infrastructure storage to scan and pull remote models, upload outputs, and create and restore character snapshots. Users initiate uploads; outputs are selected as a whole folder, and character JSON and Memory SQLite are restored as a batch. WebUI binds to localhost by default: use SSH forwarding, or explicitly launch a temporary public entry point with `./everspark share` through `Runtime/Managed/quick_tunnel.py`. Sharing needs no private configuration but WebUI has no login protection. A credentialed Named Tunnel with your own hostname is a separate optional configuration.
 
 ## 5. Scope in v0.1
 

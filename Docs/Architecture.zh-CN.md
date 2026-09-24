@@ -64,7 +64,7 @@ WebUI 的资源列表由 Orchestrator 汇总：已注册工作流来自 Image Fo
 
 `./everspark setup` 安装托管运行时并准备模型；`./everspark start` 管理 Concept Forge、Image Forge、Orchestrator、WebUI 的启动顺序。Runtime 检查进程、健康接口、GPU 与日志，WebUI 的 Runtime 页面展示其中的就绪状态。
 
-本地模式不依赖远程存储；公开模型直链下载也可单独使用。启用 rclone 后，Orchestrator 经 Infrastructure 的存储实现执行远程模型扫描与拉取、输出上传、角色数据快照和恢复。上传由用户发起，输出按整个文件夹选择；角色 JSON 与 Memory SQLite 作为一批数据恢复。Cloudflare Tunnel 是 WebUI 的可选网络入口，SSH 转发也可以访问默认监听本机地址的 WebUI。
+本地模式不依赖远程存储；公开模型直链下载也可单独使用。启用 rclone 后，Orchestrator 经 Infrastructure 的存储实现执行远程模型扫描与拉取、输出上传、角色数据快照和恢复。上传由用户发起，输出按整个文件夹选择；角色 JSON 与 Memory SQLite 作为一批数据恢复。WebUI 默认只监听本机地址：可通过 SSH 转发访问；`Runtime/Managed/quick_tunnel.py` 则由 `./everspark share` 显式启动临时公网入口，无需私人配置，但当前 WebUI 没有登录验证。带域名和凭据的 Named Tunnel 是独立的可选配置。
 
 ## 5. v0.1 的实现范围
 
