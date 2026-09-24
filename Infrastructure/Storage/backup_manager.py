@@ -140,7 +140,7 @@ class BackupManager:
                 "remote": self.paths.backup_root()}
 
     def start(self, names: list[str], memory: bool = False,
-              targets: dict[str, str] | None = None) -> dict[str, Any]:
+              targets: dict[str, str] | None = None, outputs: bool = False) -> dict[str, Any]:
         self._validate()
         if targets is None:
             targets = {}
@@ -152,6 +152,11 @@ class BackupManager:
             raise StorageError("Upload targets must be a JSON object")
         if any(name not in available for name in selected):
             raise StorageError("A selected local backup file was not found")
+        # A selected output means the complete folder, including files created
+        # after the resource list was last scanned in the WebUI.
+        if outputs or any(name.startswith("outputs/") for name in selected):
+            selected = [name for name in selected if not name.startswith("outputs/")]
+            selected.extend(name for name in available if name.startswith("outputs/"))
         if memory and not self.memory_path.is_file():
             raise StorageError("Memory database was not found")
         if not selected and not memory:

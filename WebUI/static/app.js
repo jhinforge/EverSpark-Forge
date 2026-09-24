@@ -423,7 +423,26 @@ async function loadBackup() {
       "{count} local files found. Data backup target: {remote}. Character JSON and SQLite are saved together.",
       { count: data.files.length, remote: data.remote });
     else uiText(elements.backupSummary, "Enable rclone storage to upload backups.");
+    if (data.enabled) {
+      const outputs = data.files.filter((file) => file.name.startsWith("outputs/"));
+      const pending = outputs.filter((file) => !file.backed_up).length;
+      const folder = document.createElement("label");
+      folder.className = "backup-file backup-output-folder";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.id = "backupOutputs";
+      checkbox.checked = pending > 0;
+      checkbox.disabled = !outputs.length;
+      const description = document.createElement("span");
+      uiText(description, !outputs.length ? "Outputs folder · no files"
+        : pending ? "Outputs folder · {count} files · {size} · {pending} pending"
+          : "Outputs folder · {count} files · {size} · up to date",
+      { count: outputs.length, size: formatBytes(outputs.reduce((sum, file) => sum + file.bytes, 0)), pending });
+      folder.append(checkbox, description);
+      elements.backupFiles.append(folder);
+    }
     for (const file of data.files) {
+      if (file.name.startsWith("outputs/")) continue;
       const label = document.createElement("label");
       label.className = "backup-file";
       const checkbox = document.createElement("input");
@@ -507,12 +526,13 @@ async function startBackup() {
   const targets = Object.fromEntries($$(".backup-choice:checked").map((input) =>
     [input.value, input.closest("label")?.querySelector(".backup-target")?.value || ""]));
   const memory = elements.backupMemory.checked;
-  if (!names.length && !memory) return showNotice(t("Select a file or Memory snapshot first."));
+  const outputs = Boolean($("#backupOutputs")?.checked);
+  if (!names.length && !memory && !outputs) return showNotice(t("Select a file, outputs folder, or Memory snapshot first."));
   elements.startBackupButton.disabled = true;
   try {
     const data = await api("/api/backup/upload", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ names, memory, targets }),
+      body: JSON.stringify({ names, memory, outputs, targets }),
     });
     elements.backupMemory.checked = false;
     await pollBackupJob(data.job.job_id);

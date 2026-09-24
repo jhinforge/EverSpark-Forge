@@ -317,8 +317,8 @@ class Orchestrator:
         return self.storage.save_paths(mapping)
 
     def start_backup(self, names: list[str], memory: bool = False,
-                     targets: dict[str, str] | None = None) -> dict[str, Any]:
-        return self.backups.start(names, memory, targets)
+                     targets: dict[str, str] | None = None, outputs: bool = False) -> dict[str, Any]:
+        return self.backups.start(names, memory, targets, outputs)
 
     def backup_job(self, job_id: str = "") -> dict[str, Any] | None:
         return self.backups.job(job_id)

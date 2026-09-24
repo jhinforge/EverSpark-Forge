@@ -261,7 +261,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif request_path == "/backup/upload":
                 job = self.server.orchestrator.start_backup(
                     payload.get("names", []), payload.get("memory") is True,
-                    payload.get("targets", {}),
+                    payload.get("targets", {}), payload.get("outputs") is True,
                 )
                 self._send(202, {"ok": True, "job": job})
             elif request_path == "/backup/restore":

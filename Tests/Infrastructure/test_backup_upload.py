@@ -48,6 +48,43 @@ class FakeRclone:
 
 
 class BackupUploadTests(unittest.TestCase):
+    def test_outputs_folder_selection_includes_every_file_at_job_start(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "Data/Outputs"
+            (output / "sub").mkdir(parents=True)
+            (output / "sub/image.png").write_bytes(b"PNG")
+            config = {"storage": {"backend": "rclone", "rclone": {
+                "enabled": True, "image_remote": "r:images", "concept_remote": "r:ollama",
+                "backup_remote": "r:backup"}}, "memory": {"database": str(root / "memory.db")}}
+            with patch("backup_manager.REPO_ROOT", root):
+                manager = BackupManager(config)
+                manager.client = FakeRclone()
+                self.assertEqual([item["name"] for item in manager.resources()["files"]],
+                                 ["outputs/sub/image.png"])
+                (output / "sub/new.png").write_bytes(b"NEW")
+                (output / "metadata.txt").write_bytes(b"META")
+                job = manager.start([], outputs=True)
+                for _ in range(100):
+                    result = manager.job(job["job_id"])
+                    if result["status"] in {"completed", "failed"}:
+                        break
+                    time.sleep(.01)
+                self.assertEqual(result["status"], "completed", result["error"])
+                self.assertEqual(result["progress"]["total"], 3)
+                self.assertEqual(manager.client.remote["r:backup/outputs/sub/new.png"], b"NEW")
+                self.assertEqual(manager.client.remote["r:backup/outputs/metadata.txt"], b"META")
+                (output / "last.png").write_bytes(b"LAST")
+                legacy = manager.start(["outputs/sub/image.png"])
+                for _ in range(100):
+                    result = manager.job(legacy["job_id"])
+                    if result["status"] in {"completed", "failed"}:
+                        break
+                    time.sleep(.01)
+                self.assertEqual(result["status"], "completed", result["error"])
+                self.assertEqual(result["progress"]["total"], 4)
+                self.assertEqual(manager.client.remote["r:backup/outputs/last.png"], b"LAST")
+
     def test_union_upload_requires_physical_target_and_does_not_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

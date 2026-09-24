@@ -645,9 +645,9 @@ class APITests(unittest.TestCase):
         def backup_resources(self):
             return {"enabled": True, "files": [{"name": "outputs/a.png", "bytes": 3}], "memory": True}
 
-        def start_backup(self, names, memory=False, targets=None):
+        def start_backup(self, names, memory=False, targets=None, outputs=False):
             return {"job_id": "backup-1", "names": names, "memory": memory,
-                    "targets": targets, "status": "queued"}
+                    "outputs": outputs, "targets": targets, "status": "queued"}
 
         def save_storage_paths(self, mapping):
             return mapping
@@ -810,6 +810,8 @@ class APITests(unittest.TestCase):
         )
         self.assertEqual(status, 202)
         self.assertTrue(started["job"]["memory"])
+        _, output_job = self._request("/backup/upload", {"names": [], "outputs": True})
+        self.assertTrue(output_job["job"]["outputs"])
         status, job = self._request("/backup/jobs?job_id=backup-1")
         self.assertEqual(status, 200)
         self.assertEqual(job["job"]["status"], "completed")

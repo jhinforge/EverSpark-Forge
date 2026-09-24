@@ -295,6 +295,8 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
             )
         elif self.path == "/storage/paths":
             self._json(200, {"ok": True, "paths": payload["paths"]})
+        elif self.path == "/backup/upload":
+            self._json(202, {"ok": True, "job": {"job_id": "backup-1", "outputs": payload.get("outputs")}})
         elif self.path == "/backup/restore":
             self._json(202, {"ok": True, "job": {"id": payload["id"], "status": "queued"}})
         elif self.path in {"/downloads", "/downloads/retry", "/downloads/cancel"}:
@@ -458,6 +460,9 @@ class WebUIIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(status, 202)
         self.assertEqual(started["job"]["job_id"], "storage-job-1")
+        status, uploaded = self.request_json("/api/backup/upload", {"names": [], "outputs": True})
+        self.assertEqual(status, 202)
+        self.assertTrue(uploaded["job"]["outputs"])
         _, saved = self.request_json("/api/storage/paths", {"paths": {"concept_manual": ["r:llms"]}})
         self.assertEqual(saved["paths"]["concept_manual"], ["r:llms"])
         _, points = self.request_json("/api/backup/restore-points")

@@ -311,6 +311,7 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .backup-actions label, .backup-file { color: var(--muted); font-size: 11px; }
 .backup-files { display: grid; gap: 8px; max-height: 280px; overflow: auto; margin-top: 16px; }
 .backup-file { display: flex; align-items: center; gap: 10px; overflow-wrap: anywhere; }
+.backup-output-folder { padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255, 255, 255, .025); }
 .backup-file input, .backup-actions input { accent-color: var(--ember); }
 .remote-path-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin-top: 20px; }
 .remote-path-form label { display: grid; gap: 7px; min-width: 0; color: var(--muted); font-size: 12px; }
