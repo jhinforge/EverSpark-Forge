@@ -324,6 +324,20 @@
               <button class="secondary-button" type="submit">Save mapping and scan</button>
             </form>
           </div>
+          <div class="storage-panel" id="localDataPanel">
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">LOCAL DATA</p>
+                <h3>Character and Memory ZIP</h3>
+                <p class="section-copy">Download the four JSON documents for every character with a consistent Memory SQLite snapshot. Choose a ZIP below and click Validate and restore to upload, verify and place its data. Current data is saved in Data/Recovery; restart EverSpark after restoring.</p>
+              </div>
+              <button class="ghost-button" id="downloadDataButton" type="button">Download data ZIP</button>
+            </div>
+            <div class="backup-actions local-import-actions">
+              <input id="localDataFile" type="file" accept=".zip,application/zip" aria-label="Choose EverSpark data ZIP">
+              <button class="secondary-button" id="restoreDataButton" type="button">Validate and restore</button>
+            </div>
+          </div>
           <div class="storage-panel" id="backupPanel">
             <div class="storage-heading">
               <div>

@@ -191,6 +191,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/storage/paths",
             "/backup/upload",
             "/backup/restore",
+            "/data/archive",
+            "/data/import",
             "/downloads",
             "/downloads/cancel",
             "/downloads/retry",
@@ -258,6 +260,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif request_path == "/storage/paths":
                 paths = self.server.orchestrator.save_storage_paths(payload.get("paths", {}))
                 self._send(200, {"ok": True, "paths": paths})
+            elif request_path == "/data/archive":
+                archive_id = self.server.orchestrator.export_data_archive()
+                self._send(200, {"ok": True, "id": archive_id})
+            elif request_path == "/data/import":
+                result = self.server.orchestrator.restore_data_archive(str(payload.get("id", "")))
+                self._send(200, {"ok": True, **result})
             elif request_path == "/backup/upload":
                 job = self.server.orchestrator.start_backup(
                     payload.get("names", []), payload.get("memory") is True,

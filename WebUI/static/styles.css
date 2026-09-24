@@ -413,3 +413,6 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
   .forge-button { justify-content: space-between; width: 100%; }
   .gallery-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+.local-import-actions { justify-content: flex-start; flex-wrap: wrap; }
+.local-import-actions input[type="file"] { min-width: 0; max-width: 100%; color: var(--muted); }

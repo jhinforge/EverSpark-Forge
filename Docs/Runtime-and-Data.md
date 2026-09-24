@@ -42,7 +42,7 @@ Gallery shows recent images; **Download outputs ZIP** packages the entire `Data/
 
 ## 4. Back up what you need
 
-Without rclone, export the output ZIP and separately save private configuration, character and Memory data, and any models you need. Do not assume an arbitrary copy of a SQLite file while services are writing to it is a consistent character backup.
+Without rclone, use **Storage → Character and Memory ZIP → Download data ZIP** for a consistent SQLite snapshot and all four JSON files for each character. Save private configuration, models, and the Gallery output ZIP separately. The data ZIP excludes models and images.
 
 With rclone enabled and verified, initiate uploads under **Storage → Upload local data**:
 
@@ -59,8 +59,8 @@ Absent `EVERSPARK_BACKUP_REMOTE`, the first image model source bucket uses an `e
 2. To keep remote resources or a Tunnel, upload original `env.txt`, `rclone.conf`, and Tunnel credentials into `Configuration/Import/`, then run `./everspark configure`. Manual remote path mappings saved in Storage live in `Data/Configuration/rclone/model_paths.json`; transfer that file separately or re-enter those mappings.
 3. Run `./everspark setup --plan`, `./everspark setup`, `./everspark doctor`, and `./everspark start`; confirm services are ready.
 4. Pull required models from remote Storage, or redownload by direct URL. Check compatibility with the selected workflow.
-5. If you made a character snapshot, select it under **Storage → Restore character data**. The system verifies downloaded files, SQLite, and character documents; moves the previous local data to `Data/Recovery/`; then replaces it. Restart EverSpark as prompted to reload restored data.
-6. Transfer outputs separately: download a ZIP from Gallery on the old machine or retrieve previously uploaded files using your own storage tools. The v0.1 WebUI restore action restores **character data snapshots only**, not outputs.
+5. For a downloaded local data ZIP, choose it under **Storage → Character and Memory ZIP** and click **Validate and restore** (maximum ZIP size: 128 MiB). The ZIP is temporarily received in `Data/Imports/`; the system verifies its checksums, SQLite, and character documents before replacing data, saves the previous version in `Data/Recovery/`, and removes the uploaded ZIP. Alternatively, select a remote restore point under **Storage → Restore character data**. Restart EverSpark after either restore.
+6. Transfer outputs separately: download a ZIP from Gallery on the old machine or retrieve previously uploaded files using your own storage tools. These WebUI restore actions restore **character data snapshots only**, not outputs.
 
 Neither source nor default setup contains your characters, history, outputs, or private models. A complete move depends on exporting or backing these up before the old machine disappears.
 

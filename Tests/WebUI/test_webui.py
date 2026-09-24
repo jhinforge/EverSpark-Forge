@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -60,6 +61,8 @@ class ParsingTests(unittest.TestCase):
 class MockUpstreamHandler(BaseHTTPRequestHandler):
     received_task: dict | None = None
     revision = 1
+    archive_root: Path | None = None
+    received_import: bytes | None = None
 
     @classmethod
     def subject(cls) -> dict:
@@ -295,6 +298,14 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
             )
         elif self.path == "/storage/paths":
             self._json(200, {"ok": True, "paths": payload["paths"]})
+        elif self.path == "/data/archive":
+            path = self.archive_root / "Data/Runtime/Archives" / ("everspark-data-" + "a" * 32 + ".zip")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"test archive")
+            self._json(200, {"ok": True, "id": "a" * 32})
+        elif self.path == "/data/import":
+            type(self).received_import = (self.archive_root / "Data/Imports" / (payload["id"] + ".zip")).read_bytes()
+            self._json(200, {"ok": True, "subjects": 1, "recovery": "Data/Recovery/test", "restart_required": True})
         elif self.path == "/backup/upload":
             self._json(202, {"ok": True, "job": {"job_id": "backup-1", "outputs": payload.get("outputs")}})
         elif self.path == "/backup/restore":
@@ -516,6 +527,23 @@ class WebUIIntegrationTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as caught:
             urlopen(self.base_url + "/api/image/view?filename=../private", timeout=5)
         self.assertEqual(caught.exception.code, 400)
+
+    def test_local_data_archive_download_and_restore_upload(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            MockUpstreamHandler.archive_root = root
+            with patch.object(app, "REPO_ROOT", root):
+                with urlopen(self.base_url + "/api/data/archive", timeout=5) as response:
+                    self.assertEqual(response.headers["Content-Type"], "application/zip")
+                    self.assertEqual(response.read(), b"test archive")
+                self.assertFalse((root / "Data/Runtime/Archives" / ("everspark-data-" + "a" * 32 + ".zip")).exists())
+                request = Request(self.base_url + "/api/data/import", data=b"test archive",
+                                  headers={"Content-Type": "application/zip"}, method="POST")
+                with urlopen(request, timeout=5) as response:
+                    self.assertEqual(json.loads(response.read())["subjects"], 1)
+                self.assertEqual(MockUpstreamHandler.received_import, b"test archive")
+                self.assertEqual(list((root / "Data/Imports").iterdir()), [])
+            MockUpstreamHandler.archive_root = None
 
     def test_output_archive_contains_the_complete_output_tree(self) -> None:
         with urlopen(self.base_url + "/api/outputs/archive", timeout=5) as response:

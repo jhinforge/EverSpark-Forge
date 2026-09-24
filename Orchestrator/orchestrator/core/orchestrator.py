@@ -18,6 +18,7 @@ sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Storage"))
 from r2_manager import R2StorageManager  # noqa: E402
 from download_manager import DirectDownloadManager  # noqa: E402
 from backup_manager import BackupManager  # noqa: E402
+from local_data_archive import LocalDataArchive  # noqa: E402
 
 
 class BusyError(RuntimeError):
@@ -34,6 +35,9 @@ class Orchestrator:
         self.storage = R2StorageManager(config)
         self.downloads = DirectDownloadManager(config)
         self.backups = BackupManager(config)
+        self.data_archive = LocalDataArchive(
+            self.backups.memory_path, self.backups.subject_root, REPO_ROOT
+        )
         memory_config = config["memory"]
         self.memory = SQLiteMemoryStore(
             memory_config["database"],
@@ -303,6 +307,25 @@ class Orchestrator:
 
     def storage_resources(self) -> dict[str, Any]:
         return self.storage.resources()
+
+    def export_data_archive(self) -> str:
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("A task is running; try again after it completes")
+        try:
+            with self.memory._subject_lock:
+                archive_id, _ = self.data_archive.export()
+            return archive_id
+        finally:
+            self._task_lock.release()
+
+    def restore_data_archive(self, archive_id: str) -> dict[str, Any]:
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("A task is running; try again after it completes")
+        try:
+            with self.memory._subject_lock:
+                return self.data_archive.restore(archive_id)
+        finally:
+            self._task_lock.release()
 
     def backup_resources(self) -> dict[str, Any]:
         return self.backups.resources()

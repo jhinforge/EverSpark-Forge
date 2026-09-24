@@ -8,6 +8,7 @@ import tempfile
 import threading
 import time
 import zipfile
+import uuid
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -203,6 +204,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/history": lambda: self._history(parse_qs(parsed.query)),
             "/api/image/view": lambda: self._proxy_image(parse_qs(parsed.query)),
             "/api/outputs/archive": self._output_archive,
+            "/api/data/archive": self._data_archive,
         }
         if parsed.path in routes:
             routes[parsed.path]()
@@ -223,6 +225,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/subjects/compile": "/subjects/compile",
         }
         try:
+            if path == "/api/data/import":
+                self._data_import()
+                return
             payload = self._read_json()
             if path == "/api/generate":
                 self._generate(payload)
@@ -453,6 +458,72 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(exc.code, {"ok": False, "error": "Image not found"})
         except (URLError, TimeoutError) as exc:
             self._upstream_unavailable(exc, "Image Forge")
+
+    def _data_archive(self) -> None:
+        try:
+            status, response = request_json(
+                f"{self.server.settings.orchestrator_url}/data/archive",
+                self.server.settings.request_timeout,
+                {},
+            )
+        except (URLError, TimeoutError) as exc:
+            self._upstream_unavailable(exc)
+            return
+        if status != 200 or not response.get("ok"):
+            self._json(status, response)
+            return
+        archive_id = str(response.get("id", ""))
+        if len(archive_id) != 32 or any(char not in "0123456789abcdef" for char in archive_id):
+            self._json(502, {"ok": False, "error": "Invalid archive response"})
+            return
+        path = REPO_ROOT / "Data/Runtime/Archives" / f"everspark-data-{archive_id}.zip"
+        response_started = False
+        try:
+            size = path.stat().st_size
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", f'attachment; filename="EverSpark-Data-{archive_id}.zip"')
+            self.send_header("Content-Length", str(size))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            response_started = True
+            with path.open("rb") as source:
+                while chunk := source.read(1024 * 1024):
+                    self.wfile.write(chunk)
+        except OSError as exc:
+            if not response_started:
+                self._json(500, {"ok": False, "error": str(exc)})
+        finally:
+            path.unlink(missing_ok=True)
+
+    def _data_import(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise ValueError("ZIP upload size is invalid") from exc
+        if length < 1 or length > 128 * 1024 * 1024:
+            raise ValueError("ZIP upload must be between 1 byte and 128 MiB")
+        imports = REPO_ROOT / "Data/Imports"
+        imports.mkdir(parents=True, exist_ok=True)
+        archive_id = uuid.uuid4().hex
+        path = imports / f"{archive_id}.zip"
+        try:
+            remaining = length
+            with path.open("xb") as output:
+                while remaining:
+                    chunk = self.rfile.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        raise ValueError("ZIP upload was interrupted")
+                    output.write(chunk)
+                    remaining -= len(chunk)
+            status, response = request_json(
+                f"{self.server.settings.orchestrator_url}/data/import",
+                self.server.settings.request_timeout,
+                {"id": archive_id},
+            )
+            self._json(status, response)
+        finally:
+            path.unlink(missing_ok=True)
 
     def _output_archive(self) -> None:
         if not self.server.archive_lock.acquire(blocking=False):

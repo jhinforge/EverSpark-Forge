@@ -51,6 +51,9 @@ const elements = {
   generateModeButton: $("#generateModeButton"),
   galleryGrid: $("#galleryGrid"),
   downloadOutputsButton: $("#downloadOutputsButton"),
+  downloadDataButton: $("#downloadDataButton"),
+  localDataFile: $("#localDataFile"),
+  restoreDataButton: $("#restoreDataButton"),
   runtimeGrid: $("#runtimeGrid"),
   healthDot: $("#globalHealthDot"),
   healthTitle: $("#globalHealthTitle"),
@@ -1350,6 +1353,49 @@ function downloadOutputsArchive() {
   }, 1500);
 }
 
+async function downloadDataArchive() {
+  hideNotice();
+  elements.downloadDataButton.disabled = true;
+  try {
+    const response = await fetch("/api/data/archive", { cache: "no-store" });
+    if (!response.ok) {
+      let message = t("Could not create data ZIP");
+      try { message = (await response.json()).error || message; } catch (_error) { /* keep fallback */ }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "EverSpark-Data.zip";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) { showNotice(error.message); }
+  finally { elements.downloadDataButton.disabled = false; }
+}
+
+async function restoreDataArchive() {
+  const file = elements.localDataFile.files?.[0];
+  if (!file) { showNotice(t("Choose an EverSpark data ZIP first.")); return; }
+  if (file.size < 1 || file.size > 128 * 1024 * 1024) {
+    showNotice(t("ZIP upload must be between 1 byte and 128 MiB")); return;
+  }
+  if (!window.confirm(t("Replace local character JSON and SQLite with this ZIP? Current data will be kept in Data/Recovery. Restart EverSpark after restore."))) return;
+  hideNotice();
+  elements.restoreDataButton.disabled = true;
+  try {
+    const result = await api("/api/data/import", {
+      method: "POST", headers: { "Content-Type": "application/zip" }, body: file,
+    });
+    elements.localDataFile.value = "";
+    showNotice(t("Restored {count} characters. Previous data is in {path}. Restart EverSpark to load the restored Memory.",
+      { count: result.subjects, path: result.recovery }), "success");
+  } catch (error) { showNotice(error.message); }
+  finally { elements.restoreDataButton.disabled = false; }
+}
+
 function runtimeCard(title, online, copy, args = {}) {
   const card = document.createElement("article");
   card.className = "runtime-card";
@@ -1421,6 +1467,8 @@ function bindEvents() {
   });
   $("#refreshHistoryButton").addEventListener("click", loadHistory);
   elements.downloadOutputsButton.addEventListener("click", downloadOutputsArchive);
+  elements.downloadDataButton.addEventListener("click", downloadDataArchive);
+  elements.restoreDataButton.addEventListener("click", restoreDataArchive);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);
   $("#refreshStorageButton").addEventListener("click", loadRemoteStorage);
   $("#refreshBackupButton").addEventListener("click", loadBackup);
