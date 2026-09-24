@@ -1,5 +1,7 @@
 # EverSpark Forge · v0.1
 
+**English** · [中文](README.zh-CN.md)
+
 EverSpark Forge treats compute environments as disposable, while preserving workflows, configuration, and user-owned data as persistent state.
 
 EverSpark Forge is a personal AI infrastructure and orchestration system.
@@ -41,7 +43,7 @@ storage and public networking are optional integrations.
 | --- | --- |
 | **Orchestrator** | Central routing, session coordination, and task execution |
 | **Concept Forge** | Discussion, structured intent, schema validation, and prompt compilation |
-| **Memory** | Working, episodic, and structured state memory |
+| **Memory** | Working and structured character memory; episodic memory is planned |
 | **Image Forge** | Image workflow execution through pluggable backends such as ComfyUI |
 | **EverSpark WebUI** | The user-facing conversation, generation, and runtime interface |
 | **Runtime** | Health checks, processes, hardware discovery, and logging |
