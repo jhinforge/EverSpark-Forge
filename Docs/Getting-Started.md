@@ -26,15 +26,28 @@ cd EverSpark-Forge
 ./everspark status
 ```
 
+To open WebUI **immediately via a temporary link** on your own computer, run this on the cloud machine after `start` succeeds:
+
+```bash
+./everspark share
+```
+
+Open the printed `https://*.trycloudflare.com` URL in your computer's browser. When finished, run `./everspark share stop` on the cloud machine. `share` is optional; `start` does not create a public link. For SSH access, skip `share` and follow the [forwarding steps below](#get-and-run-the-forwarding-command).
+
 `setup --plan` lists intended runtimes, model sources, and local destinations without changing the machine. `setup` creates the Git-ignored `Data/` directory, installs managed ComfyUI, Ollama, and Python environments, downloads starter models, and imports the Concept Forge model into Ollama. Check the plan for actual download sizes and destinations.
 
 `doctor` checks basic commands, configuration, and GPU visibility. `start` launches Concept Forge, Image Forge, Orchestrator, and WebUI in dependency order. `status` checks their health. If setup fails, fix the reported dependency or network issue and rerun it. An accessible WebUI alone does not establish that the models are ready for generation.
 
 For options, effects, and file changes see the command reference for [installation](Commands.md#1-initialization-configuration-and-installation) and [service management](Commands.md#2-service-management).
 
-Without `.env`, storage stays on the machine running EverSpark and services bind to localhost by default. On that machine, open `http://127.0.0.1:8780`.
+Without `.env`, storage stays on the machine running EverSpark and services bind to localhost by default. On that machine, open `http://127.0.0.1:8780`. Neither SSH forwarding nor a temporary link requires a private EverSpark configuration file.
 
 ## 3. Access the cloud WebUI from your computer
+
+| Method | Open on your computer | Requirements | Best for |
+| --- | --- | --- | --- |
+| SSH forwarding | Run `./everspark access` on the cloud machine, execute the printed SSH command on your computer, then open its local URL (normally `http://127.0.0.1:8080`) | SSH login to the cloud machine, its public SSH address and mapped port, usually an SSH key; keep the session open | Regular personal access while WebUI stays bound to the cloud machine's localhost |
+| Temporary link | Run `./everspark share` on the cloud machine, then open the printed public HTTPS URL on your computer | Outbound access from the cloud machine to Cloudflare; no SSH key, Cloudflare account, or `.env` | Short tests or demos; WebUI has no login protection, so anyone with the link can operate it. Close with `./everspark share stop` |
 
 ### Temporary link without SSH
 

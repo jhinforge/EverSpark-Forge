@@ -26,15 +26,28 @@ cd EverSpark-Forge
 ./everspark status
 ```
 
+如果想在自己的电脑上**直接通过临时链接**打开 WebUI，确认 `start` 成功后，再在云端机器运行：
+
+```bash
+./everspark share
+```
+
+在自己的电脑浏览器打开输出的 `https://*.trycloudflare.com` 地址；用完在云端运行 `./everspark share stop`。`share` 是可选的，`start` 不会自动创建公网链接。想通过 SSH 访问则无需运行 `share`，按[下方的 SSH 转发步骤](#查看并运行转发命令)操作。
+
 `setup --plan` 只列出准备安装的运行时、模型来源与本地目标，不修改机器。`setup` 创建被 Git 忽略的 `Data/` 运行目录，安装托管的 ComfyUI、Ollama 及 Python 环境，下载起步模型，并将 Concept Forge 模型导入 Ollama。下载量以计划输出为准。
 
 `doctor` 检查基础命令、配置及 GPU 可见性；`start` 按依赖顺序启动 Concept Forge、Image Forge、Orchestrator 和 WebUI；`status` 用于复查服务状态。若 `setup` 中途失败，先根据报错处理依赖或网络问题，再重新运行；不要在模型尚未准备好时把“WebUI 能打开”当作生成链路已可用。
 
 这些命令的参数、作用及实际改动见[命令手册：初始化、配置和安装](Commands.zh-CN.md#1-初始化配置和安装)与[管理服务](Commands.zh-CN.md#2-管理服务)。
 
-没有 `.env` 时，存储默认为本地，服务默认监听本机地址。启动后可在云端机器打开 `http://127.0.0.1:8780`。
+没有 `.env` 时，存储默认为本地，服务默认监听本机地址。启动后可在云端机器打开 `http://127.0.0.1:8780`。SSH 转发与临时链接均无需 EverSpark 私人配置文件。
 
 ## 3. 从自己的电脑访问云端 WebUI
+
+| 方式 | 自己电脑如何打开 | 需要什么 | 适合什么情况 |
+| --- | --- | --- | --- |
+| SSH 转发 | 在云端运行 `./everspark access` 查看命令，在自己电脑执行该 SSH 命令，再打开本机地址（默认 `http://127.0.0.1:8080`） | 有权登录云端机器；知道公网 SSH 地址和映射端口，通常使用 SSH 密钥；保持 SSH 会话连接 | 自己长期使用，WebUI 继续只监听云端本机地址 |
+| 临时链接 | 在云端运行 `./everspark share`，自己电脑打开输出的公网 HTTPS 链接 | 云端机器能连接 Cloudflare；无需 SSH 密钥、Cloudflare 账号或 `.env` | 短时间测试或演示；WebUI 没有登录验证，持有链接的人都能操作，结束后运行 `./everspark share stop` |
 
 ### 不用 SSH：临时链接
 
