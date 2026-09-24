@@ -89,8 +89,8 @@ For ordinary use, manage services with the top-level `start|stop|restart|status`
 | `./everspark concept new <subject_id> <display_name>` | Creates blank Character Subject v1 JSON and prints it; **does not save a file or select it for a conversation**. |
 | `./everspark concept validate <file>` | Reads and validates a character subject JSON file, printing the result without changing the file. |
 | `./everspark concept compile <file>` | Validates a subject and prints positive and negative prompt fragments; does not submit an image task. |
-| `./everspark orchestrator start` | Directly runs the Orchestrator server script for isolated diagnosis; it is not the full managed startup sequence of `./everspark start`. |
-| `./everspark webui start` | Directly runs the WebUI server script for isolated diagnosis; does not start other modules. |
+| `./everspark orchestrator start` | Starts the Orchestrator server process directly for isolated diagnosis; it is not the full managed startup sequence of `./everspark start`. |
+| `./everspark webui start` | Starts the WebUI server process directly for isolated diagnosis; does not start other modules. |
 | `./everspark orchestrator console` | Opens an interactive terminal that sends requests to a running Orchestrator. `/history` reads current session context, `/subject <id>` attaches a subject, `/subject clear` detaches it, and `/exit` quits. **`/clear` or `/new` clears the current session context.** |
 
 For supported module subcommands run `./everspark image help`, `./everspark concept --help`, `./everspark orchestrator help`, or `./everspark webui help`.

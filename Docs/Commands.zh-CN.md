@@ -1,6 +1,6 @@
 # EverSpark Forge 命令手册（v0.1）
 
-本文按当前源码中的 `./everspark` 入口整理命令、参数和实际影响。以下命令从**云端 Linux 仓库根目录**执行；安装脚本以外的 `everspark` 形式，只有运行 `bash Launcher/install.sh` 加入用户 PATH 后才可直接使用。本地 Windows 运行环境尚未验证。
+本文按当前源码中的 `./everspark` 入口整理命令、参数和实际影响。以下命令从**云端 Linux 仓库根目录**执行；运行 `bash Launcher/install.sh` 将启动器加入用户 PATH 后，也可以直接输入 `everspark`。本地 Windows 运行环境尚未验证。
 
 需要完整部署步骤请先看[首次运行指南](Getting-Started.zh-CN.md)；私人文件怎么准备见[配置指南](Configuration.zh-CN.md)，运行数据位置见[运行与数据](Runtime-and-Data.zh-CN.md)。可以随时运行 `./everspark help` 查看顶层清单。方括号表示可选参数，尖括号表示要换成自己的值；不要照抄括号。
 
@@ -89,8 +89,8 @@
 | `./everspark concept new <subject_id> <display_name>` | 创建空的 Character Subject v1 JSON 并打印到终端，**不会自动保存为文件或加入当前会话**。 |
 | `./everspark concept validate <文件>` | 读取并校验角色主体 JSON，打印结果，不改原文件。 |
 | `./everspark concept compile <文件>` | 校验角色主体并输出正、负向提示词片段；不向 Image Forge 提交生成。 |
-| `./everspark orchestrator start` | 直接运行 Orchestrator 服务脚本，适合单独调试；它不是按顺序启动整套托管服务的 `./everspark start`。 |
-| `./everspark webui start` | 直接运行 WebUI 服务脚本，适合单独调试；不会启动其余模块。 |
+| `./everspark orchestrator start` | 直接启动 Orchestrator 服务进程，适合单独调试；它不是按顺序启动整套托管服务的 `./everspark start`。 |
+| `./everspark webui start` | 直接启动 WebUI 服务进程，适合单独调试；不会启动其余模块。 |
 | `./everspark orchestrator console` | 启动交互终端，向正在运行的 Orchestrator 提交请求。`/history` 查看当前会话上下文，`/subject <id>` 指定主体，`/subject clear` 取消指定，`/exit` 退出；**`/clear` 或 `/new` 会清空当前会话上下文**。 |
 
 模块入口可分别运行 `./everspark image help`、`./everspark concept --help`、`./everspark orchestrator help`、`./everspark webui help` 查看当前支持的子命令。

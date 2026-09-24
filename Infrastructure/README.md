@@ -57,7 +57,7 @@ Restart EverSpark after restoring data.
 ## Network
 
 `Network/Tunnel` implements the existing Cloudflare Named Tunnel flow using a
-tunnel UUID, hostname, local port, and credential JSON. The scripts exit
+tunnel UUID, hostname, local port, and credential JSON. Tunnel commands exit
 successfully without starting cloudflared while
 `EVERSPARK_NETWORK_BACKEND=local`.
 
