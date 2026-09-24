@@ -78,6 +78,8 @@ h1, h2, h3, p { margin: 0; }
 .brand-mark span { width: 11px; height: 18px; background: var(--ember); clip-path: polygon(55% 0, 100% 38%, 65% 100%, 52% 63%, 0 75%, 26% 26%); filter: drop-shadow(0 0 8px var(--ember)); }
 .brand-name { font-size: 16px; font-weight: 720; letter-spacing: -.02em; }
 .brand-subtitle { margin-top: 2px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.source-link { display: block; margin-top: 8px; color: var(--muted); font-size: 11px; text-align: center; text-decoration: underline; }
+.source-link:hover { color: var(--text); }
 
 .nav { display: grid; gap: 7px; margin-top: 42px; }
 .nav-item {

@@ -6,9 +6,8 @@ without binding those workflows to one machine, one model provider, or one
 execution backend.
 
 > [!IMPORTANT]
-> This repository is currently being initialized. The one-command launcher is
-> available for initialization, diagnostics, and the migrated Orchestrator,
-> but this is not yet a finished release.
+> The source code is available for testing. A versioned public release has not
+> been published yet.
 
 ## Product goal
 
@@ -172,5 +171,7 @@ saves the previous local data in `Data/Recovery` before replacing it.
 
 ## License
 
-No open-source license has been selected yet. Until a license is added, all
-rights are reserved by the repository owner.
+EverSpark Forge is licensed under the GNU Affero General Public License,
+version 3 only (AGPL-3.0-only). See [LICENSE](LICENSE) for the full terms.
+
+Models, workflows, and other third-party resources retain their own licenses.

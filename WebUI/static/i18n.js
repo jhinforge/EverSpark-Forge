@@ -11,6 +11,7 @@
     "Checking runtime": "正在检查运行环境",
     "Connecting to local services": "正在连接本地服务",
     "LOCAL-FIRST · V0.1": "本地优先 · V0.1",
+    "Source code": "源代码",
     "WORKSPACE / FORGE": "工作区 / FORGE",
     "WORKSPACE / SUBJECTS": "工作区 / 角色",
     "WORKSPACE / GALLERY": "工作区 / 图库",
