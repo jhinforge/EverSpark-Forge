@@ -54,7 +54,7 @@ class SQLiteMemoryStore:
 
                 CREATE TABLE IF NOT EXISTS session_subjects (
                     session_id TEXT PRIMARY KEY,
-                    subject_id TEXT NOT NULL UNIQUE,
+                    subject_id TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -105,6 +105,30 @@ class SQLiteMemoryStore:
                 );
                 """
             )
+            # Older databases restricted each subject to one session. Rebuild
+            # only that table so existing characters can be selected elsewhere.
+            for index in connection.execute("PRAGMA index_list(session_subjects)").fetchall():
+                if not index[2]:
+                    continue
+                columns = [row[2] for row in connection.execute(
+                    f'PRAGMA index_info("{index[1]}")'
+                ).fetchall()]
+                if columns == ["subject_id"]:
+                    connection.execute("""
+                        CREATE TABLE session_subjects_new (
+                            session_id TEXT PRIMARY KEY,
+                            subject_id TEXT NOT NULL,
+                            created_at TEXT NOT NULL,
+                            updated_at TEXT NOT NULL
+                        )
+                    """)
+                    connection.execute("""
+                        INSERT INTO session_subjects_new
+                        SELECT session_id, subject_id, created_at, updated_at FROM session_subjects
+                    """)
+                    connection.execute("DROP TABLE session_subjects")
+                    connection.execute("ALTER TABLE session_subjects_new RENAME TO session_subjects")
+                    break
             task_columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(tasks)").fetchall()
             }
@@ -285,6 +309,21 @@ class SQLiteMemoryStore:
                 (session_id,),
             ).fetchone()
         return None if row is None else str(row[0])
+
+    def select_session_subject(self, session_id: str, subject_id: str) -> None:
+        if not session_id:
+            raise ValueError("session_id cannot be empty")
+        if not subject_id or self.get_subject(subject_id) is None:
+            raise ValueError(f"Subject not found: {subject_id}")
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            connection.execute("""
+                INSERT INTO session_subjects(session_id, subject_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    subject_id = excluded.subject_id,
+                    updated_at = excluded.updated_at
+            """, (session_id, subject_id, now, now))
 
     def record_conversation(
         self, session_id: str, user_text: str, assistant_text: str

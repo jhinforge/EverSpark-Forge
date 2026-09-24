@@ -6,6 +6,7 @@ const uiAttr = (node, property, key, args) => i18n.bind(node, key, args, propert
 const state = {
   subjects: [],
   selectedSubject: null,
+  selectingSubject: false,
   mode: "discuss",
   resources: { workflows: [], checkpoints: [], vaes: [], loras: [], llms: [], defaults: {} },
   remoteStorage: null,
@@ -39,6 +40,8 @@ const elements = {
   subjectAvatar: $("#subjectAvatar"),
   composerContext: $("#composerSubjectContext"),
   subjectGrid: $("#subjectGrid"),
+  subjectPicker: $("#subjectPicker"),
+  useSubjectButton: $("#useSubjectButton"),
   resultStage: $("#resultStage"),
   generationState: $("#generationState"),
   scenePrompt: $("#scenePrompt"),
@@ -759,11 +762,64 @@ function traitValues(document) {
   ].filter(Boolean).slice(0, 7);
 }
 
+function updateSubjectPickerButton() {
+  elements.useSubjectButton.disabled = state.selectingSubject || !elements.subjectPicker.value
+    || elements.subjectPicker.value === state.selectedSubject?.subject_id;
+}
+
+function renderSubjectPicker() {
+  const previous = elements.subjectPicker.value;
+  elements.subjectPicker.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  uiText(placeholder, "Choose a character");
+  elements.subjectPicker.appendChild(placeholder);
+  for (const item of state.subjects) {
+    const option = document.createElement("option");
+    option.value = item.subject_id;
+    option.textContent = `${item.display_name || item.subject_id} · ${item.subject_id}`;
+    elements.subjectPicker.appendChild(option);
+  }
+  const current = state.selectedSubject?.subject_id;
+  elements.subjectPicker.value = [current, previous].find((id) =>
+    [...elements.subjectPicker.options].some((option) => option.value === id)) || "";
+  elements.subjectPicker.disabled = !state.subjects.length || state.selectingSubject;
+  updateSubjectPickerButton();
+}
+
+async function selectExistingSubject(subjectId, openForge = false) {
+  if (!subjectId || state.selectingSubject) return;
+  state.selectingSubject = true;
+  const generationWasDisabled = elements.generateButton.disabled;
+  elements.generateButton.disabled = true;
+  renderSubjectPicker();
+  const sessionId = state.sessionId;
+  try {
+    const data = await api("/api/subjects/select", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, subject_id: subjectId }),
+    });
+    if (state.sessionId === sessionId) {
+      state.selectedSubject = data.document;
+      renderSelectedSubject();
+      if (openForge) setView("forge");
+      hideNotice();
+    }
+  } catch (error) {
+    showNotice(error.message);
+  } finally {
+    state.selectingSubject = false;
+    if (!generationWasDisabled) elements.generateButton.disabled = false;
+    renderSubjectPicker();
+  }
+}
+
 function renderSelectedSubject() {
   const subject = state.selectedSubject;
   const hasSubject = Boolean(subject);
   elements.selectedEmpty.classList.toggle("hidden", hasSubject);
   elements.selectedCard.classList.toggle("hidden", !hasSubject);
+  renderSubjectPicker();
 
   elements.composerContext.replaceChildren();
   const miniAvatar = document.createElement("span");
@@ -864,7 +920,15 @@ function renderSubjectGrid() {
         inspect.disabled = false;
       }
     });
-    card.append(inspect, groups);
+    const actions = document.createElement("div");
+    actions.className = "subject-card-actions";
+    const use = document.createElement("button");
+    use.type = "button";
+    use.className = "text-button";
+    uiText(use, "Use in Forge");
+    use.addEventListener("click", () => { void selectExistingSubject(item.subject_id, true); });
+    actions.append(inspect, use);
+    card.append(actions, groups);
     elements.subjectGrid.appendChild(card);
   }
 }
@@ -927,10 +991,12 @@ async function loadSubjects() {
     state.subjects = data.subjects || [];
     elements.subjectCount.textContent = String(state.subjects.length);
     renderSubjectGrid();
+    renderSubjectPicker();
   } catch (error) {
     state.subjects = [];
     elements.subjectCount.textContent = "0";
     renderSubjectGrid();
+    renderSubjectPicker();
     showNotice(error.message);
   }
 }
@@ -1067,6 +1133,7 @@ async function newConversation() {
   state.sessionId = crypto.randomUUID();
   localStorage.setItem("everspark.session", state.sessionId);
   state.selectedSubject = null;
+  elements.subjectPicker.value = "";
   elements.conversationFeed.replaceChildren();
   elements.scenePrompt.value = "";
   renderSelectedSubject();
@@ -1303,6 +1370,10 @@ async function loadRuntime() {
 }
 
 function bindEvents() {
+  elements.subjectPicker.addEventListener("change", updateSubjectPickerButton);
+  elements.useSubjectButton.addEventListener("click", () => {
+    void selectExistingSubject(elements.subjectPicker.value);
+  });
   elements.languageSelect.addEventListener("change", () => {
     i18n.setLanguage(elements.languageSelect.value);
     $$('[data-date]').forEach((node) => { node.textContent = formatDate(node.dataset.date); });

@@ -277,6 +277,9 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                 "subject_id": payload["subject_id"],
                 payload["group"]: {payload["group"]: payload["instruction"]},
             }})
+        elif self.path == "/subjects/select":
+            self._json(200, {"ok": True, "document": self.subject(),
+                             "session_id": payload["session_id"]})
         elif self.path == "/storage/pull":
             self._json(
                 202,
@@ -382,6 +385,8 @@ class WebUIIntegrationTests(unittest.TestCase):
         self.assertIn("Install models from a URL", page)
         self.assertLess(page.index('/static/i18n.js'), page.index('/static/app.js'))
         self.assertIn('id="languageSelect"', page)
+        self.assertIn('id="subjectPicker"', page)
+        self.assertIn('id="useSubjectButton"', page)
         with urlopen(self.base_url + "/static/i18n.js", timeout=5) as response:
             translations = response.read().decode("utf-8")
         self.assertIn('"Character subjects": "角色主体"', translations)
@@ -490,6 +495,11 @@ class WebUIIntegrationTests(unittest.TestCase):
         self.assertEqual(current["document"]["subject_id"], "ember-keeper")
 
     def test_subject_group_routes_are_available_in_webui(self) -> None:
+        _, selected = self.request_json("/api/subjects/select", {
+            "session_id": "another-session", "subject_id": "ember-keeper",
+        })
+        self.assertEqual(selected["document"]["subject_id"], "ember-keeper")
+        self.assertEqual(selected["session_id"], "another-session")
         _, viewed = self.request_json("/api/subjects/bundle?subject_id=ember-keeper")
         self.assertEqual(viewed["bundle"]["positive_prompt"]["positive_prompt"], "portrait")
         _, revised = self.request_json("/api/subjects/revise", {

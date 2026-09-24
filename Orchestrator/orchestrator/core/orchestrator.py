@@ -170,6 +170,19 @@ class Orchestrator:
         subject_id = self.memory.get_session_subject_id(session)
         return None if subject_id is None else self.memory.get_subject(subject_id)
 
+    def select_session_subject(self, session_id: str, subject_id: str) -> dict[str, Any]:
+        session = normalize_unicode(session_id).strip()
+        if not session or len(session) > 128:
+            raise ValueError("session_id must contain 1 to 128 characters")
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("Wait for the current task before switching characters")
+        try:
+            subject = self.get_subject(normalize_unicode(subject_id).strip())
+            self.memory.select_session_subject(session, subject["subject_id"])
+            return subject
+        finally:
+            self._task_lock.release()
+
     def get_history(self, session_id: str) -> list[dict[str, str]]:
         return self.memory.get_history(normalize_unicode(session_id).strip())
 

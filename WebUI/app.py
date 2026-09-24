@@ -219,6 +219,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/subjects/generate": "/subjects/generate",
             "/api/subjects/update": "/subjects/update",
             "/api/subjects/revise": "/subjects/revise",
+            "/api/subjects/select": "/subjects/select",
             "/api/subjects/compile": "/subjects/compile",
         }
         try:

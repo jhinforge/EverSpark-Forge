@@ -18,6 +18,30 @@ from everspark_memory import (  # noqa: E402
 
 
 class SQLiteMemoryStoreTests(unittest.TestCase):
+    def test_existing_session_links_migrate_and_character_can_be_reused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "memory.db"
+            with sqlite3.connect(database) as connection:
+                connection.execute("""
+                    CREATE TABLE session_subjects (
+                        session_id TEXT PRIMARY KEY, subject_id TEXT NOT NULL UNIQUE,
+                        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+                    )
+                """)
+                connection.execute("INSERT INTO session_subjects VALUES (?, ?, ?, ?)",
+                                   ("old-session", "ember-keeper", "earlier", "earlier"))
+            store = SQLiteMemoryStore(str(database))
+            document = json.loads((REPO_ROOT / "ConceptForge/Examples/character_subject.example.json").read_text())
+            store.save_subject(document)
+            store.select_session_subject("new-session", "ember-keeper")
+            self.assertEqual(store.get_session_subject_id("old-session"), "ember-keeper")
+            self.assertEqual(SQLiteMemoryStore(str(database)).get_session_subject_id("new-session"), "ember-keeper")
+            with self.assertRaisesRegex(ValueError, "Subject not found"):
+                store.select_session_subject("new-session", "missing")
+            self.assertEqual(store.get_session_subject_id("new-session"), "ember-keeper")
+            store.clear_session("old-session")
+            self.assertEqual(store.get_session_subject_id("new-session"), "ember-keeper")
+
     def test_old_subject_prompt_contract_migrates_to_separate_json(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / "memory.db"

@@ -185,6 +185,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/subjects/generate",
             "/subjects/update",
             "/subjects/revise",
+            "/subjects/select",
             "/subjects/compile",
             "/storage/pull",
             "/storage/paths",
@@ -244,6 +245,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                     str(payload.get("instruction", "")),
                 )
                 self._send(200, {"ok": True, "bundle": bundle})
+            elif request_path == "/subjects/select":
+                subject = self.server.orchestrator.select_session_subject(
+                    str(payload.get("session_id", "")), str(payload.get("subject_id", ""))
+                )
+                self._send(200, {"ok": True, "document": subject})
             elif request_path == "/storage/pull":
                 job = self.server.orchestrator.start_storage_pull(
                     str(payload.get("kind", "")), str(payload.get("name", ""))

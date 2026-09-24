@@ -324,6 +324,66 @@ class BatchTests(unittest.TestCase):
 
 
 class SubjectIntegrationTests(unittest.TestCase):
+    def test_selected_existing_character_is_used_by_generation_and_persists(self) -> None:
+        class Concept:
+            def generate_subject(self, _text, subject_id, existing=None, **_kwargs):
+                self.assert_existing = existing is not None
+                document = json.loads(json.dumps(existing))
+                document["revision"] += 1
+                return document
+
+            def generate_prompt(self, _text, _history):
+                return GenerationPlan("illustrious", "rooftop", "bad quality", 1, "over")
+
+        class Workflow:
+            def selected_workflow_id(self, _id=""):
+                return "test"
+
+            def build(self, positive, negative, **_kwargs):
+                return {"positive": positive, "negative": negative}
+
+            def bind_checkpoint(self, *_args, **_kwargs):
+                return "test.safetensors"
+
+        class Image:
+            def list_checkpoints(self):
+                return ["test.safetensors"]
+
+            def queue_prompt(self, _workflow):
+                return "queued"
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = load_config()
+            config["memory"]["database"] = str(Path(directory) / "memory.db")
+            orchestrator = Orchestrator(config)
+            subject = new_subject("old-character", "Old Character")
+            subject["appearance"]["hair"]["color"] = "silver"
+            orchestrator.save_subject(subject)
+            orchestrator.save_subject(new_subject("other-character", "Other Character"))
+            orchestrator.select_session_subject("old-session", "old-character")
+            orchestrator.memory.record_conversation("new-session", "hello", "hi")
+            orchestrator.select_session_subject("new-session", "old-character")
+            self.assertEqual(orchestrator.get_history("new-session")[0]["content"], "hello")
+            self.assertEqual(orchestrator.get_session_subject("old-session")["subject_id"], "old-character")
+            self.assertEqual(orchestrator.get_session_subject("new-session")["subject_id"], "old-character")
+            with self.assertRaisesRegex(ValueError, "session_id"):
+                orchestrator.select_session_subject("", "old-character")
+            with self.assertRaisesRegex(Exception, "Subject not found"):
+                orchestrator.select_session_subject("new-session", "missing")
+            self.assertEqual(orchestrator.get_session_subject("new-session")["subject_id"], "old-character")
+
+            concept = Concept()
+            orchestrator.runner.concept = concept
+            orchestrator.runner.workflow = Workflow()
+            orchestrator.runner.image = Image()
+            result = orchestrator.submit("Place her on a rooftop", "new-session")["result"]
+            self.assertTrue(concept.assert_existing)
+            self.assertEqual(result["subject"]["subject_id"], "old-character")
+            self.assertIn("silver", result["positive_prompt"])
+            self.assertEqual(orchestrator.get_session_subject("old-session")["subject_id"], "old-character")
+            orchestrator.select_session_subject("new-session", "other-character")
+            self.assertEqual(orchestrator.get_session_subject("new-session")["subject_id"], "other-character")
+
     def test_group_revisions_target_one_document_without_switching_session(self) -> None:
         class FakeConcept:
             def revise_subject_section(self, _text, group, existing):
@@ -547,6 +607,10 @@ class APITests(unittest.TestCase):
         def get_session_subject(self, _session_id):
             return self.document
 
+        def select_session_subject(self, session_id, subject_id):
+            self.selected = (session_id, subject_id)
+            return self.document
+
         def submit(self, text, session_id, selection=None):
             return {
                 "ok": True,
@@ -722,6 +786,12 @@ class APITests(unittest.TestCase):
         self.assertEqual(job["job"]["status"], "completed")
 
     def test_subject_bundle_and_model_revision_routes(self) -> None:
+        status, selected = self._request("/subjects/select", {
+            "session_id": "new-session", "subject_id": "subject-a",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(selected["document"]["subject_id"], "subject-a")
+        self.assertEqual(self.fake.selected, ("new-session", "subject-a"))
         status, bundle = self._request("/subjects/bundle?subject_id=subject-a")
         self.assertEqual(status, 200)
         self.assertEqual(bundle["bundle"]["negative_prompt"]["negative_prompt"], "bad anatomy")

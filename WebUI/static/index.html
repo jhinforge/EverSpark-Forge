@@ -96,6 +96,14 @@
                 </div>
               </div>
 
+              <div class="subject-picker">
+                <label for="subjectPicker">Current character</label>
+                <div class="subject-picker-actions">
+                  <span class="select-wrap"><select id="subjectPicker" aria-label="Choose a character"></select></span>
+                  <button class="secondary-button" id="useSubjectButton" type="button">Use in Forge</button>
+                </div>
+              </div>
+
               <div id="selectedSubjectEmpty" class="subject-empty">
                 <div class="subject-orbit"><span>＋</span></div>
                 <h3>No identity extracted yet</h3>
@@ -195,7 +203,7 @@
             <div>
               <p class="section-kicker">STRUCTURED STATE</p>
               <h2>Character subjects</h2>
-              <p class="section-copy">Each character has four JSON documents. Ask Concept Forge to revise a selected group; viewing a character does not switch your active conversation.</p>
+              <p class="section-copy">Each character has four JSON documents. Ask Concept Forge to revise a selected group, or choose Use in Forge to work with it in this conversation.</p>
             </div>
           </div>
           <div class="subject-grid" id="subjectGrid"></div>
