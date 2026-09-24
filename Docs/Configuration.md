@@ -49,7 +49,7 @@ See the [command reference for initialization and configuration](Commands.md#1-i
 | Outputs | `Data/Outputs/`; Gallery exports the entire directory as a ZIP |
 | Workflows | API Format JSON and adjacent manifests in `ImageForge/Workflows/` |
 
-WebUI selects registered workflows and installed models. Advanced users can point `EVERSPARK_WORKFLOW_TEMPLATE` to another API Format workflow. See [Image Forge](../ImageForge/README.md) for manifests and node requirements. A regular ComfyUI interface workflow is not directly executable as an API Format file. Character subjects, memory, and outputs are runtime data: save what you need before replacing a cloud machine. A model source URL never enables automatic backups.
+WebUI selects registered workflows and installed models. Advanced users can point `EVERSPARK_WORKFLOW_TEMPLATE` to another API Format workflow. See [Image Forge](../ImageForge/README.md) for manifests and node requirements. A regular ComfyUI interface workflow is not directly executable as an API Format file. Character subjects, memory, and outputs are runtime data: save what you need before replacing a cloud machine. Even without rclone, use **Storage → Character and Memory ZIP** to download character JSON and Memory SQLite together; choose the saved ZIP and click **Validate and restore** to import it, then restart EverSpark. Save outputs, models, and private settings separately. A model source URL never enables automatic backups; see [Runtime and data](Runtime-and-Data.md).
 
 ## 5. rclone remote storage (optional)
 

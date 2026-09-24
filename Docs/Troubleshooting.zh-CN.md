@@ -62,11 +62,13 @@
 
 在 **Forge** 选择已有角色并点击 **Use in Forge**；只在 **Subjects** 列表中看到它，不代表当前对话已经选用了它。切回 Forge 检查当前角色卡，再提交生成。如果选择后页面没有更新，记录浏览器提示和 `Data/Logs/orchestrator-service.log`、`Data/Logs/webui-service.log` 中相同时间的错误。
 
-## 7. 远程模型拉取、上传或角色恢复失败
+## 7. 本地 ZIP 导出/恢复或远程传输失败
 
-先运行 `./everspark doctor`。启用 rclone 时，需要有效的 `rclone.conf`、图片与 Concept 模型扫描根路径，以及可访问的 remote。Storage 页面中的手工目录或上传目标如果指向只读、聚合 remote，需改为实际可写的目标。检查页面的任务错误和 `Data/Logs/rclone.log`。
+**角色与 Memory ZIP：** 在 **Storage → 角色与 Memory 压缩包** 下载失败时先确认 Orchestrator 就绪、`Data/Memory/everspark.db` 可用，并查看页面报错与 `Data/Logs/orchestrator-service.log`、`Data/Logs/webui-service.log`。选择 ZIP 后点击 **验证并恢复** 若失败，确认文件来自 EverSpark 的 **下载数据 ZIP**、文件大小不超过 128 MiB，且 ZIP 未损坏或更改。系统会验证清单、校验值、SQLite 完整性及四份角色 JSON 与数据库的一致性；不接受任意 ZIP。恢复成功后按提示重启 EverSpark。原数据位于 `Data/Recovery/`；暂存上传文件在 `Data/Imports/`，完成或失败后由 WebUI 清理。这个 ZIP 不包含输出图片或模型。
 
-上传输出时选择 **Outputs folder**；它会按整个输出目录处理，无须逐张选择。角色恢复只针对成批保存的角色 JSON 与 Memory SQLite；恢复后按页面提示重启 EverSpark。输出图片和模型不会随角色恢复按钮一并取回。数据的位置及迁移步骤见[运行时与数据生命周期](Runtime-and-Data.zh-CN.md)。
+**远程模型与数据：** 先运行 `./everspark doctor`。启用 rclone 时，需要有效的 `rclone.conf`、图片与 Concept 模型扫描根路径，以及可访问的 remote。Storage 页面中的手工目录或上传目标如果指向只读、聚合 remote，需改为实际可写的目标。检查页面的任务错误和 `Data/Logs/rclone.log`。
+
+上传输出时选择 **Outputs folder**；它会按整个输出目录处理，无须逐张选择。远程恢复点也只针对成批保存的角色 JSON 与 Memory SQLite；恢复后按页面提示重启 EverSpark。输出图片和模型不会随任一种角色恢复方式一并取回。数据的位置及迁移步骤见[运行时与数据生命周期](Runtime-and-Data.zh-CN.md)。
 
 ## 8. 临时链接或 Named Tunnel 在外网打不开
 

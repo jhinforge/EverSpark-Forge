@@ -65,7 +65,7 @@ cd EverSpark-Forge
 
 仅上传 `rclone.conf` 不会开启远程存储；必须显式启用 rclone 后端并配置模型扫描路径。Cloudflare Tunnel 也只会在配置完整并启用后加入托管生命周期。不启用远程存储时，Storage 页面仍能通过公开直链下载图片模型和 Concept Forge GGUF。详见[配置指南](Docs/Configuration.zh-CN.md)。
 
-运行数据位于被 Git 忽略的 `Data/` 下：图片模型在 `Data/Models/ImageForge/`，Concept Forge 模型在 `Data/Models/ConceptForge/`，生成结果在 `Data/Outputs/`，角色文档与记忆分别在 `Data/Subjects/` 和 `Data/Memory/`。Gallery 的 **Download outputs ZIP** 会打包整个输出目录。启用 rclone 后，可手动上传模型、整个输出目录以及成批的角色 JSON 与 SQLite 快照；这些备份**不会自动进行**。角色数据恢复会先把本地旧数据移入 `Data/Recovery/`，但不会一并恢复图片和模型。迁移前请查看[运行与数据指南](Docs/Runtime-and-Data.zh-CN.md)。
+运行数据位于被 Git 忽略的 `Data/` 下：图片模型在 `Data/Models/ImageForge/`，Concept Forge 模型在 `Data/Models/ConceptForge/`，生成结果在 `Data/Outputs/`，角色文档与记忆分别在 `Data/Subjects/` 和 `Data/Memory/`。Gallery 的 **Download outputs ZIP** 会打包整个输出目录。无需 rclone，也可在 Storage 的 **角色与 Memory 压缩包** 区域下载角色四份 JSON 与 Memory SQLite 的 ZIP；选择备份 ZIP 并点击 **验证并恢复**，系统会校验内容、保存当前数据至 `Data/Recovery/` 并恢复，之后需重启 EverSpark。启用 rclone 后还可手动上传模型、整个输出目录及成批的角色数据；这些备份**不会自动进行**。角色与 Memory ZIP 不包含图片、模型或私人配置；迁移前请查看[运行与数据指南](Docs/Runtime-and-Data.zh-CN.md)。
 
 ## 架构与当前范围
 

@@ -28,6 +28,7 @@ Paths are relative to the repository root. Private data and installation artifac
 | Concept Forge models | `Data/Models/ConceptForge/` | Redownload or restore and import into Ollama as needed |
 | Conversations, tasks, character associations | `Data/Memory/everspark.db` | Back up and restore with subjects; JSON alone loses these links |
 | Character documents | `Data/Subjects/` | Back up and restore with the Memory database |
+| Local data ZIP staging | `Data/Runtime/Archives/`, `Data/Imports/` | Used while preparing a download or receiving an upload; cleaned up after transfer or processing, not durable backups |
 | Generated images | `Data/Outputs/` | Export its ZIP from Gallery or upload the whole folder |
 | Service logs | `Data/Logs/` | Preserve for diagnosis if needed; recreated on the new machine |
 | Previous local data before restoration | `Data/Recovery/` | Created during character restore; remains only on this machine |
@@ -42,7 +43,7 @@ Gallery shows recent images; **Download outputs ZIP** packages the entire `Data/
 
 ## 4. Back up what you need
 
-Without rclone, use **Storage → Character and Memory ZIP → Download data ZIP** for a consistent SQLite snapshot and all four JSON files for each character. Save private configuration, models, and the Gallery output ZIP separately. The data ZIP excludes models and images.
+Without rclone, you can still use **Storage → Character and Memory ZIP → Download data ZIP** for a consistent SQLite snapshot and four JSON files per character: `subject.json`, `metadata.json`, `positive_prompt.json`, and `negative_prompt.json`. Save the downloaded file on your own computer or another persistent location. Save private configuration, models, and the Gallery output ZIP separately; the data ZIP excludes models and generated images.
 
 With rclone enabled and verified, initiate uploads under **Storage → Upload local data**:
 
@@ -59,7 +60,7 @@ Absent `EVERSPARK_BACKUP_REMOTE`, the first image model source bucket uses an `e
 2. To keep remote resources or a Tunnel, upload original `env.txt`, `rclone.conf`, and Tunnel credentials into `Configuration/Import/`, then run `./everspark configure`. Manual remote path mappings saved in Storage live in `Data/Configuration/rclone/model_paths.json`; transfer that file separately or re-enter those mappings.
 3. Run `./everspark setup --plan`, `./everspark setup`, `./everspark doctor`, and `./everspark start`; confirm services are ready.
 4. Pull required models from remote Storage, or redownload by direct URL. Check compatibility with the selected workflow.
-5. For a downloaded local data ZIP, choose it under **Storage → Character and Memory ZIP** and click **Validate and restore** (maximum ZIP size: 128 MiB). The ZIP is temporarily received in `Data/Imports/`; the system verifies its checksums, SQLite, and character documents before replacing data, saves the previous version in `Data/Recovery/`, and removes the uploaded ZIP. Alternatively, select a remote restore point under **Storage → Restore character data**. Restart EverSpark after either restore.
+5. For a downloaded EverSpark data ZIP, choose it under **Storage → Character and Memory ZIP** and click the adjacent **Validate and restore** button (maximum uploaded ZIP size: 128 MiB). The file is staged in `Data/Imports/`. The system checks its manifest and hashes, SQLite integrity, and agreement between character documents and the database before replacing the current subjects and Memory database. It saves the previous data in `Data/Recovery/` and removes the staged ZIP. Alternatively, select a remote restore point under **Storage → Restore character data**. Restart EverSpark after either restore.
 6. Transfer outputs separately: download a ZIP from Gallery on the old machine or retrieve previously uploaded files using your own storage tools. These WebUI restore actions restore **character data snapshots only**, not outputs.
 
 Neither source nor default setup contains your characters, history, outputs, or private models. A complete move depends on exporting or backing these up before the old machine disappears.

@@ -164,6 +164,14 @@ uses an `everspark-backups` prefix. Local output files can be uploaded there.
 Character JSON and SQLite are uploaded and restored as verified batches. Restore
 saves the previous local data in `Data/Recovery` before replacing it.
 
+Without rclone, **Storage → Character and Memory ZIP** can download the four
+JSON documents per character together with a consistent Memory SQLite snapshot.
+Choose a saved EverSpark data ZIP and click **Validate and restore** to verify
+and replace local character and Memory data; the previous data goes to
+`Data/Recovery/`. Restart EverSpark afterward. This ZIP excludes models,
+generated images, and private configuration; export those separately. See
+[Runtime and data](Docs/Runtime-and-Data.md) for migration steps.
+
 ## In v0.1
 
 - Discuss a character in the WebUI, reuse an existing subject, and generate

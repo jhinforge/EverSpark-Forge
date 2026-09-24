@@ -106,6 +106,8 @@ If the platform does not supply that information, set `EVERSPARK_SSH_HOST` and `
 
 A reusable character's stable traits are separate from the scene, pose, and camera direction for a particular request.
 
+To take your characters and memory with you, use **Storage → Character and Memory ZIP → Download data ZIP** to save the four JSON files for each character and a Memory SQLite snapshot on your own computer; rclone is not required. On a new machine, choose that ZIP and click the adjacent **Validate and restore** button, then restart EverSpark. Export generated images separately from Gallery. See [Runtime and data](Runtime-and-Data.md).
+
 ## 5. Import existing private configuration first (optional)
 
 Upload any files you need into `Configuration/Import/`:

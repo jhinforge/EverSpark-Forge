@@ -59,7 +59,7 @@ EVERSPARK_SSH_USER=root
 
 WebUI 可以选择已注册的工作流及已安装的模型。高级使用者可以通过 `EVERSPARK_WORKFLOW_TEMPLATE` 指向其他 API Format 工作流文件；有关工作流清单及节点要求，参见 [Image Forge 说明](../ImageForge/README.md)。普通 ComfyUI 界面工作流不能直接当作 API Format 文件放入注册目录。
 
-角色主体、记忆和输出都是运行数据。搬迁或重建云端机器前，请自行保留需要的数据；远程备份是可选功能，不会因填写了模型来源地址就自动开始上传。
+角色主体、记忆和输出都是运行数据。搬迁或重建云端机器前，请自行保留需要的数据。即使不配置 rclone，也可在 Storage 的 **角色与 Memory 压缩包** 区域下载角色 JSON 与 Memory SQLite 的 ZIP，之后选择该 ZIP 并点击 **验证并恢复**；恢复后需重启 EverSpark。输出图片、模型和私人配置需分别保存。远程备份是可选功能，不会因填写了模型来源地址就自动开始上传；详见[运行与数据生命周期](Runtime-and-Data.zh-CN.md)。
 
 ## 5. 接入 rclone 远程存储（可选）
 

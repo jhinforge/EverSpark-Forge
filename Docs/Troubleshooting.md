@@ -58,11 +58,13 @@ Successful images go to `Data/Outputs/`; **Download outputs ZIP** exports the en
 
 Select it in **Forge** and click **Use in Forge**. Merely seeing it in **Subjects** does not select it for the current conversation. Confirm the current character card in Forge before generating. If selection fails, record browser feedback and errors at the same time in `Data/Logs/orchestrator-service.log` and `Data/Logs/webui-service.log`.
 
-## 7. Remote pull, upload, or character restore fails
+## 7. Local ZIP export/restore or remote transfer fails
 
-Run `./everspark doctor`. rclone needs valid `rclone.conf`, image and Concept model scanning roots, and an accessible remote. Manual paths or upload destinations pointing at a read-only or aggregate remote need a real writable target for uploads. Inspect the UI task error and `Data/Logs/rclone.log`.
+**Character and Memory ZIP:** If **Download data ZIP** fails under **Storage → Character and Memory ZIP**, check that Orchestrator is ready and `Data/Memory/everspark.db` is available. Inspect the page error and `Data/Logs/orchestrator-service.log` and `Data/Logs/webui-service.log`. If **Validate and restore** fails, confirm the file came from EverSpark's **Download data ZIP**, is no larger than 128 MiB, and has not been damaged or changed. Validation checks the manifest, hashes, SQLite integrity, and agreement between all four character JSON documents and the database; arbitrary ZIP files are not accepted. Restart EverSpark after a successful restore. Previous data lives in `Data/Recovery/`; the upload is staged in `Data/Imports/` and cleaned up by WebUI after success or failure. This ZIP contains no images or models.
 
-For outputs, choose **Outputs folder** to upload the whole directory. Character restore handles batch snapshots of character JSON and Memory SQLite and requires the prompted restart. It does not restore output images or models. See [Runtime and data](Runtime-and-Data.md).
+**Remote models and data:** Run `./everspark doctor`. rclone needs valid `rclone.conf`, image and Concept model scanning roots, and an accessible remote. Manual paths or upload destinations pointing at a read-only or aggregate remote need a real writable target for uploads. Inspect the UI task error and `Data/Logs/rclone.log`.
+
+For outputs, choose **Outputs folder** to upload the whole directory. Remote restore points also contain batched character JSON and Memory SQLite and require the prompted restart. Neither restore method brings back output images or models. See [Runtime and data](Runtime-and-Data.md).
 
 ## 8. Temporary link or Named Tunnel inaccessible publicly
 

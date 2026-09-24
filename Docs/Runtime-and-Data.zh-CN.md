@@ -28,6 +28,7 @@
 | Concept Forge 模型 | `Data/Models/ConceptForge/` | 重新下载，或从远程库恢复并按需导入 Ollama |
 | 对话、任务记录、角色关联 | `Data/Memory/everspark.db` | 备份并恢复；只恢复角色 JSON 不足以保留这些关联 |
 | 角色文档 | `Data/Subjects/` | 与 Memory 数据库一起备份和恢复 |
+| 本地数据 ZIP 的暂存目录 | `Data/Runtime/Archives/`、`Data/Imports/` | 前者用于生成下载文件，后者暂存上传文件；成功传输或处理后由程序清理，不作为备份保存 |
 | 生成图片 | `Data/Outputs/` | 下载整个输出目录的 ZIP，或启用远程存储后上传整个目录 |
 | 服务日志 | `Data/Logs/` | 排障时留存；新环境会重新生成 |
 | 数据恢复前的本地旧版本 | `Data/Recovery/` | 恢复角色数据时生成；其安全性取决于当前机器是否仍在 |
@@ -42,7 +43,7 @@ Gallery 显示近期结果，**Download outputs ZIP** 将当前 `Data/Outputs` �
 
 ## 4. 备份：先确定需要保存什么
 
-不开启 rclone 时，可以在 **Storage → 角色与 Memory 压缩包 → 下载数据 ZIP** 下载一致的 SQLite 快照和每个角色的四份 JSON。私人配置、模型及 Gallery 的输出 ZIP 仍需分别保存；数据 ZIP 不包含模型或图片。
+不开启 rclone 时，也可以在 **Storage → 角色与 Memory 压缩包 → 下载数据 ZIP** 下载一致的 SQLite 快照和每个角色的四份 JSON：`subject.json`、`metadata.json`、`positive_prompt.json`、`negative_prompt.json`。把下载文件保存到自己的电脑或其他持久位置；私人配置、模型及 Gallery 的输出 ZIP 仍需分别保存。数据 ZIP 不包含模型或生成图片。
 
 启用并验证 rclone 后，在 WebUI 的 **Storage → Upload local data** 中按需发起上传：
 
@@ -61,7 +62,7 @@ Gallery 显示近期结果，**Download outputs ZIP** 将当前 `Data/Outputs` �
 2. 如需原有远程资源或 Tunnel，将 `env.txt`、`rclone.conf`、Tunnel 凭据等原始文件上传到 `Configuration/Import/`，执行 `./everspark configure`。在旧机器 Storage 页面保存过的**手工远程路径映射**存放在 `Data/Configuration/rclone/model_paths.json`；若没有单独带走它，需在新机器重新设置。
 3. 执行 `./everspark setup --plan`、`./everspark setup`、`./everspark doctor`、`./everspark start`，确认服务就绪。
 4. 在 Storage 页面按需要从远程库拉取模型；如果没有远程库，可用直链重新下载。检查所选工作流所需的模型是否已在新机器上。
-5. 对下载到本地的数据 ZIP，在 **Storage → 角色与 Memory 压缩包** 中选择文件并点击 **验证并恢复**（ZIP 上限为 128 MiB）。文件暂存于 `Data/Imports/`；系统校验哈希、SQLite 和角色文档后，将原数据保存至 `Data/Recovery/`，完成替换并删除暂存 ZIP。也可以在 **Storage → Restore character data** 选择远程恢复点。恢复完成后重启 EverSpark。
+5. 对下载到本地的 EverSpark 数据 ZIP，在 **Storage → 角色与 Memory 压缩包** 中选择文件并点击旁边的 **验证并恢复**（上传 ZIP 上限为 128 MiB）。文件暂存于 `Data/Imports/`；系统验证清单与文件校验值、SQLite 完整性以及角色文档与数据库的一致性，成功后用 ZIP 内数据替换当前角色文档和 Memory 数据库，并将原数据保存至 `Data/Recovery/`。上传的暂存 ZIP 随后会被删除。也可以在 **Storage → Restore character data** 选择远程恢复点。恢复完成后重启 EverSpark。
 6. 输出图片如果仍在原机器，可用 Gallery 下载 ZIP 并自行转移；如果已上传远程存储，也需通过自己的存储工具取回。WebUI 的这两种恢复操作只负责**角色数据快照**，不会一并取回输出图片。
 
 不能从源码或默认 `setup` 推出你的个人角色、历史、输出或私人模型。迁移是否完整，取决于这些内容在旧机器删除前是否实际完成了备份或导出。

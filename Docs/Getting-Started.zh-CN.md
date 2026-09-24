@@ -95,6 +95,8 @@ ssh -p 22 root@example.com
 
 角色的稳定特征与这次生成的场景是不同的数据：讨论形成的角色可继续使用，而场景、姿势和镜头描述属于本次请求。
 
+如果想带走角色和记忆，到 **Storage → 角色与 Memory 压缩包** 点击 **下载数据 ZIP**，将每个角色的四份 JSON 和 Memory SQLite 快照保存到自己的电脑；此功能不需要 rclone。以后在新机器上选择该 ZIP，点击旁边的 **验证并恢复**，完成后重启 EverSpark。生成图片请另用 Gallery 导出；详见[运行与数据生命周期](Runtime-and-Data.zh-CN.md)。
+
 ## 5. 已有私人配置：先导入，再安装
 
 如果你已有 Pod 上使用的配置，可先将以下文件上传到仓库里的 `Configuration/Import/`：
