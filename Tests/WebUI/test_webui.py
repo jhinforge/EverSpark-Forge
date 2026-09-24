@@ -380,6 +380,11 @@ class WebUIIntegrationTests(unittest.TestCase):
         self.assertIn("Character subjects", page)
         self.assertIn("New conversation", page)
         self.assertIn("Install models from a URL", page)
+        self.assertLess(page.index('/static/i18n.js'), page.index('/static/app.js'))
+        self.assertIn('id="languageSelect"', page)
+        with urlopen(self.base_url + "/static/i18n.js", timeout=5) as response:
+            translations = response.read().decode("utf-8")
+        self.assertIn('"Character subjects": "角色主体"', translations)
         self.assertNotIn("Subject ID", page)
         status, health = self.request_json("/api/runtime/status")
         self.assertEqual(status, 200)

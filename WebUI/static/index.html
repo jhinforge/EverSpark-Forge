@@ -6,6 +6,7 @@
     <meta name="color-scheme" content="dark">
     <title>EverSpark Forge</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/i18n.js" defer></script>
     <script src="/static/app.js" defer></script>
   </head>
   <body>
@@ -65,6 +66,13 @@
             <h1 id="viewTitle">Turn an idea into an image.</h1>
           </div>
           <div class="top-actions">
+            <label class="language-picker" for="languageSelect">
+              <span>Language</span>
+              <select id="languageSelect" aria-label="Language">
+                <option value="zh-CN">简体中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
             <button class="ghost-button" id="refreshButton" type="button">Refresh</button>
             <button class="primary-button compact" id="newConversationButton" type="button">
               <span>＋</span> New conversation
