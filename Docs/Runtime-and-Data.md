@@ -74,3 +74,5 @@ Neither source nor default setup contains your characters, history, outputs, or 
 ```
 
 `status` checks processes and health endpoints; `doctor` checks basic tools, enabled backends, and GPU visibility. WebUI **Runtime** shows readiness. Managed service output goes to `Data/Logs/`. For failed generation or transfers, check the task error and service status, then the corresponding logs. Logs help diagnose failures but are not backups.
+
+See [service management](Commands.md#2-service-management) for `start|stop|restart|status` behavior and [log maintenance](Commands.md#5-log-status-and-maintenance) for retention and rotation commands.

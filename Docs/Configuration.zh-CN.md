@@ -42,6 +42,8 @@ EVERSPARK_SSH_USER=root
 
 如果文件放在其他目录，可用 `./everspark configure --from <目录>`；同一目录中同时有 `.env` 与 `env.txt` 且内容不同，可用 `--env <文件>` 显式指定一个。修改了运行中服务使用的配置后，按需要运行 `./everspark restart` 使服务重新读取配置。
 
+`configure`、`setup`、`doctor` 的具体影响及可选参数见[命令手册：初始化、配置和安装](Commands.zh-CN.md#1-初始化配置和安装)。
+
 ## 4. 模型、工作流和输出
 
 **模型不是源码的一部分。** 默认 `setup` 会下载起步所需模型。之后可以在 WebUI 的 Storage 页面粘贴公开模型直链，下载图片模型或 Concept Forge GGUF；需要远程模型库存时，再启用下文的 rclone 模式。使用 Storage 页面选择已安装的资源，不需要在私人配置里手工列出每一个 checkpoint 或 LoRA。

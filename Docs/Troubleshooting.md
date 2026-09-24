@@ -14,6 +14,8 @@ From the repository root:
 
 `status` reports service health and log locations. `doctor` checks basic commands, GPU visibility, and enabled backend settings. `logs status` lists managed log status. WebUI **Runtime** also shows readiness. Logs default to `Data/Logs/`; if `EVERSPARK_LOG_DIR` is configured, use the actual location shown by `status`.
 
+See [log commands](Commands.md#5-log-status-and-maintenance) for the checks above and for `logs rotate`, which can change or remove log files.
+
 ## 1. Setup did not finish
 
 **Check:** Find the first error from `./everspark setup`. Use `./everspark setup --plan` to inspect download sources and destinations. Confirm the GPU with `nvidia-smi`, and run `./everspark doctor` for platform and command checks. Runtime installation and model downloads require network access.

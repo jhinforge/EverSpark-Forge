@@ -71,6 +71,7 @@ field reference; create a private `.env` containing only the settings you need.
 | Guide | English | 中文 |
 | --- | --- | --- |
 | First run | [Getting started](Docs/Getting-Started.md) | [首次运行](Docs/Getting-Started.zh-CN.md) |
+| Commands | [Command reference](Docs/Commands.md) | [命令手册](Docs/Commands.zh-CN.md) |
 | Configuration | [Configuration](Docs/Configuration.md) | [配置指南](Docs/Configuration.zh-CN.md) |
 | Runtime and data | [Runtime and data](Docs/Runtime-and-Data.md) | [运行与数据](Docs/Runtime-and-Data.zh-CN.md) |
 | Troubleshooting | [Troubleshooting](Docs/Troubleshooting.md) | [排障指南](Docs/Troubleshooting.zh-CN.md) |

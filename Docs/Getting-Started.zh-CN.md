@@ -30,6 +30,8 @@ cd EverSpark-Forge
 
 `doctor` 检查基础命令、配置及 GPU 可见性；`start` 按依赖顺序启动 Concept Forge、Image Forge、Orchestrator 和 WebUI；`status` 用于复查服务状态。若 `setup` 中途失败，先根据报错处理依赖或网络问题，再重新运行；不要在模型尚未准备好时把“WebUI 能打开”当作生成链路已可用。
 
+这些命令的参数、作用及实际改动见[命令手册：初始化、配置和安装](Commands.zh-CN.md#1-初始化配置和安装)与[管理服务](Commands.zh-CN.md#2-管理服务)。
+
 没有 `.env` 时，存储默认为本地，服务默认监听本机地址。启动后可在云端机器打开 `http://127.0.0.1:8780`。
 
 ## 3. 从自己的电脑访问云端 WebUI
@@ -79,6 +81,8 @@ ssh -p 22 root@example.com
 
 如果云端环境提供了脚本能够识别的连接信息，输出会包含完整的 SSH 端口转发命令。**在自己的电脑上运行输出的命令**；使用非默认密钥文件时，也给这条命令加上 `-i 私钥文件路径`。保持该 SSH 会话连接，然后访问输出的本地浏览器地址（默认 `http://127.0.0.1:8080`）。不要把云端机器上的 `127.0.0.1:8780` 当作自己电脑上的地址。
 
+`access`、`share` 的完整参数与关闭行为见[命令手册：查看和开启 WebUI 访问](Commands.zh-CN.md#3-查看和开启-webui-访问)。
+
 如果平台没有提供这些连接信息，在私人 `.env` 中设置 `EVERSPARK_SSH_HOST` 和 `EVERSPARK_SSH_PORT`（需要时还可设置 `EVERSPARK_SSH_USER`），然后重新运行 `./everspark access`。端口转发依赖你已拥有该机器的 SSH 访问权限。
 
 ## 4. 完成第一次生成
@@ -127,5 +131,7 @@ ssh -p 22 root@example.com
 ```
 
 托管服务的原始输出写在 `Data/Logs/`。当 WebUI 可以打开但不能生成时，依次检查 Runtime 页面、`./everspark status`、模型资源是否可见，以及对应服务的日志。基础环境与配置可再次用 `./everspark doctor` 检查。
+
+`models` 与 `logs` 子命令的区别见[起步模型命令](Commands.zh-CN.md#4-管理清单中的起步模型)及[日志命令](Commands.zh-CN.md#5-查看与整理日志)。
 
 本页的主流程针对**云端 Linux 首次部署**；其他云端镜像及本地 Windows 部署尚未验证。

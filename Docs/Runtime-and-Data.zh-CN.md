@@ -76,3 +76,5 @@ Gallery 显示近期结果，**Download outputs ZIP** 将当前 `Data/Outputs` �
 ```
 
 `status` 检查服务的进程与健康接口；`doctor` 检查基础命令、已启用后端的配置和 GPU 可见性。WebUI 的 **Runtime** 页面可查看就绪状态。托管服务的原始输出写在 `Data/Logs/`；如果生成、模型拉取或上传失败，先看对应服务的状态和任务报错，再查日志。日志有助于排障，但并不代替模型、角色或输出的备份。
+
+服务的 `start|stop|restart|status` 行为见[命令手册：管理服务](Commands.zh-CN.md#2-管理服务)；日志保留与清理命令见[查看与整理日志](Commands.zh-CN.md#5-查看与整理日志)。

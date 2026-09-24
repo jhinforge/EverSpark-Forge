@@ -43,6 +43,7 @@ cd EverSpark-Forge
 | 内容 | 中文 | English |
 | --- | --- | --- |
 | 首次运行 | [首次运行指南](Docs/Getting-Started.zh-CN.md) | [Getting started](Docs/Getting-Started.md) |
+| 命令说明 | [命令手册](Docs/Commands.zh-CN.md) | [Command reference](Docs/Commands.md) |
 | 私人配置 | [配置指南](Docs/Configuration.zh-CN.md) | [Configuration](Docs/Configuration.md) |
 | 数据与迁移 | [运行与数据](Docs/Runtime-and-Data.zh-CN.md) | [Runtime and data](Docs/Runtime-and-Data.md) |
 | 故障定位 | [排障指南](Docs/Troubleshooting.zh-CN.md) | [Troubleshooting](Docs/Troubleshooting.md) |

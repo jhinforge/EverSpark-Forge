@@ -14,6 +14,8 @@
 
 `status` 报告各服务是否健康，以及日志位置；`doctor` 检查基本命令、GPU 可见性与已启用后端的配置；`logs status` 列出托管日志状态。WebUI 的 **Runtime** 页面也会显示服务就绪情况。默认日志在 `Data/Logs/`；如果设置了 `EVERSPARK_LOG_DIR`，请以实际配置和 `status` 输出为准。
 
+这些检查命令的含义及会修改日志文件的 `logs rotate` 见[命令手册：查看与整理日志](Commands.zh-CN.md#5-查看与整理日志)。
+
 ## 1. `setup` 没有完成
 
 **检查：** 回看 `./everspark setup` 最先出现的错误；先运行 `./everspark setup --plan` 确认下载来源与目标。检查 `nvidia-smi` 是否能看到 GPU，`./everspark doctor` 是否报告平台或基础命令问题。安装运行时与下载模型都需要网络。

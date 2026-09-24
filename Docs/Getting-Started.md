@@ -30,6 +30,8 @@ cd EverSpark-Forge
 
 `doctor` checks basic commands, configuration, and GPU visibility. `start` launches Concept Forge, Image Forge, Orchestrator, and WebUI in dependency order. `status` checks their health. If setup fails, fix the reported dependency or network issue and rerun it. An accessible WebUI alone does not establish that the models are ready for generation.
 
+For options, effects, and file changes see the command reference for [installation](Commands.md#1-initialization-configuration-and-installation) and [service management](Commands.md#2-service-management).
+
 Without `.env`, storage stays on the machine running EverSpark and services bind to localhost by default. On that machine, open `http://127.0.0.1:8780`.
 
 ## 3. Access the cloud WebUI from your computer
@@ -90,6 +92,8 @@ For a non-default key path, add `-i PATH_TO_PRIVATE_KEY` to the `ssh` command. I
 
 If the cloud environment supplies connection information the launcher recognizes, the output includes the complete SSH forwarding command. **Run that command on your own computer**; add `-i PATH_TO_PRIVATE_KEY` to it if you use a non-default key file. Keep the SSH session open and visit the local browser address shown (normally `http://127.0.0.1:8080`). The cloud machine's `127.0.0.1:8780` is not an address on your computer.
 
+See [WebUI access commands](Commands.md#3-webui-access-and-temporary-sharing) for all `access` and `share` options and stop behavior.
+
 If the platform does not supply that information, set `EVERSPARK_SSH_HOST` and `EVERSPARK_SSH_PORT` in your private `.env` (and `EVERSPARK_SSH_USER` if needed), then rerun `./everspark access`. Forwarding requires SSH access to the machine.
 
 ## 4. Generate your first image
@@ -138,3 +142,5 @@ If `doctor` reports remote paths or credentials, fix the enabled backend before 
 ```
 
 Managed service logs are in `Data/Logs/`. If WebUI opens but generation fails, check Runtime, `./everspark status`, available models, and the relevant service log. Rerun `./everspark doctor` for environment and configuration checks. Other cloud images and local Windows deployments have not been verified.
+
+See the [starter model commands](Commands.md#4-manifest-starter-models) and [log commands](Commands.md#5-log-status-and-maintenance) for their separate scopes.

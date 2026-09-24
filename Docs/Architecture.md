@@ -72,4 +72,4 @@ Local mode needs no remote storage, and public direct model downloads work indep
 - **Current limits:** Ollama concept provider and ComfyUI image adapter; one Orchestrator request at a time; registered API Format workflows and supported parameter changes only.
 - **Not yet implemented:** automatic episodic memory extraction, retrieval, and consolidation. Other concept providers and image adapters cannot be activated just by changing a setting.
 
-For changes, start with the relevant module README and the request flow above. See [Getting started](Getting-Started.md) for installation and [Troubleshooting](Troubleshooting.md) for failures.
+For changes, start with the relevant module README and the request flow above. See [module CLI entry points](Commands.md#6-module-entry-points-development-and-isolated-diagnosis) for isolated diagnosis, [Getting started](Getting-Started.md) for installation, and [Troubleshooting](Troubleshooting.md) for failures.

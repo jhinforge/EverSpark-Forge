@@ -36,6 +36,8 @@ Place `env.txt` **or** `.env` in `Configuration/Import/`, then run:
 
 Uploaded files remain in the inbox. The root `.env` is ignored by Git; required credentials are copied into `Data/Configuration/` with permissions restricted to the current user. To update settings, upload the **complete** environment file and rerun `configure`: it replaces the root `.env` rather than merging new keys into old values. Use `--from <directory>` for another source directory or `--env <file>` to explicitly select one of two conflicting environment files. Restart affected running services with `./everspark restart` after changing their configuration.
 
+See the [command reference for initialization and configuration](Commands.md#1-initialization-configuration-and-installation) for options and effects of `configure`, `setup`, and `doctor`.
+
 ## 4. Models, workflows, and outputs
 
 **Models are not part of the source release.** Default setup downloads starter models. Later you can download an image model or Concept Forge GGUF by public direct URL in **Storage**. Enable rclone only if you need a remote model library. Select installed resources in Storage instead of listing each checkpoint or LoRA in your environment file.

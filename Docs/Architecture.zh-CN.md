@@ -72,4 +72,4 @@ WebUI 的资源列表由 Orchestrator 汇总：已注册工作流来自 Image Fo
 - **当前边界：** Concept Forge 使用 Ollama 提供者，Image Forge 使用 ComfyUI 适配器；同一时间仅有一个 Orchestrator 请求在运行；仅支持注册的 API Format 工作流及已实现的参数变更方式。
 - **尚未实现：** 情节式记忆的自动提取、检索和整合；其它概念提供者或图像执行适配器不能仅凭改一个配置值就立即投入使用。
 
-需要修改模块时，可先从对应目录的 README 和本篇的请求流定位代码；启动及故障定位分别见[首次运行](Getting-Started.zh-CN.md)和[排障指南](Troubleshooting.zh-CN.md)。
+需要修改模块时，可先从对应目录的 README 和本篇的请求流定位代码；模块单独调试的 CLI 入口见[命令手册：模块入口](Commands.zh-CN.md#6-模块入口开发与单独调试)。启动及故障定位分别见[首次运行](Getting-Started.zh-CN.md)和[排障指南](Troubleshooting.zh-CN.md)。
