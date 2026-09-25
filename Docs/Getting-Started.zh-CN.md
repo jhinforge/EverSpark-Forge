@@ -120,6 +120,12 @@ ssh -p 22 root@example.com
 | `rclone.conf` | 使用已有的 rclone/R2 连接时 |
 | `<CF_TUNNEL_UUID>.json` | 启用 Cloudflare Named Tunnel 时 |
 
+如果从这一节单独开始，请先在克隆目录的上一级运行以下命令；已经按第 2 节进入仓库目录的用户跳过此步：
+
+```bash
+cd EverSpark-Forge
+```
+
 然后在仓库根目录执行：
 
 ```bash

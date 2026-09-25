@@ -131,6 +131,12 @@ Upload any files you need into `Configuration/Import/`:
 | `rclone.conf` | Existing rclone/R2 connection |
 | `<CF_TUNNEL_UUID>.json` | Cloudflare Named Tunnel credentials |
 
+If you started with this section, run the following from the parent directory of your clone. Skip this step if you already entered the repository in section 2:
+
+```bash
+cd EverSpark-Forge
+```
+
 Then run from the repository root:
 
 ```bash
