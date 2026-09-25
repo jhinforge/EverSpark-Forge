@@ -31,6 +31,8 @@ The service binds to `127.0.0.1:8765` by default and exposes:
 - `GET /health`
 - `GET /resources`
 - `POST /tasks`
+- `POST /tasks/start` (returns a job ID immediately; `request_id` prevents duplicate submissions)
+- `GET /tasks/jobs?job_id=...` (poll planning and image submission)
 - `POST /conversation`
 - `GET /memory/history?session_id=...`
 - `POST /memory/clear`

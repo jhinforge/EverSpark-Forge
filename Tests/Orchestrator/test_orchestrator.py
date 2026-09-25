@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from urllib.error import HTTPError
@@ -632,6 +633,14 @@ class APITests(unittest.TestCase):
         def __init__(self):
             self.cleared = None
             self.document = new_subject("subject-a", "Subject A")
+            self._task_jobs_lock = threading.Lock()
+            self._task_jobs = {}
+            self.task_gate = None
+            self.submit_calls = 0
+
+        start_task = Orchestrator.start_task
+        task_job = Orchestrator.task_job
+        _execute_task = Orchestrator._execute_task
 
         def get_history(self, session_id):
             return [{"role": "user", "content": session_id}]
@@ -655,6 +664,9 @@ class APITests(unittest.TestCase):
             return self.document
 
         def submit(self, text, session_id, selection=None):
+            self.submit_calls += 1
+            if self.task_gate is not None:
+                self.task_gate.wait(2)
             return {
                 "ok": True,
                 "text": text,
@@ -820,6 +832,28 @@ class APITests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         self.assertEqual(current["document"]["subject_id"], "subject-a")
+
+    def test_generation_returns_job_before_work_finishes_and_retries_are_idempotent(self) -> None:
+        self.fake.task_gate = threading.Event()
+        request = {"text": "red dress", "session_id": "session-a",
+                   "request_id": "a" * 32, "selection": {"engine": "diffusers"}}
+        start = time.monotonic()
+        status, accepted = self._request("/tasks/start", request)
+        self.assertEqual(status, 202)
+        self.assertLess(time.monotonic() - start, 1)
+        self.assertEqual(accepted["job"]["id"], request["request_id"])
+        _, repeated = self._request("/tasks/start", request)
+        self.assertEqual(repeated["job"]["id"], accepted["job"]["id"])
+        _, pending = self._request("/tasks/jobs?job_id=" + request["request_id"])
+        self.assertIn(pending["job"]["status"], ("queued", "running"))
+        self.fake.task_gate.set()
+        for _ in range(100):
+            _, completed = self._request("/tasks/jobs?job_id=" + request["request_id"])
+            if completed["job"]["status"] == "completed":
+                break
+            time.sleep(.01)
+        self.assertEqual(completed["job"]["response"]["text"], "red dress")
+        self.assertEqual(self.fake.submit_calls, 1)
 
     def test_storage_routes_use_the_infrastructure_boundary(self) -> None:
         status, scan = self._request("/storage/scan")

@@ -73,6 +73,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, "job": self.server.orchestrator.image_plugin_job(job_id)})
             except ValueError as exc:
                 self._send(400, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/tasks/jobs":
+            try:
+                job_id = parse_qs(parsed.query).get("job_id", [""])[0]
+                self._send(200, {"ok": True, "job": self.server.orchestrator.task_job(job_id)})
+            except ValueError as exc:
+                self._send(404, {"ok": False, "error": str(exc)})
         elif parsed.path == "/image/results":
             ids = [value for value in parse_qs(parsed.query).get("prompt_id", []) if value]
             if not ids or len(ids) > 20:
@@ -238,6 +244,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         request_path = urlparse(self.path).path
         if request_path not in {
             "/tasks",
+            "/tasks/start",
             "/conversation",
             "/memory/clear",
             "/subjects",
@@ -274,6 +281,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                     payload.get("selection"),
                 )
                 self._send(200, result)
+            elif request_path == "/tasks/start":
+                job = self.server.orchestrator.start_task(
+                    str(payload.get("text", "")), str(payload.get("session_id", "")),
+                    payload.get("selection"), str(payload.get("request_id", "")))
+                self._send(202, {"ok": True, "job": job})
             elif request_path in {"/image/plugins/install", "/image/plugins/enable"}:
                 job = self.server.orchestrator.start_image_plugin(
                     str(payload.get("plugin", "")), request_path.rsplit("/", 1)[-1])

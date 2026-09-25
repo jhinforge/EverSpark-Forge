@@ -63,6 +63,11 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
         if parsed.path in {"/health", "/image/health"}:
             self._json(200, {"ok": True})
+        elif parsed.path == "/tasks/jobs":
+            self._json(200, {"ok": True, "job": {
+                "id": query.get("job_id", [""])[0], "status": "completed",
+                "response": {"ok": True, "result": {
+                    "count": 1, "items": [{"index": 1, "prompt_id": "prompt-1", "seed": 7}]}}}})
         elif parsed.path == "/image/plugins":
             self._json(200, {"ok": True, "default": "comfyui", "plugins": [
                 {"id": "comfyui", "name": "ComfyUI", "installed": True, "online": True},
@@ -251,6 +256,10 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+        elif self.path == "/tasks/start":
+            type(self).received_task = payload
+            self._json(202, {"ok": True, "job": {
+                "id": payload["request_id"], "status": "queued"}})
         elif self.path in {"/image/plugins/install", "/image/plugins/enable"}:
             self._json(202, {"ok": True, "job": {"id": "a" * 32, "plugin": payload["plugin"], "status": "running"}})
         elif self.path == "/image/plugins/default":
@@ -425,6 +434,18 @@ class WebUIIntegrationTests(unittest.TestCase):
         image_url = result["results"][0]["images"][0]["url"]
         with urlopen(self.base_url + image_url, timeout=5) as response:
             self.assertEqual(response.read(), PNG_BYTES)
+
+    def test_generation_start_and_poll_proxy(self) -> None:
+        request_id = "b" * 32
+        status, accepted = self.request_json("/api/generate/start", {
+            "message": "rooftop", "session_id": "session-a", "request_id": request_id,
+            "selection": {"engine": "diffusers"},
+        })
+        self.assertEqual(status, 202)
+        self.assertEqual(accepted["job"]["id"], request_id)
+        self.assertEqual(MockUpstreamHandler.received_task["selection"]["engine"], "diffusers")
+        _, result = self.request_json("/api/generate/jobs?job_id=" + request_id)
+        self.assertEqual(result["job"]["response"]["result"]["items"][0]["prompt_id"], "prompt-1")
 
     def test_resources_and_generation_selection_are_proxied(self) -> None:
         _, resources = self.request_json("/api/resources")

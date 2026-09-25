@@ -1371,6 +1371,23 @@ async function pollResults(items) {
   }
 }
 
+async function waitForGeneration(jobId) {
+  let failedChecks = 0;
+  while (true) {
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    let data;
+    try {
+      data = await api(`/api/generate/jobs?job_id=${encodeURIComponent(jobId)}`);
+      failedChecks = 0;
+    } catch (error) {
+      if (++failedChecks < 3) continue;
+      throw error;
+    }
+    if (data.job.status === "completed") return data.job.response;
+    if (data.job.status === "failed") throw new Error(data.job.error || t("Generation failed"));
+  }
+}
+
 async function generate() {
   if (state.mode === "discuss") {
     await discuss();
@@ -1399,15 +1416,27 @@ async function generate() {
   pending.append(spinner, title, detail);
   elements.resultStage.appendChild(pending);
   try {
-    const data = await api("/api/generate", {
+    const requestId = crypto.randomUUID().replaceAll("-", "");
+    const request = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message,
         session_id: state.sessionId,
         selection: generationSelection(),
+        request_id: requestId,
       }),
-    });
+    };
+    let accepted;
+    try {
+      accepted = await api("/api/generate/start", request);
+    } catch (error) {
+      // A proxy can drop the acceptance response even after the server starts the task.
+      try {
+        accepted = await api(`/api/generate/jobs?job_id=${requestId}`);
+      } catch (_lookupError) { throw error; }
+    }
+    const data = await waitForGeneration(accepted.job.id);
     await Promise.all([loadCurrentSubject(), loadSubjects()]);
     const items = data.result?.items || [];
     if (!items.length) throw new Error(t("Orchestrator did not return any queued frames."));

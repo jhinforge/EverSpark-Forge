@@ -118,6 +118,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/resources": lambda: self._proxy_orchestrator_get(
                 "/resources", parsed.query
             ),
+            "/api/generate/jobs": lambda: self._proxy_orchestrator_get("/tasks/jobs", parsed.query),
             "/api/image/plugins": lambda: self._proxy_orchestrator_get("/image/plugins"),
             "/api/image/plugins/jobs": lambda: self._proxy_orchestrator_get("/image/plugins/jobs", parsed.query),
             "/api/storage/resources": lambda: self._proxy_orchestrator_get(
@@ -182,6 +183,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
             if path == "/api/generate":
                 self._generate(payload)
+            elif path == "/api/generate/start":
+                self._start_generation(payload)
             elif path == "/api/conversation":
                 self._conversation(payload)
             elif path == "/api/conversation/clear":
@@ -233,6 +236,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             "selection": payload.get("selection", {}),
         }
         self._proxy_orchestrator_post("/tasks", request_payload)
+
+    def _start_generation(self, payload: dict[str, Any]) -> None:
+        message = str(payload.get("message", "")).strip()
+        session_id = str(payload.get("session_id", "main")).strip()
+        if not message:
+            raise ValueError("Describe the scene before generating")
+        self._proxy_orchestrator_post("/tasks/start", {
+            "text": message, "session_id": session_id,
+            "selection": payload.get("selection", {}),
+            "request_id": str(payload.get("request_id", "")),
+        })
 
     def _conversation(self, payload: dict[str, Any]) -> None:
         message = str(payload.get("message", "")).strip()

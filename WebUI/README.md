@@ -27,7 +27,8 @@ configuration file.
 - Combine the automatically maintained identity with a temporary scene.
 - Select a registered workflow, Checkpoint, and installed Ollama model.
 - Add one or more standard LoRAs with independent MODEL and CLIP strengths.
-- Submit image tasks and track their exact Image Forge prompt identifiers.
+- Submit image tasks in the background, poll planning status, then track their
+  exact Image Forge prompt identifiers without holding an HTTP request open.
 - Display current results and recent Image Forge history, and download the
   complete output directory as a timestamped ZIP archive.
 - Show local Orchestrator, Image Forge, and logging readiness.
