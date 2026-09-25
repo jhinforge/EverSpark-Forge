@@ -29,6 +29,9 @@ class FakeEngine:
         self.received = None
         self.status = "running"
 
+    def health(self):
+        return False
+
     def submit(self, request, notify=None):
         self.received = request
         return "backend-job", {"workflow": "demo", "checkpoint": "test.safetensors",
@@ -83,6 +86,46 @@ class ImageGatewayTests(unittest.TestCase):
                     time.sleep(0.01)
             self.assertEqual(job["status"], "failed")
             self.assertIn("install unavailable", job["error"])
+
+    def test_existing_worker_is_stopped_before_dependency_repair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "outputs").mkdir()
+            class Worker(FakeEngine):
+                name = "diffusers"
+                online = True
+
+                def health(self):
+                    return self.online
+
+            worker = Worker()
+            gateway = ImageGateway(worker, str(root / "memory.db"), root / "outputs")
+            manifest = PluginManifest("diffusers", "Diffusers", "image_forge.adapters.diffusers",
+                                      "DiffusersAdapter", "diffusers", "Data/Runtime/Diffusers/peft-ready",
+                                      "Runtime/Managed/install_diffusers.sh")
+            manager = PluginManager({"diffusers": manifest}, gateway, root)
+            self.assertFalse(manager.plugins()["plugins"][0]["installed"])
+            actions = []
+
+            def run(command, **_kwargs):
+                actions.append(command)
+                if "stop" in command:
+                    worker.online = False
+                if command[0] == "bash":
+                    marker = root / manifest.runtime_marker
+                    marker.parent.mkdir(parents=True)
+                    marker.write_text("peft-ready")
+
+            with patch("image_forge.plugins.subprocess.run", side_effect=run):
+                started = manager.start("diffusers", "install")
+                for _ in range(100):
+                    result = manager.job(started["id"])
+                    if result["status"] != "running":
+                        break
+                    time.sleep(0.01)
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(["stop" if "stop" in args else "install" if args[0] == "bash"
+                              else "start" for args in actions], ["stop", "install", "start"])
 
     def test_comfyui_adapter_translates_shared_request_into_workflow(self):
         config = {"directory": str(ROOT / "ImageForge/Workflows"),

@@ -45,7 +45,8 @@ class PluginManager:
                 online = False
             with self._lock:
                 active = self._active.get(name, "")
-            result.append({**manifest.public(), "installed": self._installed(manifest) or online,
+            installed = self._installed(manifest)
+            result.append({**manifest.public(), "installed": installed if manifest.installer else installed or online,
                            "online": online, "installable": bool(manifest.installer),
                            "job_id": active})
         return {"default": self.gateway.default(), "plugins": result}
@@ -99,6 +100,14 @@ class PluginManager:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             if state["action"] == "install":
+                if self.gateway.engines[manifest.id].health():
+                    with log_path.open("ab") as log:
+                        subprocess.run([sys.executable, str(self.root / "Runtime/Managed/runtime_manager.py"),
+                                        "stop", manifest.managed_service], cwd=self.root,
+                                       stdout=log, stderr=subprocess.STDOUT,
+                                       check=True, timeout=90)
+                    if self.gateway.engines[manifest.id].health():
+                        raise RuntimeError(f"Stop the existing {manifest.name} worker before repairing it")
                 installer = (self.root / manifest.installer).resolve()
                 if self.root.resolve() not in installer.parents:
                     raise ValueError("Invalid plugin installer path")

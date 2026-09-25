@@ -27,6 +27,11 @@ the ComfyUI adapter. The engines may produce different images from the same
 seed and prompts. Diffusers may need access to model configuration files when
 loading a single-file checkpoint.
 
+For Diffusers installations made before the PEFT dependency was added, Forge
+shows **Repair required**. Click **Repair tool** to stop the managed worker,
+install and verify PEFT, and start it again. A selected LoRA remains active
+when changing VAE; clear LoRA selections to test VAE loading on its own.
+
 The job catalog is stored alongside EverSpark Memory in its SQLite database;
 images remain in `Data/Outputs`. Earlier images in that directory appear in
 the gallery even if their ComfyUI job ID was never registered. Completed jobs

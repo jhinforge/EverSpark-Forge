@@ -42,6 +42,8 @@
     "Drawing tool": "绘图工具",
     "Set as default": "设为默认",
     "Install tool": "安装工具",
+    "Repair tool": "修复工具",
+    "Repair required": "需要修复",
     "Enable tool": "启动工具",
     "Not installed": "未安装",
     "Offline": "未运行",

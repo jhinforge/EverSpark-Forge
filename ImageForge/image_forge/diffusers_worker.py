@@ -65,6 +65,7 @@ def write_job(job_id: str, result: dict[str, Any]) -> None:
 
 def generate(job_id: str, data: dict[str, Any]) -> None:
     write_job(job_id, {"status": "running", "images": []})
+    stage = "checkpoint loading"
     try:
         import torch
         from diffusers import AutoencoderKL, StableDiffusionXLPipeline
@@ -74,11 +75,14 @@ def generate(job_id: str, data: dict[str, Any]) -> None:
         pipe = StableDiffusionXLPipeline.from_single_file(str(checkpoint),
                                                             torch_dtype=dtype)
         if data.get("vae"):
+            stage = "VAE loading"
             vae = model_path("vae", data["vae"])
             pipe.vae = AutoencoderKL.from_single_file(str(vae), torch_dtype=dtype)
+        stage = "pipeline setup"
         pipe.to("cuda" if torch.cuda.is_available() else "cpu")
         names, weights = [], []
         for index, item in enumerate(data.get("loras", [])):
+            stage = "LoRA loading"
             path = model_path("loras", item["name"])
             adapter_name = f"adapter_{index}"
             pipe.load_lora_weights(str(path.parent), weight_name=path.name,
@@ -86,7 +90,9 @@ def generate(job_id: str, data: dict[str, Any]) -> None:
             names.append(adapter_name)
             weights.append(float(item.get("strength_model", 1)))
         if names:
+            stage = "LoRA activation"
             pipe.set_adapters(names, adapter_weights=weights)
+        stage = "image generation"
         generator = torch.Generator(device="cuda" if torch.cuda.is_available() else "cpu")
         generator.manual_seed(int(data["seed"]))
         def on_step(_pipe: Any, step: int, _timestep: Any,
@@ -108,7 +114,7 @@ def generate(job_id: str, data: dict[str, Any]) -> None:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
     except Exception as exc:
-        write_job(job_id, {"status": "failed", "images": [], "error": str(exc)})
+        write_job(job_id, {"status": "failed", "images": [], "error": f"{stage}: {exc}"})
     finally:
         with lock:
             active_jobs.discard(job_id)

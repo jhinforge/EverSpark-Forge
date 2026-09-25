@@ -4,6 +4,6 @@
   "module": "image_forge.adapters.diffusers",
   "class": "DiffusersAdapter",
   "managed_service": "diffusers",
-  "runtime_marker": "Data/Runtime/Diffusers/torch-profile",
+  "runtime_marker": "Data/Runtime/Diffusers/peft-ready",
   "installer": "Runtime/Managed/install_diffusers.sh"
 }

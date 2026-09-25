@@ -28,14 +28,21 @@ if [ ! -x "${DIFFUSERS_VENV}/bin/python" ]; then
   "${DIFFUSERS_VENV}/bin/python" -m pip install --disable-pip-version-check \
     --index-url "$TORCH_INDEX_URL" "torch==${TORCH_VERSION}"
 fi
+rm -f -- "${DIFFUSERS_RUNTIME}/peft-ready"
 "${DIFFUSERS_VENV}/bin/python" -m pip install --disable-pip-version-check \
-  'diffusers==0.35.1' 'transformers>=4.44,<5' 'accelerate>=1,<2' safetensors
+  'diffusers==0.35.1' 'transformers>=4.44,<5' 'accelerate>=1,<2' \
+  'peft>=0.17,<0.20' safetensors
 EVERSPARK_EXPECTED_TORCH_VERSION="$TORCH_VERSION" \
 EVERSPARK_EXPECTED_TORCH_CUDA="$TORCH_EXPECTED_CUDA" \
   "${DIFFUSERS_VENV}/bin/python" - <<'PY'
 import os
 import diffusers
 import torch
+import peft
+from diffusers.utils import USE_PEFT_BACKEND
+
+if not USE_PEFT_BACKEND:
+    raise SystemExit("Diffusers PEFT backend is unavailable")
 
 if not torch.__version__.startswith(os.environ["EVERSPARK_EXPECTED_TORCH_VERSION"]):
     raise SystemExit(f"Wrong Diffusers PyTorch version: {torch.__version__}")
@@ -43,6 +50,8 @@ if not (torch.version.cuda or "").startswith(os.environ["EVERSPARK_EXPECTED_TORC
     raise SystemExit(f"Wrong Diffusers CUDA profile: {torch.version.cuda}")
 if not torch.cuda.is_available() and os.environ.get("EVERSPARK_ALLOW_CPU") != "1":
     raise SystemExit("CUDA is unavailable to Diffusers")
-print("Diffusers:", diffusers.__version__, "PyTorch:", torch.__version__)
+print("Diffusers:", diffusers.__version__, "PEFT:", peft.__version__,
+      "PyTorch:", torch.__version__)
 PY
 printf '%s\n' "$TORCH_PROFILE_REVISION" > "${DIFFUSERS_RUNTIME}/torch-profile"
+printf '%s\n' 'peft-ready' > "${DIFFUSERS_RUNTIME}/peft-ready"

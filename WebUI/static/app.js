@@ -299,9 +299,11 @@ function renderImagePlugin() {
   const plugin = state.imagePlugins.find((item) => item.id === elements.imageEngineSelect.value);
   if (!plugin) return;
   elements.imageEngineStatus.textContent = plugin.job_id ? t("Installing tool") :
-    !plugin.installed ? t("Not installed") : plugin.online ? t("Ready") : t("Offline");
-  elements.imageEngineAction.hidden = plugin.online || Boolean(plugin.job_id);
-  elements.imageEngineAction.textContent = t(plugin.installed ? "Enable tool" : "Install tool");
+    !plugin.installed ? t(plugin.online ? "Repair required" : "Not installed") :
+    plugin.online ? t("Ready") : t("Offline");
+  elements.imageEngineAction.hidden = (plugin.online && plugin.installed) || Boolean(plugin.job_id);
+  elements.imageEngineAction.textContent = t(plugin.installed ? "Enable tool" :
+    plugin.online ? "Repair tool" : "Install tool");
   elements.imageEngineAction.disabled = !plugin.installed && !plugin.installable;
   elements.imageEngineDefault.hidden = plugin.id === state.defaultImagePlugin || !plugin.installed;
 }
