@@ -13,6 +13,7 @@ const state = {
   pathsLoaded: false,
   selectedLoras: [],
   imagePlugins: [],
+  modelConnections: [],
   defaultImagePlugin: "comfyui",
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
@@ -74,6 +75,15 @@ const elements = {
   checkpointSelect: $("#checkpointSelect"),
   vaeSelect: $("#vaeSelect"),
   llmSelect: $("#llmSelect"),
+  conceptProviderSelect: $("#conceptProviderSelect"),
+  modelServiceList: $("#modelServiceList"),
+  modelServiceForm: $("#modelServiceForm"),
+  modelServiceId: $("#modelServiceId"),
+  modelServiceName: $("#modelServiceName"),
+  modelServiceUrl: $("#modelServiceUrl"),
+  modelServiceModel: $("#modelServiceModel"),
+  modelServiceKey: $("#modelServiceKey"),
+  modelServiceJsonMode: $("#modelServiceJsonMode"),
   loraSelect: $("#loraSelect"),
   addLoraButton: $("#addLoraButton"),
   selectedLoras: $("#selectedLoras"),
@@ -131,6 +141,7 @@ const viewCopy = {
   history: ["WORKSPACE / GALLERY", "Review the latest outputs."],
   storage: ["WORKSPACE / STORAGE", "Manage models and backups."],
   runtime: ["WORKSPACE / RUNTIME", "Know what is ready."],
+  models: ["WORKSPACE / MODEL SERVICES", "Connect language models."],
 };
 
 async function api(path, options = {}) {
@@ -310,6 +321,7 @@ function generationSelection() {
     checkpoint: elements.checkpointSelect.value,
     vae: elements.vaeSelect.value,
     llm: elements.llmSelect.value,
+    concept_provider: elements.conceptProviderSelect.value,
     loras: state.selectedLoras.map((item) => ({ ...item })),
   };
 }
@@ -373,6 +385,15 @@ async function defaultImagePlugin() {
   } catch (error) { showNotice(error.message); }
 }
 
+function updateConceptModels() {
+  const provider = elements.conceptProviderSelect.value;
+  const models = state.resources.conceptModels?.[provider] || [];
+  const preferred = provider === state.resources.defaults.concept_provider
+    ? state.resources.defaults.llm : state.resources.conceptProviders?.find((item) => item.id === provider)?.model;
+  fillSelect(elements.llmSelect, models, (item) => item, (item) => item, preferred);
+  elements.llmSelect.disabled = !models.length;
+}
+
 async function loadResources() {
   try {
     const engine = elements.imageEngineSelect.value;
@@ -404,18 +425,23 @@ async function loadResources() {
     fillSelect(elements.workflowSelect, state.resources.workflows, (item) => item.id, (item) => item.name, state.resources.defaults.workflow);
     fillSelect(elements.checkpointSelect, state.resources.checkpoints, (item) => item, (item) => item, state.resources.defaults.checkpoint);
     fillSelect(elements.vaeSelect, ["", ...state.resources.vaes], (item) => item, (item) => item || t("Checkpoint VAE"));
-    fillSelect(elements.llmSelect, state.resources.llms, (item) => item, (item) => item, state.resources.defaults.llm);
+    state.resources.conceptProviders = data.concept_providers || [];
+    state.resources.conceptModels = data.concept_models || {};
+    fillSelect(elements.conceptProviderSelect, state.resources.conceptProviders,
+      (item) => item.id, (item) => item.name, state.resources.defaults.concept_provider);
+    updateConceptModels();
     fillSelect(elements.loraSelect, state.resources.loras, (item) => item, (item) => item);
     elements.workflowSelect.disabled = !state.resources.workflows.length;
     elements.checkpointSelect.disabled = !state.resources.checkpoints.length;
     elements.vaeSelect.disabled = !state.resources.vaes.length;
-    elements.llmSelect.disabled = !state.resources.llms.length;
+    elements.conceptProviderSelect.disabled = !state.resources.conceptProviders.length;
     updateLoraAvailability();
   } catch (error) {
     elements.workflowSelect.disabled = true;
     elements.checkpointSelect.disabled = true;
     elements.vaeSelect.disabled = true;
     elements.llmSelect.disabled = true;
+    elements.conceptProviderSelect.disabled = true;
     elements.loraSelect.disabled = true;
     elements.addLoraButton.disabled = true;
     showNotice(error.message);
@@ -885,6 +911,135 @@ async function retryDirectDownload() {
   }
 }
 
+function resetModelServiceForm() {
+  elements.modelServiceForm.reset();
+  elements.modelServiceId.value = "";
+  uiText($("#modelServiceFormTitle"), "Add model service");
+  $("#cancelModelServiceEdit").classList.add("hidden");
+}
+
+function modelServicePayload() {
+  return {
+    id: elements.modelServiceId.value,
+    name: elements.modelServiceName.value.trim(),
+    base_url: elements.modelServiceUrl.value.trim(),
+    model: elements.modelServiceModel.value.trim(),
+    api_key: elements.modelServiceKey.value,
+    json_mode: elements.modelServiceJsonMode.checked,
+  };
+}
+
+async function modelServiceRequest(path, payload) {
+  return api(`/api/concept/connections/${path}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+function renderModelConnections() {
+  elements.modelServiceList.replaceChildren();
+  for (const connection of state.modelConnections) {
+    const card = document.createElement("article");
+    card.className = "model-service-card";
+    const heading = document.createElement("h3");
+    heading.textContent = connection.name;
+    const model = document.createElement("p");
+    model.textContent = `${connection.type === "ollama" ? "Ollama" : "OpenAI Compatible"} · ${connection.model}`;
+    const detail = document.createElement("p");
+    uiText(detail, connection.id === state.defaultModelService ? "Default model service" :
+      (connection.builtin ? "Built-in connection" : "API Key saved on server"));
+    card.append(heading, model, detail);
+    if (connection.base_url) {
+      const url = document.createElement("p");
+      url.textContent = connection.base_url;
+      card.appendChild(url);
+    }
+    const actions = document.createElement("div");
+    actions.className = "model-service-card-actions";
+    if (connection.id !== state.defaultModelService) {
+      const setDefault = document.createElement("button");
+      setDefault.type = "button";
+      setDefault.className = "secondary-button";
+      uiText(setDefault, "Set as default");
+      setDefault.addEventListener("click", async () => {
+        try {
+          await modelServiceRequest("default", { id: connection.id });
+          await Promise.all([loadModelConnections(), loadResources()]);
+          elements.conceptProviderSelect.value = connection.id;
+          updateConceptModels();
+        } catch (error) { showNotice(error.message); }
+      });
+      actions.appendChild(setDefault);
+    }
+    if (!connection.builtin) {
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "secondary-button";
+      uiText(edit, "Edit connection");
+      edit.addEventListener("click", () => {
+        elements.modelServiceId.value = connection.id;
+        elements.modelServiceName.value = connection.name;
+        elements.modelServiceUrl.value = connection.base_url;
+        elements.modelServiceModel.value = connection.model;
+        elements.modelServiceKey.value = "";
+        elements.modelServiceJsonMode.checked = connection.json_mode;
+        uiText($("#modelServiceFormTitle"), "Edit model service");
+        $("#cancelModelServiceEdit").classList.remove("hidden");
+        elements.modelServiceName.focus();
+      });
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "ghost-button";
+      uiText(remove, "Remove connection");
+      remove.addEventListener("click", async () => {
+        if (!window.confirm(t("Remove this model connection?"))) return;
+        try {
+          await modelServiceRequest("remove", { id: connection.id });
+          if (elements.modelServiceId.value === connection.id) resetModelServiceForm();
+          await Promise.all([loadModelConnections(), loadResources()]);
+        } catch (error) { showNotice(error.message); }
+      });
+      actions.append(edit, remove);
+    }
+    card.appendChild(actions);
+    elements.modelServiceList.appendChild(card);
+  }
+}
+
+async function loadModelConnections() {
+  try {
+    const data = await api("/api/concept/connections");
+    state.modelConnections = data.connections || [];
+    state.defaultModelService = data.default;
+    renderModelConnections();
+  } catch (error) { showNotice(error.message); }
+}
+
+async function saveModelService(event) {
+  event.preventDefault();
+  hideNotice();
+  const button = $("#saveModelService");
+  button.disabled = true;
+  try {
+    await modelServiceRequest("save", modelServicePayload());
+    resetModelServiceForm();
+    await Promise.all([loadModelConnections(), loadResources()]);
+    showNotice(t("Model connection saved."), "success");
+  } catch (error) { showNotice(error.message); }
+  finally { button.disabled = false; }
+}
+
+async function testModelService() {
+  hideNotice();
+  const button = $("#testModelService");
+  button.disabled = true;
+  try {
+    await modelServiceRequest("test", modelServicePayload());
+    showNotice(t("Model connection works."), "success");
+  } catch (error) { showNotice(error.message); }
+  finally { button.disabled = false; }
+}
+
 function setView(name) {
   $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
   $$("[data-view-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.viewPanel === name));
@@ -892,6 +1047,7 @@ function setView(name) {
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
+  if (name === "models") loadModelConnections();
   if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadRestorePoints()]);
 }
 
@@ -1632,6 +1788,11 @@ function bindEvents() {
   elements.discussModeButton.addEventListener("click", () => setMode("discuss"));
   elements.generateModeButton.addEventListener("click", () => setMode("generate"));
   elements.workflowSelect.addEventListener("change", updateLoraAvailability);
+  elements.conceptProviderSelect.addEventListener("change", updateConceptModels);
+  elements.modelServiceForm.addEventListener("submit", saveModelService);
+  $("#testModelService").addEventListener("click", testModelService);
+  $("#cancelModelServiceEdit").addEventListener("click", resetModelServiceForm);
+  $("#refreshModelServices").addEventListener("click", loadModelConnections);
   elements.imageEngineSelect.addEventListener("change", () => {
     state.selectedLoras = [];
     renderSelectedLoras();
@@ -1705,7 +1866,7 @@ async function initialize() {
   bindEvents();
   setMode("discuss");
   renderSelectedSubject();
-  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadImagePlugins(), loadRemoteStorage(), loadDirectDownload(), loadBackup()]);
+  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadImagePlugins(), loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadModelConnections()]);
   await loadResources();
   setInterval(loadRuntime, 20000);
 }

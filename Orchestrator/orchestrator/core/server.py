@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from concept_forge.subjects import SubjectValidationError
+from concept_forge.port import ConceptError
 from everspark_memory import SubjectRevisionConflictError
 
 from ..config.config import ConfigError, load_config
@@ -67,6 +68,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, **self.server.orchestrator.image_plugins()})
             except Exception as exc:
                 self._send(502, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/concept/connections":
+            self._send(200, {"ok": True, **self.server.orchestrator.concept_connections()})
         elif parsed.path == "/image/plugins/jobs":
             try:
                 job_id = parse_qs(parsed.query).get("job_id", [""])[0]
@@ -266,6 +269,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/image/plugins/install",
             "/image/plugins/enable",
             "/image/plugins/default",
+            "/concept/connections/save",
+            "/concept/connections/test",
+            "/concept/connections/remove",
+            "/concept/connections/default",
         }:
             self._send(404, {"ok": False, "error": "Not found"})
             return
@@ -293,6 +300,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif request_path == "/image/plugins/default":
                 result = self.server.orchestrator.set_default_image_plugin(str(payload.get("plugin", "")))
                 self._send(200, {"ok": True, **result})
+            elif request_path == "/concept/connections/save":
+                self._send(200, {"ok": True, **self.server.orchestrator.save_concept_connection(payload)})
+            elif request_path == "/concept/connections/test":
+                self._send(200, {"ok": True, **self.server.orchestrator.test_concept_connection(payload)})
+            elif request_path == "/concept/connections/remove":
+                self._send(200, {"ok": True, **self.server.orchestrator.remove_concept_connection(str(payload.get("id", "")))})
+            elif request_path == "/concept/connections/default":
+                self._send(200, {"ok": True, **self.server.orchestrator.default_concept_connection(str(payload.get("id", "")))})
             elif request_path == "/conversation":
                 result = self.server.orchestrator.discuss(
                     str(payload.get("text", "")),
@@ -400,6 +415,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send(404, {"ok": False, "error": str(exc)})
         except (StorageError, DownloadError) as exc:
             self._send(400, {"ok": False, "error": str(exc)})
+        except ConceptError as exc:
+            self._send(502, {"ok": False, "error": str(exc)})
         except (ValueError, SubjectValidationError, json.JSONDecodeError) as exc:
             self._log(
                 "warning",

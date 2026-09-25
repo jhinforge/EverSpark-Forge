@@ -13,7 +13,7 @@ PLUGIN_DIRECTORY = Path(__file__).resolve().parents[2] / "Plugins"
 
 
 def create_adapters(config: dict[str, Any], directory: Path = PLUGIN_DIRECTORY) -> dict[str, ConceptAdapter]:
-    adapters: dict[str, ConceptAdapter] = {}
+    manifests: dict[str, dict[str, Any]] = {}
     for path in sorted(directory.glob("*.json")):
         manifest = json.loads(path.read_text(encoding="utf-8"))
         name = manifest["id"]
@@ -23,16 +23,21 @@ def create_adapters(config: dict[str, Any], directory: Path = PLUGIN_DIRECTORY) 
                 or not isinstance(module_name, str)
                 or not module_name.startswith("concept_forge.adapters.")):
             raise ValueError(f"Invalid Concept Forge adapter manifest: {path.name}")
-        if name in adapters:
+        if name in manifests:
             raise ValueError(f"Duplicate Concept Forge adapter: {name}")
-        settings = config.get(name)
-        if settings is None:
-            continue
+        manifests[name] = manifest
+    adapters: dict[str, ConceptAdapter] = {}
+    for instance_id, settings in config.items():
         if not isinstance(settings, dict):
-            raise ValueError(f"Invalid Concept Forge provider config: {name}")
+            raise ValueError(f"Invalid Concept Forge provider config: {instance_id}")
+        kind = settings.get("provider_type", instance_id)
+        manifest = manifests.get(kind)
+        if manifest is None:
+            raise ValueError(f"Unsupported Concept Forge adapter: {kind}")
+        module_name = manifest["module"]
         adapter_type = getattr(importlib.import_module(module_name), manifest["class"])
         adapter = adapter_type(settings)
-        if adapter.name != name:
-            raise ValueError(f"Concept Forge adapter ID mismatch: {name}")
-        adapters[name] = adapter
+        if adapter.name != kind:
+            raise ValueError(f"Concept Forge adapter ID mismatch: {kind}")
+        adapters[instance_id] = adapter
     return adapters

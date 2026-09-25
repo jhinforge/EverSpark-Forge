@@ -19,8 +19,15 @@ Orchestrator talks to Concept Forge through the service. The gateway routes
 normalized chat requests to a registered adapter; Ollama's `/api/chat` payload,
 `/api/tags` model list, `/no_think` setting, and HTTP errors stay in its adapter.
 Other providers can add their own input and output adapters without changing
-the subject, discussion, or prompt compilation logic. Only Ollama is installed
-as a Concept Forge provider in this release; the existing configuration remains valid.
+the subject, discussion, or prompt compilation logic. Ollama remains the built-in
+default. OpenAI Compatible connections can be added under **Model services** in
+the WebUI sidebar. Enter a connection name, an API base URL ending in `/v1`,
+the provider's exact model ID, and its API Key. Test before using it, then choose
+the service and model in Forge, or set it as the default for subject revisions.
+The adapter sends non-streaming Chat Completions requests. Optional JSON mode
+is disabled by default for services that do not implement `response_format`.
+Connections persist under `Data/Configuration/ConceptForge/connections.json`
+with owner-only file permissions; API keys are never returned by the WebUI API.
 
 ## Character Subject v1
 

@@ -648,6 +648,22 @@ class APITests(unittest.TestCase):
         def clear_memory(self, session_id):
             self.cleared = session_id
 
+        def concept_connections(self):
+            return {"default": "ollama", "connections": [{"id": "ollama", "model": "local"}]}
+
+        def save_concept_connection(self, payload):
+            self.saved_connection = payload
+            return {"default": "ollama", "connections": [{"id": "api_test", "model": payload["model"]}]}
+
+        def test_concept_connection(self, payload):
+            return {"model": payload["model"], "connected": True}
+
+        def remove_concept_connection(self, identifier):
+            return {"default": "ollama", "connections": [], "removed": identifier}
+
+        def default_concept_connection(self, identifier):
+            return {"default": identifier, "connections": []}
+
         def discuss(self, text, session_id, selection=None):
             return {
                 "ok": True,
@@ -854,6 +870,24 @@ class APITests(unittest.TestCase):
             time.sleep(.01)
         self.assertEqual(completed["job"]["response"]["text"], "red dress")
         self.assertEqual(self.fake.submit_calls, 1)
+
+    def test_concept_connection_routes_hide_the_key(self) -> None:
+        status, listed = self._request("/concept/connections")
+        self.assertEqual(status, 200)
+        self.assertEqual(listed["default"], "ollama")
+        payload = {"name": "Test", "base_url": "https://example.test/v1",
+                   "api_key": "secret-key", "model": "actual-id"}
+        status, tested = self._request("/concept/connections/test", payload)
+        self.assertEqual(status, 200)
+        self.assertTrue(tested["connected"])
+        _, saved = self._request("/concept/connections/save", payload)
+        self.assertEqual(saved["connections"][0]["model"], "actual-id")
+        self.assertNotIn("secret-key", json.dumps(saved))
+        self.assertEqual(self.fake.saved_connection["api_key"], "secret-key")
+        _, activated = self._request("/concept/connections/default", {"id": "api_test"})
+        self.assertEqual(activated["default"], "api_test")
+        _, removed = self._request("/concept/connections/remove", {"id": "api_test"})
+        self.assertEqual(removed["removed"], "api_test")
 
     def test_storage_routes_use_the_infrastructure_boundary(self) -> None:
         status, scan = self._request("/storage/scan")

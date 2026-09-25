@@ -1,0 +1,5 @@
+{
+  "id": "openai_compatible",
+  "module": "concept_forge.adapters.openai_compatible",
+  "class": "OpenAICompatibleAdapter"
+}

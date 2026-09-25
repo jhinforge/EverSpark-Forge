@@ -127,6 +127,7 @@ class Orchestrator:
                 text,
                 history,
                 llm_model=str(selected.get("llm", "")),
+                concept_provider=str(selected.get("concept_provider", "")),
                 persist=False,
             )
             saved_prompts = self.memory.get_subject_prompt(document["subject_id"])
@@ -183,18 +184,22 @@ class Orchestrator:
             raise BusyError("The first-version Orchestrator is already running one task")
         selected = self._normalize_selection(selection)
         llm_model = str(selected.get("llm", ""))
+        concept_provider = str(selected.get("concept_provider", ""))
         try:
             history = self.memory.get_history(session)
+            kwargs = {}
             if llm_model:
-                reply = self.runner.concept.discuss(text, history, model=llm_model)
-            else:
-                reply = self.runner.concept.discuss(text, history)
+                kwargs["model"] = llm_model
+            if concept_provider:
+                kwargs["provider"] = concept_provider
+            reply = self.runner.concept.discuss(text, history, **kwargs)
             document = self._refresh_session_subject(
                 session,
                 text,
                 history,
                 assistant_reply=reply,
                 llm_model=llm_model,
+                concept_provider=concept_provider,
             )
             self.memory.record_conversation(session, text, reply)
             return {"ok": True, "reply": reply, "subject": document}
@@ -208,6 +213,7 @@ class Orchestrator:
         history: list[dict[str, str]],
         assistant_reply: str = "",
         llm_model: str = "",
+        concept_provider: str = "",
         persist: bool = True,
     ) -> dict[str, Any]:
         subject_id = self.memory.get_or_create_session_subject_id(session_id)
@@ -215,6 +221,8 @@ class Orchestrator:
         kwargs = {"history": history, "assistant_reply": assistant_reply}
         if llm_model:
             kwargs["model"] = llm_model
+        if concept_provider:
+            kwargs["provider"] = concept_provider
         document = self.runner.concept.generate_subject(
             user_text, subject_id, existing, **kwargs
         )
@@ -361,6 +369,21 @@ class Orchestrator:
 
     def resources(self, engine: str = "") -> dict[str, Any]:
         return self.runner.resources(engine)
+
+    def concept_connections(self) -> dict[str, Any]:
+        return self.runner.concept_connections.public()
+
+    def save_concept_connection(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.runner.concept_connections.save(payload)
+
+    def test_concept_connection(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.runner.concept_connections.test(payload)
+
+    def remove_concept_connection(self, identifier: str) -> dict[str, Any]:
+        return self.runner.concept_connections.remove(identifier)
+
+    def default_concept_connection(self, identifier: str) -> dict[str, Any]:
+        return self.runner.concept_connections.set_default(identifier)
 
     def image_health(self) -> dict[str, Any]:
         engine = self.runner.gateway.select()

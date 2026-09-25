@@ -68,24 +68,30 @@ class GenerationPlan:
 class ConceptService:
     def __init__(self, gateway: ConceptGateway):
         self.gateway = gateway
-        self.model = gateway.model
 
-    def _chat(self, messages: list[dict[str, str]], model: str = "", json_mode: bool = False) -> str:
-        return self.gateway.chat(ChatRequest(messages, model or self.model, json_mode)).content
+    @property
+    def model(self) -> str:
+        return self.gateway.model
 
-    def list_models(self) -> list[str]:
-        return self.gateway.list_models()
+    def _chat(self, messages: list[dict[str, str]], model: str = "", json_mode: bool = False,
+              provider: str = "") -> str:
+        adapter = self.gateway.select(provider)
+        return self.gateway.chat(ChatRequest(messages, model or adapter.model, json_mode), provider).content
+
+    def list_models(self, provider: str = "") -> list[str]:
+        return self.gateway.list_models(provider)
 
     def generate_prompt(
         self,
         user_text: str,
         history: list[dict[str, str]] | None = None,
         model: str = "",
+        provider: str = "",
     ) -> GenerationPlan:
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages.extend(history or [])
         messages.append({"role": "user", "content": user_text})
-        response = self._chat(messages, model.strip(), json_mode=True)
+        response = self._chat(messages, model.strip(), json_mode=True, provider=provider)
         try:
             result = json.loads(response)
         except (KeyError, TypeError, json.JSONDecodeError) as exc:
@@ -115,6 +121,7 @@ class ConceptService:
         history: list[dict[str, str]] | None = None,
         assistant_reply: str = "",
         model: str = "",
+        provider: str = "",
     ) -> dict[str, Any]:
         if existing is None:
             target = new_subject(subject_id, subject_id)
@@ -156,7 +163,7 @@ class ConceptService:
                 ),
             },
         ]
-        response = self._chat(messages, model.strip(), json_mode=True)
+        response = self._chat(messages, model.strip(), json_mode=True, provider=provider)
         try:
             document = json.loads(response)
         except (KeyError, TypeError, json.JSONDecodeError) as exc:
@@ -189,11 +196,12 @@ class ConceptService:
         user_text: str,
         history: list[dict[str, str]] | None = None,
         model: str = "",
+        provider: str = "",
     ) -> str:
         messages = [{"role": "system", "content": DISCUSSION_SYSTEM_PROMPT}]
         messages.extend(history or [])
         messages.append({"role": "user", "content": user_text})
-        response = self._chat(messages, model.strip())
+        response = self._chat(messages, model.strip(), provider=provider)
         reply = response.strip()
         if not reply:
             raise ConceptError("Concept Forge model returned an empty discussion response")

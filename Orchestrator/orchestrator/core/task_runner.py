@@ -4,8 +4,7 @@ import secrets
 from pathlib import Path
 from typing import Any, Callable
 
-from concept_forge.adapters import create_adapters
-from concept_forge.gateway import ConceptGateway
+from concept_forge.connections import ConceptConnections
 from concept_forge.service import ConceptService, GenerationPlan
 from concept_forge.subjects import CompiledSubject
 from image_forge.adapters import create_engines, discover_plugins
@@ -22,12 +21,10 @@ class TaskRunner:
     def __init__(self, config: dict[str, Any]):
         concept_config = config["concept_forge"]
         image_config = config["image_forge"]
-        provider = str(concept_config.get("provider", "")).strip().lower()
         adapter = str(image_config.get("adapter", "")).strip().lower()
         try:
-            self.concept = ConceptService(ConceptGateway(
-                create_adapters(concept_config["providers"]), provider,
-            ))
+            self.concept_connections = ConceptConnections(concept_config)
+            self.concept = ConceptService(self.concept_connections.gateway)
         except ValueError as exc:
             raise TaskError(str(exc)) from exc
         self.manifests = discover_plugins()
@@ -67,11 +64,12 @@ class TaskRunner:
         checkpoint = str(selected.get("checkpoint", "")).strip()
         vae = str(selected.get("vae", "")).strip()
         llm_model = str(selected.get("llm", "")).strip()
+        concept_provider = str(selected.get("concept_provider", "")).strip()
         loras = selected.get("loras", [])
         if not isinstance(loras, list):
             raise TaskError("selection.loras must be a list")
         if llm_model:
-            available_llms = self.concept.list_models()
+            available_llms = self.concept.list_models(concept_provider) if concept_provider else self.concept.list_models()
             resolved_llm = self._resolve_model(llm_model, available_llms)
             if not resolved_llm:
                 raise TaskError(f"Selected LLM is unavailable: {llm_model}")
@@ -90,6 +88,7 @@ class TaskRunner:
             prompt_history,
             notify or (lambda _message: None),
             llm_model,
+            concept_provider,
         )
         if plan.status != "over":
             raise TaskError(
@@ -126,6 +125,9 @@ class TaskRunner:
             selected_loras = resolved["loras"]
             items.append({"index": index, "prompt_id": prompt_id, "seed": seed})
 
+        selected_llm = (llm_model or (self.concept.gateway.select(concept_provider).model
+                                  if hasattr(self.concept, "gateway") else
+                                  str(getattr(self.concept, "model", ""))))
         return {
             "status": "queued",
             "model": plan.model,
@@ -137,7 +139,8 @@ class TaskRunner:
                 "engine": selected_engine.name,
                 "checkpoint": selected_checkpoint,
                 "vae": selected_vae,
-                "llm": llm_model or str(getattr(self.concept, "model", "")),
+                "llm": selected_llm,
+                "concept_provider": concept_provider or str(getattr(getattr(self.concept, "gateway", None), "default", "ollama")),
                 "loras": selected_loras,
             },
             "items": items,
@@ -154,6 +157,16 @@ class TaskRunner:
         resources = self.gateway.resources(engine)
         resources["llms"] = llms
         resources["defaults"]["llm"] = default_llm or self.concept.model
+        resources["defaults"]["concept_provider"] = self.concept.gateway.default
+        resources["concept_providers"] = self.concept_connections.public()["connections"]
+        models_by_provider = {self.concept.gateway.default: llms}
+        for entry in resources["concept_providers"]:
+            if entry["id"] not in models_by_provider:
+                try:
+                    models_by_provider[entry["id"]] = self.concept.list_models(entry["id"])
+                except (OSError, RuntimeError):
+                    models_by_provider[entry["id"]] = []
+        resources["concept_models"] = models_by_provider
         return resources
 
     @staticmethod
@@ -177,15 +190,16 @@ class TaskRunner:
         history: list[dict[str, str]],
         notify: Callable[[str], None],
         llm_model: str = "",
+        concept_provider: str = "",
     ) -> GenerationPlan:
         attempts = self.max_model_retries + 1
         for attempt in range(attempts):
+            kwargs = {}
             if llm_model:
-                plan = self.concept.generate_prompt(
-                    user_text, history, model=llm_model
-                )
-            else:
-                plan = self.concept.generate_prompt(user_text, history)
+                kwargs["model"] = llm_model
+            if concept_provider:
+                kwargs["provider"] = concept_provider
+            plan = self.concept.generate_prompt(user_text, history, **kwargs)
             if plan.model in self.supported_models:
                 return plan
             if attempt < attempts - 1:

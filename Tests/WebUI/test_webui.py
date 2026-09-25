@@ -74,6 +74,8 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                 {"id": "diffusers", "name": "Diffusers", "installed": False, "online": False}]})
         elif parsed.path == "/image/plugins/jobs":
             self._json(200, {"ok": True, "job": {"id": query.get("job_id", [""])[0], "status": "completed"}})
+        elif parsed.path == "/concept/connections":
+            self._json(200, {"ok": True, "default": "ollama", "connections": [{"id": "ollama", "name": "Ollama", "model": "local"}]})
         elif parsed.path == "/resources":
             self._json(
                 200,
@@ -264,6 +266,11 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
             self._json(202, {"ok": True, "job": {"id": "a" * 32, "plugin": payload["plugin"], "status": "running"}})
         elif self.path == "/image/plugins/default":
             self._json(200, {"ok": True, "default": payload["plugin"]})
+        elif self.path in {"/concept/connections/save", "/concept/connections/test",
+                           "/concept/connections/remove", "/concept/connections/default"}:
+            type(self).received_connection = payload
+            self._json(200, {"ok": True, "connected": True, "default": payload.get("id", "ollama"),
+                             "connections": []})
         elif self.path == "/conversation":
             self._json(
                 200,
@@ -471,6 +478,16 @@ class WebUIIntegrationTests(unittest.TestCase):
             },
         )
         self.assertEqual(MockUpstreamHandler.received_task["selection"], selection)
+
+    def test_model_service_routes_are_proxied(self) -> None:
+        _, listed = self.request_json("/api/concept/connections")
+        self.assertEqual(listed["connections"][0]["name"], "Ollama")
+        payload = {"base_url": "https://example.test/v1", "api_key": "private-key",
+                   "name": "Testing", "model": "exact-model"}
+        status, tested = self.request_json("/api/concept/connections/test", payload)
+        self.assertEqual(status, 200)
+        self.assertTrue(tested["connected"])
+        self.assertEqual(MockUpstreamHandler.received_connection, payload)
 
     def test_remote_scan_is_proxied_without_waiting_for_model_listing(self) -> None:
         status, started = self.request_json("/api/storage/scan", {})

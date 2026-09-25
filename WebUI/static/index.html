@@ -45,6 +45,10 @@
             <span class="nav-icon">⌁</span>
             Runtime
           </button>
+          <button class="nav-item" data-view="models" type="button">
+            <span class="nav-icon">✧</span>
+            Model services
+          </button>
         </nav>
 
         <div class="sidebar-bottom">
@@ -161,6 +165,10 @@
                   <span class="select-wrap"><select id="vaeSelect"></select></span>
                 </label>
                 <label class="resource-field">
+                  <span>Model service</span>
+                  <span class="select-wrap"><select id="conceptProviderSelect"></select></span>
+                </label>
+                <label class="resource-field">
                   <span>Concept LLM</span>
                   <span class="select-wrap"><select id="llmSelect"></select></span>
                 </label>
@@ -256,6 +264,41 @@
             </ol>
             <p class="setup-note">Image generation also needs a configured Image Forge adapter and workflow. Optional remote storage and Cloudflare networking remain disabled until explicitly enabled.</p>
           </div>
+        </section>
+
+        <section class="view" id="modelsView" data-view-panel="models">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">CONCEPT FORGE</p>
+              <h2>Model services</h2>
+              <p class="section-copy">Connect an OpenAI Compatible service and choose its model in Forge.</p>
+            </div>
+            <button class="ghost-button" id="refreshModelServices" type="button">Refresh connections</button>
+          </div>
+          <div class="model-service-list" id="modelServiceList"></div>
+          <form class="storage-panel model-service-form" id="modelServiceForm">
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">OPENAI COMPATIBLE</p>
+                <h3 id="modelServiceFormTitle">Add model service</h3>
+                <p class="section-copy">Use the exact base URL and model ID from your provider. API keys stay on this server and are never shown again.</p>
+              </div>
+            </div>
+            <input id="modelServiceId" type="hidden">
+            <div class="model-service-fields">
+              <label>Connection name <input id="modelServiceName" required maxlength="80" placeholder="My API"></label>
+              <label>API base URL <input id="modelServiceUrl" type="url" required placeholder="https://example.com/v1"></label>
+              <label>Model ID <input id="modelServiceModel" required maxlength="200" placeholder="provider-model-id"></label>
+              <label>API Key <input id="modelServiceKey" type="password" autocomplete="new-password" placeholder="Enter or replace API Key"></label>
+            </div>
+            <label class="model-service-json"><input id="modelServiceJsonMode" type="checkbox"> Send JSON mode for structured requests</label>
+            <p class="section-copy">Leave JSON mode off if your provider does not support response_format.</p>
+            <div class="model-service-actions">
+              <button class="secondary-button" id="testModelService" type="button">Test connection</button>
+              <button class="primary-button" id="saveModelService" type="submit">Save connection</button>
+              <button class="ghost-button hidden" id="cancelModelServiceEdit" type="button">Cancel edit</button>
+            </div>
+          </form>
         </section>
 
         <section class="view" id="storageView" data-view-panel="storage">

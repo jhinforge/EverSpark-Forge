@@ -120,6 +120,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             ),
             "/api/generate/jobs": lambda: self._proxy_orchestrator_get("/tasks/jobs", parsed.query),
             "/api/image/plugins": lambda: self._proxy_orchestrator_get("/image/plugins"),
+            "/api/concept/connections": lambda: self._proxy_orchestrator_get("/concept/connections"),
             "/api/image/plugins/jobs": lambda: self._proxy_orchestrator_get("/image/plugins/jobs", parsed.query),
             "/api/storage/resources": lambda: self._proxy_orchestrator_get(
                 "/storage/resources", parsed.query
@@ -170,6 +171,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/image/plugins/install": "/image/plugins/install",
             "/api/image/plugins/enable": "/image/plugins/enable",
             "/api/image/plugins/default": "/image/plugins/default",
+            "/api/concept/connections/save": "/concept/connections/save",
+            "/api/concept/connections/test": "/concept/connections/test",
+            "/api/concept/connections/remove": "/concept/connections/remove",
+            "/api/concept/connections/default": "/concept/connections/default",
             "/api/subjects/generate": "/subjects/generate",
             "/api/subjects/update": "/subjects/update",
             "/api/subjects/revise": "/subjects/revise",

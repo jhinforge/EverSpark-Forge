@@ -327,6 +327,18 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .restore-heading { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
 @media (max-width: 700px) { .remote-path-form { grid-template-columns: 1fr; } .backup-actions { flex-wrap: wrap; } }
 .direct-download-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+.model-service-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 22px 0; }
+.model-service-card { padding: 19px; border: 1px solid var(--line); border-radius: 13px; background: rgba(17, 21, 27, .82); }
+.model-service-card h3 { font-size: 16px; }
+.model-service-card p { margin-top: 8px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.model-service-card-actions, .model-service-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.model-service-card-actions button { padding: 8px 11px; font-size: 11px; }
+.model-service-form { display: grid; gap: 15px; }
+.model-service-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.model-service-fields label { display: grid; gap: 7px; color: var(--muted); font-size: 11px; }
+.model-service-fields input { min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--text); background: var(--panel-solid); }
+.model-service-json { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 12px; }
+.model-service-json input { accent-color: var(--ember); }
 .direct-download-card { display: grid; gap: 13px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .15); }
 .direct-download-card h4 { margin: 5px 0 0; font-size: 14px; }
 .download-card-label { color: var(--ember); font-size: 9px; font-weight: 750; letter-spacing: .13em; }
@@ -384,7 +396,7 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
   .forge-layout { grid-template-columns: 1fr; }
   .subject-rail { min-height: auto; }
   .subject-empty { min-height: 240px; }
-  .runtime-grid, .setup-steps, .storage-resource-grid, .direct-download-grid { grid-template-columns: 1fr; }
+  .runtime-grid, .setup-steps, .storage-resource-grid, .direct-download-grid, .model-service-list, .model-service-fields { grid-template-columns: 1fr; }
   .subject-documents { grid-template-columns: 1fr; }
   .generation-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
