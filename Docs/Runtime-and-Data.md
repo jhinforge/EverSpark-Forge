@@ -22,8 +22,8 @@ Paths are relative to the repository root. Private data and installation artifac
 | --- | --- | --- |
 | Code and public workflows | Git repository; `ImageForge/Workflows/` | Clone again; separately save uncommitted custom workflows |
 | Private environment settings | Root `.env` | Save separately or import `env.txt` on the new machine |
-| Remote storage and Tunnel credentials, path mappings | `Data/Configuration/` | Save original credentials and mappings or configure again |
-| Managed ComfyUI, virtual environment, process state | `Data/Runtime/` | Usually rebuild with `setup` |
+| Remote storage, Tunnel and model service credentials, path mappings | `Data/Configuration/` | Save original credentials and mappings or configure again |
+| Managed ComfyUI and Ollama; optional Diffusers worker, virtual environments, process state | `Data/Runtime/` | Usually rebuild with `setup`; install the optional plugin again in Forge |
 | Image models | `Data/Models/ImageForge/` | Redownload or selectively pull from your remote library |
 | Concept Forge models | `Data/Models/ConceptForge/` | Redownload or restore and import into Ollama as needed |
 | Conversations, tasks, character associations | `Data/Memory/everspark.db` | Back up and restore with subjects; JSON alone loses these links |
@@ -39,11 +39,11 @@ Git ignores `.env`, private `Configuration/Import/` uploads, and `Data/`. **Igno
 
 In Discuss, Concept Forge updates the current conversation's character subject and Memory retains its documents and revisions. In Generate, stable character traits combine with this request's scene direction; Orchestrator submits to Image Forge, and WebUI displays results. Model, workflow, checkpoint, VAE, and LoRA choices depend on available resources on the current machine.
 
-Gallery shows recent images; **Download outputs ZIP** packages the entire `Data/Outputs` tree. This is a manual export: merely viewing Gallery does not move images off the cloud machine.
+The default language model is Ollama; Forge can select a tested OpenAI Compatible connection from **Model services**. ComfyUI is the default drawing engine; Diffusers can be installed and selected in Forge. Gallery shows recent images; **Download outputs ZIP** packages the entire `Data/Outputs` tree. This is a manual export: merely viewing Gallery does not move images off the cloud machine.
 
 ## 4. Back up what you need
 
-Without rclone, you can still use **Storage → Character and Memory ZIP → Download data ZIP** for a consistent SQLite snapshot and four JSON files per character: `subject.json`, `metadata.json`, `positive_prompt.json`, and `negative_prompt.json`. Save the downloaded file on your own computer or another persistent location. Save private configuration, models, and the Gallery output ZIP separately; the data ZIP excludes models and generated images.
+Without rclone, you can still use **Storage → Character and Memory ZIP → Download data ZIP** for a consistent SQLite snapshot and four JSON files per character: `subject.json`, `metadata.json`, `positive_prompt.json`, and `negative_prompt.json`. Save the downloaded file on your own computer or another persistent location. Save private configuration, including `Data/Configuration/ConceptForge/connections.json` if you configured model services, models, and the Gallery output ZIP separately; the data ZIP excludes credentials, models, and generated images.
 
 With rclone enabled and verified, initiate uploads under **Storage → Upload local data**:
 
@@ -57,7 +57,7 @@ Absent `EVERSPARK_BACKUP_REMOTE`, the first image model source bucket uses an `e
 ## 5. Moving to another cloud machine
 
 1. Clone source on a Linux machine with an NVIDIA GPU and network access.
-2. To keep remote resources or a Tunnel, upload original `env.txt`, `rclone.conf`, and Tunnel credentials into `Configuration/Import/`, then run `./everspark configure`. Manual remote path mappings saved in Storage live in `Data/Configuration/rclone/model_paths.json`; transfer that file separately or re-enter those mappings.
+2. To keep remote resources or a Tunnel, upload original `env.txt`, `rclone.conf`, and Tunnel credentials into `Configuration/Import/`, then run `./everspark configure`. Manual remote path mappings saved in Storage live in `Data/Configuration/rclone/model_paths.json`; transfer that file separately or re-enter those mappings. Re-enter model services in WebUI or transfer `Data/Configuration/ConceptForge/connections.json` securely; the character ZIP does not include it.
 3. Run `./everspark setup --plan`, `./everspark setup`, `./everspark doctor`, and `./everspark start`; confirm services are ready.
 4. Pull required models from remote Storage, or redownload by direct URL. Check compatibility with the selected workflow.
 5. For a downloaded EverSpark data ZIP, choose it under **Storage → Character and Memory ZIP** and click the adjacent **Validate and restore** button (maximum uploaded ZIP size: 128 MiB). The file is staged in `Data/Imports/`. The system checks its manifest and hashes, SQLite integrity, and agreement between character documents and the database before replacing the current subjects and Memory database. It saves the previous data in `Data/Recovery/` and removes the staged ZIP. Alternatively, select a remote restore point under **Storage → Restore character data**. Restart EverSpark after either restore.

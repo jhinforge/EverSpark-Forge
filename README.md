@@ -44,7 +44,7 @@ storage and public networking are optional integrations.
 | **Orchestrator** | Central routing, session coordination, and task execution |
 | **Concept Forge** | Discussion, structured intent, schema validation, and prompt compilation |
 | **Memory** | Working and structured character memory; episodic memory is planned |
-| **Image Forge** | Image workflow execution through pluggable backends such as ComfyUI |
+| **Image Forge** | Image execution through selectable ComfyUI and optional Diffusers plugins |
 | **EverSpark WebUI** | The user-facing conversation, generation, and runtime interface |
 | **Runtime** | Health checks, processes, hardware discovery, and logging |
 | **Infrastructure** | Optional storage and network integrations |
@@ -142,16 +142,26 @@ detected GPU architecture and NVIDIA driver capability; users do not choose a
 CUDA wheel family manually. A runtime-profile change rebuilds only the managed
 ComfyUI virtual environment and retains models, workflows, configuration,
 outputs, and memory.
-The WebUI can select installed Ollama models, ComfyUI checkpoints, VAE models, and
-registered API Format workflows. Standard SDXL/Illustrious workflows can add
-multiple LoRAs per request without modifying the bundled workflow file.
+The WebUI can select installed Ollama models or a configured OpenAI Compatible
+model service. Add a service in **Model services** using its `/v1` base URL,
+API Key, and exact model ID, test it, then select it in Forge. This uses the
+non-streaming Chat Completions endpoint; support for an individual provider
+depends on its implementation. Ollama remains the built-in default.
+
+Forge selects ComfyUI by default and can install and enable the optional
+Diffusers drawing plugin from its drawing tool selector. Diffusers currently
+supports SDXL single-file checkpoints with compatible LoRA and VAE files;
+ComfyUI uses registered API Format workflows. Select a drawing tool or save a
+default in Forge without editing `.env`. Standard SDXL/Illustrious ComfyUI
+workflows can add multiple LoRAs per request without modifying the bundled file.
 The Gallery can package the complete `Data/Outputs` tree into a timestamped ZIP
 and download it through the same WebUI connection.
 
 The Storage page also includes a direct model downloader that works without R2.
-Users can paste a public model URL, choose the Image Forge model type, or install
-a Concept Forge GGUF and have it registered with Ollama automatically. Downloads
-show byte progress, speed, ETA, cancellation, and retry state; incomplete files
+Users can paste a public model URL into separate Checkpoint/diffusion, LoRA,
+VAE, or Concept Forge GGUF download cards. GGUF downloads register with Ollama
+automatically. Downloads show byte progress, speed, ETA, cancellation, and retry
+state; incomplete files
 are never exposed to the model scanners.
 
 The Storage page discovers nested remote model directories from configured
@@ -176,7 +186,8 @@ generated images, and private configuration; export those separately. See
 
 - Discuss a character in the WebUI, reuse an existing subject, and generate
   images through Concept Forge, Orchestrator, and Image Forge.
-- Select installed workflows, language models, checkpoints, VAEs, and LoRAs.
+- Select a drawing plugin, installed workflows and image models, or a configured
+  language model service and model.
 - Download models by direct URL or from optional rclone storage; upload models
   to mapped remote directories and back up outputs, character data, and memory.
 - Inspect runtime health, manage services through `./everspark`, and export the

@@ -35,8 +35,8 @@ The default WebUI listens only on localhost. The cloud machine's `127.0.0.1:8780
 
 | Service | Check first | Default process log |
 | --- | --- | --- |
-| Concept Forge | `./everspark status concept`; Ollama and its model | `Data/Logs/ollama-service.log` |
-| Image Forge | `./everspark status image`; ComfyUI and GPU | `Data/Logs/comfyui.log` |
+| Concept Forge | `./everspark status concept`; Ollama for the built-in provider; Orchestrator for external requests | `Data/Logs/ollama-service.log` or `Data/Logs/orchestrator-service.log` |
+| Image Forge | `./everspark status image`; selected engine and GPU | `Data/Logs/comfyui.log` or `Data/Logs/diffusers.log` |
 | Orchestrator | `./everspark status orchestrator`; upstream services and settings | `Data/Logs/orchestrator-service.log` |
 | WebUI | `./everspark status webui`; listening port and process | `Data/Logs/webui-service.log` |
 
@@ -44,13 +44,15 @@ The default WebUI listens only on localhost. The cloud machine's `127.0.0.1:8780
 
 ## 4. Missing model or workflow choices
 
-In **Forge**, inspect **Workflow**, **Checkpoint**, **VAE**, and **Concept LLM**. Run `./everspark models status`. For user downloads, check that the task completed under **Storage** and that you chose the correct model category. Interrupted or failed direct downloads are not exposed as complete models.
+In **Forge**, inspect the selected **Drawing tool**, **Workflow** (ComfyUI), **Checkpoint**, **VAE**, and **Concept LLM**. Run `./everspark models status`. For user downloads, check that the task completed under **Storage** and that you chose the correct Checkpoint/diffusion, LoRA, VAE, or GGUF card. Interrupted or failed direct downloads are not exposed as complete models. For a hosted language model, open **Model services**, verify the `/v1` base URL and exact model ID, then use **Test**; these IDs are entered explicitly rather than discovered from `/models`.
 
-Workflows must be registered **API Format JSON** with a matching manifest. A regular ComfyUI UI workflow cannot simply be placed in the registered workflow directory. Installed models must also match the workflow. See [Image Forge](../ImageForge/README.md) for node and LoRA constraints. For remote libraries, check scanned model directories and set manual paths for unusual layouts. Public direct URL downloads work without rclone.
+ComfyUI workflows must be registered **API Format JSON** with a matching manifest. A regular ComfyUI UI workflow cannot simply be placed in the registered workflow directory. Diffusers does not use those workflows and currently accepts SDXL single-file checkpoints. Installed models must match the chosen engine. See [Image Forge](../ImageForge/README.md) for node, LoRA, and VAE constraints. For remote libraries, check scanned model directories and set manual paths for unusual layouts. Public direct URL downloads work without rclone.
 
 ## 5. Generation fails or no result appears
 
-Read the on-page task error and recent **Gallery** results, then run `./everspark status`. Inspect `Data/Logs/comfyui.log` for Image Forge problems and `Data/Logs/orchestrator-service.log` for submission problems. If failures began after changing a workflow, checkpoint, VAE, or LoRA, record the selection and error and compare it with the workflow's model and node requirements.
+Read the on-page task error and recent **Gallery** results, then run `./everspark status`. Inspect `Data/Logs/comfyui.log` for ComfyUI or `Data/Logs/diffusers.log` for the managed Diffusers worker; plugin installation tasks may report `Data/Logs/image-plugin-diffusers.log`. Check `Data/Logs/orchestrator-service.log` for task submission and planning. Diffusers installations made before PEFT was added can show **Repair required**: use **Repair tool** in Forge before retrying LoRA or VAE. If failures began after changing a workflow, checkpoint, VAE, or LoRA, record the selection and error and compare it with the selected engine's requirements.
+
+If the browser reports HTTP 502 while generating, first check the background task in Forge and the result in Gallery: planning and generation run asynchronously, and an image may have completed. Capture WebUI and Orchestrator logs if the task status still cannot be polled. For an OpenAI Compatible error, test the connection in **Model services** and check the Orchestrator log. The adapter expects non-streaming Chat Completions and text in `choices[0].message.content`; optional JSON mode should remain off if the service rejects `response_format`.
 
 Successful images go to `Data/Outputs/`; **Download outputs ZIP** exports the entire folder. A failed generation does not imply any backup occurred.
 

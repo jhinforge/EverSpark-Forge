@@ -1,6 +1,6 @@
 # EverSpark Forge architecture (v0.1)
 
-EverSpark Forge routes discussion and generation through a coordinator to separate concept processing and image execution modules. This path works in v0.1. The modules are designed to allow replacement, but **the implemented concept provider is Ollama and the image adapter is ComfyUI**. This guide describes present code and data flow without treating planned capabilities as implemented.
+EverSpark Forge routes discussion and generation through a coordinator to separate concept processing and image execution modules. Ollama is the built-in concept provider; user-configured OpenAI Compatible services use a separate adapter. ComfyUI is the default image engine, with an optional Diffusers plugin. This guide describes the implemented boundaries and data flow.
 
 ## 1. System boundaries
 
@@ -31,14 +31,14 @@ sequenceDiagram
     O->>M: Save conversation and subject revision
     W->>O: Scene and resource choices
     O->>C: Prepare character and prompt
-    O->>I: Submit workflow with independent seeds
-    I-->>O: Return prompt ID
+    O->>I: Submit image request with independent seeds
+    I-->>O: Return engine job IDs
     O->>M: Save prompt and task records
-    W->>I: Poll results by prompt ID
+    W->>I: Poll results by job ID
     I-->>W: Status and image metadata
 ```
 
-The browser talks to WebUI alone. The WebUI service proxies discussion, generation, character, and storage requests to Orchestrator. For result polling and image retrieval, **the WebUI service** contacts the configured Image Forge backend and returns data through same-origin endpoints to the browser. In v0.1 the image backend is ComfyUI, while Ollama sits behind the Concept Forge provider. The sequence summarizes responsibilities; validation and failure paths also occur during subject updates, prompt creation, and database writes.
+The browser talks to WebUI alone. The WebUI service proxies discussion, generation, character, and storage requests to Orchestrator. Result polling and image retrieval use same-origin endpoints backed by Image Forge's selected engine. Concept Forge sends normalized requests through its gateway to either the built-in Ollama adapter or a configured OpenAI Compatible adapter. The sequence summarizes responsibilities; validation and failure paths also occur during subject updates, prompt creation, and database writes.
 
 ### Discussion and character subjects
 
@@ -48,17 +48,17 @@ Each conversation has one current character subject. Orchestrator obtains bounde
 
 ### Generation and retrieval
 
-Orchestrator reads the current subject and context again. Concept Forge prepares a generation plan and prompts, merging compiled character identity with this request's scene. Image Forge makes a **per-task copy** of a registered API Format workflow, binds available checkpoint, VAE, and LoRA choices, assigns an independent seed to each image in a batch, and submits through the ComfyUI adapter. Selecting resources does not rewrite the workflow file in the repository.
+Orchestrator reads the current subject and context again. Concept Forge prepares a generation plan and prompts, merging compiled character identity with this request's scene. Generation starts as a background task so the WebUI can poll planning progress without keeping the initial HTTP request open. Image Forge assigns independent seeds and routes each image request to the chosen plugin. ComfyUI makes a **per-task copy** of a registered API Format workflow and binds checkpoint, VAE, and LoRA choices; Diffusers executes a compatible SDXL single-file checkpoint through its separate worker. Selecting resources does not rewrite repository workflows.
 
-Orchestrator returns the submitted `prompt_id`. WebUI then polls the image backend's task history and displays the result. v0.1 coordinates one Orchestrator request at a time; a batch of images belongs to that request. Recent results appear in Gallery and outputs default to `Data/Outputs/`.
+When planning completes, Orchestrator records the engine job IDs (`prompt_id` values in the WebUI task response). WebUI polls task status and displays results. A batch of images belongs to one generation request. Recent results appear in Gallery and outputs default to `Data/Outputs/`.
 
 ## 3. Configuration and resources
 
 Without a private `.env`, storage and networking are local. Runtime defaults are spread across module configuration files, including `orchestrator/config/default_config.json`. `Configuration/default.yaml` describes the public configuration contract; during this migration, not every service loads from one shared YAML loader. See [Configuration](Configuration.md) for importing `env.txt` / `.env` and enabling optional backends.
 
-Orchestrator aggregates resources for WebUI: registered workflows from Image Forge, checkpoints, VAEs, and LoRAs visible to ComfyUI, and language models from Ollama. Choices accompany individual requests. Execution depends on workflow node structure and model compatibility.
+Orchestrator aggregates resources for WebUI: workflows and image models from the selected image plugin, Ollama models, and explicitly configured OpenAI Compatible connections. Users add and test external services in **Model services**, choose a service and model in Forge, and can set a default for subject revisions. Connection credentials live under `Data/Configuration/ConceptForge/`, outside source and character ZIP exports. Choices accompany individual requests. Execution depends on the chosen plugin and model compatibility.
 
-Managed setup prepares a usable starter path but does not require a particular private model. The v0.1 workflow registry executes only API Format JSON; standard LoRA injection depends on supported workflow structure. See [Image Forge](../ImageForge/README.md) for constraints.
+Managed setup prepares a usable starter path but does not require a particular private model. The ComfyUI workflow registry executes API Format JSON; standard LoRA injection depends on supported workflow structure. Diffusers has its own SDXL checkpoint, LoRA, and VAE constraints. See [Image Forge](../ImageForge/README.md) for details.
 
 ## 4. Runtime, storage, and access
 
@@ -69,7 +69,7 @@ Local mode needs no remote storage, and public direct model downloads work indep
 ## 5. Scope in v0.1
 
 - **Implemented:** shared session for discussion and generation; persistent character subjects and revisions; API Format image workflows; runtime status; local model downloads; optional remote models and data backups.
-- **Current limits:** Ollama concept provider and ComfyUI image adapter; one Orchestrator request at a time; registered API Format workflows and supported parameter changes only.
-- **Not yet implemented:** automatic episodic memory extraction, retrieval, and consolidation. Other concept providers and image adapters cannot be activated just by changing a setting.
+- **Current limits:** OpenAI Compatible requires the non-streaming Chat Completions protocol and an explicitly entered model ID; Diffusers supports SDXL single-file checkpoints. ComfyUI requires registered API Format workflows and supported parameter changes.
+- **Not yet implemented:** automatic episodic memory extraction, retrieval, and consolidation. Additional model protocols and drawing engines require their own adapters.
 
 For changes, start with the relevant module README and the request flow above. See [module CLI entry points](Commands.md#6-module-entry-points-development-and-isolated-diagnosis) for isolated diagnosis, [Getting started](Getting-Started.md) for installation, and [Troubleshooting](Troubleshooting.md) for failures.

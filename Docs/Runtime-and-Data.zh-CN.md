@@ -22,8 +22,8 @@
 | --- | --- | --- |
 | 程序代码、公开工作流 | Git 仓库，工作流在 `ImageForge/Workflows/` | 从仓库重新获取；自行新增但未提交的工作流要另行保存 |
 | 私人环境配置 | 根目录 `.env` | 单独保存，或在新机器重新准备 `env.txt` 并导入 |
-| 远程存储及 Tunnel 凭据、路径映射 | `Data/Configuration/` | 单独保存原始凭据和映射，或在新机器重新配置 |
-| 托管的 ComfyUI、虚拟环境、进程状态 | `Data/Runtime/` | 通常由新机器上的 `setup` 重建 |
+| 远程存储、Tunnel、模型服务凭据及路径映射 | `Data/Configuration/` | 单独保存原始凭据和映射，或在新机器重新配置 |
+| 托管的 ComfyUI、Ollama、可选 Diffusers 进程及虚拟环境 | `Data/Runtime/` | 通常由新机器上的 `setup` 重建；可选插件需在 Forge 重新安装 |
 | 图片模型 | `Data/Models/ImageForge/` | 在新机器重新下载，或从自己配置的远程模型库选择性拉取 |
 | Concept Forge 模型 | `Data/Models/ConceptForge/` | 重新下载，或从远程库恢复并按需导入 Ollama |
 | 对话、任务记录、角色关联 | `Data/Memory/everspark.db` | 备份并恢复；只恢复角色 JSON 不足以保留这些关联 |
@@ -39,11 +39,11 @@ Git 默认忽略 `.env`、`Configuration/Import/` 下的私人上传文件及 `D
 
 WebUI 的讨论模式通过 Concept Forge 更新当前对话的角色主体；角色文档和修订记录由 Memory 保留。生成模式将角色的稳定特征与本次场景描述组合，由 Orchestrator 提交给 Image Forge，再在 WebUI 显示结果。模型、工作流、Checkpoint、VAE 与 LoRA 的选择来自当前机器可用的资源。
 
-Gallery 显示近期结果，**Download outputs ZIP** 将当前 `Data/Outputs` 整棵目录打包下载。这是手动导出：打开过 Gallery 或看见生成图片，不等于文件已经离开云端机器。
+默认语言模型由 Ollama 提供，也可以在 Forge 选用**模型服务**中已测试的 OpenAI Compatible 连接。默认绘图工具是 ComfyUI，Diffusers 可在 Forge 安装和选择。Gallery 显示近期结果，**Download outputs ZIP** 将当前 `Data/Outputs` 整棵目录打包下载。这是手动导出：打开过 Gallery 或看见生成图片，不等于文件已经离开云端机器。
 
 ## 4. 备份：先确定需要保存什么
 
-不开启 rclone 时，也可以在 **Storage → 角色与 Memory 压缩包 → 下载数据 ZIP** 下载一致的 SQLite 快照和每个角色的四份 JSON：`subject.json`、`metadata.json`、`positive_prompt.json`、`negative_prompt.json`。把下载文件保存到自己的电脑或其他持久位置；私人配置、模型及 Gallery 的输出 ZIP 仍需分别保存。数据 ZIP 不包含模型或生成图片。
+不开启 rclone 时，也可以在 **Storage → 角色与 Memory 压缩包 → 下载数据 ZIP** 下载一致的 SQLite 快照和每个角色的四份 JSON：`subject.json`、`metadata.json`、`positive_prompt.json`、`negative_prompt.json`。把下载文件保存到自己的电脑或其他持久位置；私人配置（包括已设置模型服务时的 `Data/Configuration/ConceptForge/connections.json`）、模型及 Gallery 的输出 ZIP 仍需分别保存。数据 ZIP 不包含凭据、模型或生成图片。
 
 启用并验证 rclone 后，在 WebUI 的 **Storage → Upload local data** 中按需发起上传：
 
@@ -59,7 +59,7 @@ Gallery 显示近期结果，**Download outputs ZIP** 将当前 `Data/Outputs` �
 以下是一条基于 v0.1 现有功能的恢复顺序：
 
 1. 从 Git 获取源码，在新机器准备 Linux、NVIDIA GPU 和网络环境。
-2. 如需原有远程资源或 Tunnel，将 `env.txt`、`rclone.conf`、Tunnel 凭据等原始文件上传到 `Configuration/Import/`，执行 `./everspark configure`。在旧机器 Storage 页面保存过的**手工远程路径映射**存放在 `Data/Configuration/rclone/model_paths.json`；若没有单独带走它，需在新机器重新设置。
+2. 如需原有远程资源或 Tunnel，将 `env.txt`、`rclone.conf`、Tunnel 凭据等原始文件上传到 `Configuration/Import/`，执行 `./everspark configure`。在旧机器 Storage 页面保存过的**手工远程路径映射**存放在 `Data/Configuration/rclone/model_paths.json`；若没有单独带走它，需在新机器重新设置。模型服务也需在 WebUI 重新填写，或安全转移 `Data/Configuration/ConceptForge/connections.json`；角色 ZIP 不含这份文件。
 3. 执行 `./everspark setup --plan`、`./everspark setup`、`./everspark doctor`、`./everspark start`，确认服务就绪。
 4. 在 Storage 页面按需要从远程库拉取模型；如果没有远程库，可用直链重新下载。检查所选工作流所需的模型是否已在新机器上。
 5. 对下载到本地的 EverSpark 数据 ZIP，在 **Storage → 角色与 Memory 压缩包** 中选择文件并点击旁边的 **验证并恢复**（上传 ZIP 上限为 128 MiB）。文件暂存于 `Data/Imports/`；系统验证清单与文件校验值、SQLite 完整性以及角色文档与数据库的一致性，成功后用 ZIP 内数据替换当前角色文档和 Memory 数据库，并将原数据保存至 `Data/Recovery/`。上传的暂存 ZIP 随后会被删除。也可以在 **Storage → Restore character data** 选择远程恢复点。恢复完成后重启 EverSpark。

@@ -12,7 +12,7 @@ EverSpark Forge 是一个自托管 AI 创作平台：它把模型、工作流、
 
 1. 从源码安装托管的 ComfyUI、Ollama 和起步模型。
 2. 在 WebUI 中讨论角色，保存并复用角色主体，再提交图像生成请求。
-3. 选择已安装的语言模型、Checkpoint、VAE、LoRA 和注册的 API Format 工作流。
+3. 选择 Ollama 或自行接入的 OpenAI Compatible 模型服务，并选择 ComfyUI 或可选的 Diffusers 绘图工具、Checkpoint、VAE、LoRA 和适用的工作流。
 4. 下载模型、查看运行状态与生成结果，按需导出输出目录。
 5. 可选地接入 rclone 远程模型库与数据备份，或通过 Cloudflare Tunnel 提供访问入口。
 
@@ -63,7 +63,7 @@ cd EverSpark-Forge
 
 `env.txt` 和 `.env` 的内容**完全是同一种 `KEY=VALUE` 格式**；使用 `env.txt` 是为了方便在自己的电脑上查看、保存和上传。`configure` 验证后将其导入为仓库根目录的 `.env`，原始上传文件不会被删除。`.env.example` 只供参考字段，请仅填写实际需要的设置。
 
-仅上传 `rclone.conf` 不会开启远程存储；必须显式启用 rclone 后端并配置模型扫描路径。Cloudflare Tunnel 也只会在配置完整并启用后加入托管生命周期。不启用远程存储时，Storage 页面仍能通过公开直链下载图片模型和 Concept Forge GGUF。详见[配置指南](Docs/Configuration.zh-CN.md)。
+仅上传 `rclone.conf` 不会开启远程存储；必须显式启用 rclone 后端并配置模型扫描路径。Cloudflare Tunnel 也只会在配置完整并启用后加入托管生命周期。不启用远程存储时，Storage 页面仍能通过公开直链分别下载 Checkpoint/扩散模型、LoRA、VAE 和 Concept Forge GGUF。详见[配置指南](Docs/Configuration.zh-CN.md)。
 
 运行数据位于被 Git 忽略的 `Data/` 下：图片模型在 `Data/Models/ImageForge/`，Concept Forge 模型在 `Data/Models/ConceptForge/`，生成结果在 `Data/Outputs/`，角色文档与记忆分别在 `Data/Subjects/` 和 `Data/Memory/`。Gallery 的 **Download outputs ZIP** 会打包整个输出目录。无需 rclone，也可在 Storage 的 **角色与 Memory 压缩包** 区域下载角色四份 JSON 与 Memory SQLite 的 ZIP；选择备份 ZIP 并点击 **验证并恢复**，系统会校验内容、保存当前数据至 `Data/Recovery/` 并恢复，之后需重启 EverSpark。启用 rclone 后还可手动上传模型、整个输出目录及成批的角色数据；这些备份**不会自动进行**。角色与 Memory ZIP 不包含图片、模型或私人配置；迁移前请查看[运行与数据指南](Docs/Runtime-and-Data.zh-CN.md)。
 
@@ -72,14 +72,14 @@ cd EverSpark-Forge
 | 模块 | 职责 |
 | --- | --- |
 | **Orchestrator** | 会话协调、请求调度和任务管理 |
-| **Concept Forge** | 讨论、角色主体、结构化意图和提示词编译；当前使用 Ollama |
+| **Concept Forge** | 讨论、角色主体、结构化意图和提示词编译；内置 Ollama，支持在 WebUI 接入 OpenAI Compatible 模型服务 |
 | **Memory** | 对话历史、角色及修订、提示词和任务记录 |
-| **Image Forge** | 工作流构建与图像任务提交；当前使用 ComfyUI |
+| **Image Forge** | 图像任务与结果的统一接口；默认 ComfyUI，可安装并选用 Diffusers 插件 |
 | **WebUI** | 讨论、生成、Storage、Gallery 和 Runtime 界面 |
 | **Runtime / Launcher** | 安装、启动、健康检查、硬件发现和日志 |
 | **Infrastructure** | 可选的远程存储及网络入口 |
 
-v0.1 已实现讨论与生成共用会话、角色主体持久化、注册的 API Format 图像工作流、运行状态、本地模型直链下载，以及可选的远程模型与数据备份。情节式记忆的自动提取、检索和整合尚未实现；其他概念提供者和图像后端也尚不能只靠修改配置切换。模块边界及实际请求流见[架构指南](Docs/Architecture.zh-CN.md)。
+在 **模型服务**中填写以 `/v1` 结尾的 API 基础地址、API Key 和平台要求的模型 ID，测试后即可在 Forge 选用；使用的是非流式 Chat Completions 接口，具体平台仍需兼容该接口。Forge 的绘图工具选择器可安装、启用 Diffusers，并保存默认工具，无需改动 `.env`。Diffusers 当前支持 SDXL 单文件 Checkpoint 及兼容的 LoRA、VAE；ComfyUI 仍使用注册的 API Format 工作流。情节式记忆的自动提取、检索和整合尚未实现。模块边界及实际请求流见[架构指南](Docs/Architecture.zh-CN.md)。
 
 ## 许可证
 

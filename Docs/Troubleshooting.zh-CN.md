@@ -37,8 +37,8 @@
 
 | 未就绪的服务 | 先检查 | 默认原始进程日志 |
 | --- | --- | --- |
-| Concept Forge | `./everspark status concept`，Ollama 与模型是否可用 | `Data/Logs/ollama-service.log` |
-| Image Forge | `./everspark status image`，ComfyUI 是否启动、GPU 是否可用 | `Data/Logs/comfyui.log` |
+| Concept Forge | `./everspark status concept`，内置 Ollama；外部请求还需检查 Orchestrator | `Data/Logs/ollama-service.log` 或 `Data/Logs/orchestrator-service.log` |
+| Image Forge | `./everspark status image`，所选引擎及 GPU 是否可用 | `Data/Logs/comfyui.log` 或 `Data/Logs/diffusers.log` |
 | Orchestrator | `./everspark status orchestrator`，上游服务与配置 | `Data/Logs/orchestrator-service.log` |
 | WebUI | `./everspark status webui`，监听端口与进程 | `Data/Logs/webui-service.log` |
 
@@ -46,17 +46,17 @@
 
 ## 4. 模型或工作流选不到
 
-在 WebUI 的 **Forge** 检查 **Workflow**、**Checkpoint**、**VAE**、**Concept LLM** 的资源列表；运行 `./everspark models status`，确认安装所需模型。如果是自己下载的模型，在 **Storage** 查看下载任务是否真正完成，并确认选对了模型类别。中断或失败的直链下载不会把不完整文件当作可用模型展示。
+在 WebUI 的 **Forge** 检查**绘图工具**、ComfyUI 的 **Workflow**、**Checkpoint**、**VAE** 和 **Concept LLM**；运行 `./everspark models status`，确认安装所需模型。如果是自己下载的模型，在 **Storage** 查看任务是否完成，并确认选对了 Checkpoint/扩散模型、LoRA、VAE 或 GGUF 下载卡片。中断或失败的直链下载不会把不完整文件当作可用模型展示。托管语言模型则在**模型服务**中核对 `/v1` 地址和准确模型 ID，并点击**测试**；远端模型 ID 需要手工填写。
 
-工作流必须是注册的 **API Format JSON**，并有相应清单。普通 ComfyUI 界面工作流不能直接当成可执行文件放入工作流目录。模型虽然安装成功，也必须与所选工作流匹配；工作流和 LoRA 的节点限制见 [Image Forge 说明](../ImageForge/README.md)。
+ComfyUI 工作流必须是注册的 **API Format JSON**，并有相应清单。普通 ComfyUI 界面工作流不能直接当成可执行文件放入工作流目录。Diffusers 不使用这类工作流，当前仅支持 SDXL 单文件 Checkpoint。模型虽然安装成功，也必须与所选引擎匹配；工作流、LoRA、VAE 限制见 [Image Forge 说明](../ImageForge/README.md)。
 
 如果使用远程模型库，还要确认 Storage 扫描的是实际模型目录；目录结构特殊时设置手工扫描路径。没有启用 rclone 时，仍可使用 Storage 的公开直链下载功能。
 
 ## 5. 点击生成后失败，或结果没有出现
 
-先看页面显示的任务错误与 **Gallery** 中的最近结果，再检查 `./everspark status`。如果 Image Forge 未就绪，查看 `Data/Logs/comfyui.log`；如果 Orchestrator 未就绪或无法提交任务，查看 `Data/Logs/orchestrator-service.log`。这些日志比单纯重复点击生成更能说明故障发生在哪一层。
+先看页面显示的任务错误与 **Gallery** 中的最近结果，再检查 `./everspark status`。ComfyUI 问题看 `Data/Logs/comfyui.log`，托管 Diffusers 进程看 `Data/Logs/diffusers.log`；插件安装任务也可能报告 `Data/Logs/image-plugin-diffusers.log`。任务提交或规划问题看 `Data/Logs/orchestrator-service.log`。早期安装的 Diffusers 如果显示 **需要修复**，在 Forge 点击**修复工具**补齐 PEFT，再测试 LoRA 或 VAE。
 
-如果是换了工作流、Checkpoint、VAE 或 LoRA 后才失败，先记录当前选择及报错，再对照所选工作流的模型与节点要求。生成失败不等于输出目录已经备份；成功结果默认写在 `Data/Outputs/`，Gallery 的 **Download outputs ZIP** 可下载整个输出目录。
+如果是换了工作流、Checkpoint、VAE 或 LoRA 后才失败，先记录当前选择及报错，再对照所选引擎的要求。如果浏览器显示 HTTP 502，先查看 Forge 的后台任务状态及 Gallery：生成和规划是异步执行的，图片可能已经完成；无法查询任务时收集 WebUI 与 Orchestrator 日志。OpenAI Compatible 报错时先在**模型服务**测试连接，再查看 Orchestrator 日志；服务需要支持非流式 Chat Completions 并返回 `choices[0].message.content` 文本，不支持 `response_format` 的服务保持可选 JSON 模式关闭。生成失败不等于输出目录已经备份；成功结果默认写在 `Data/Outputs/`，Gallery 的 **Download outputs ZIP** 可下载整个输出目录。
 
 ## 6. 旧角色在列表里，但当前对话没用上
 

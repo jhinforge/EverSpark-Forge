@@ -25,7 +25,8 @@ configuration file.
 - Inspect immutable subject revision documents.
 - Switch the same conversation between discussion and image generation.
 - Combine the automatically maintained identity with a temporary scene.
-- Select a registered workflow, Checkpoint, and installed Ollama model.
+- Select the default ComfyUI engine or install the optional Diffusers plugin in Forge; save an engine default without editing `.env`.
+- Select a registered ComfyUI workflow and image models, and choose an installed Ollama model or a tested OpenAI Compatible connection under **Model services**.
 - Add one or more standard LoRAs with independent MODEL and CLIP strengths.
 - Submit image tasks in the background, poll planning status, then track their
   exact Image Forge prompt identifiers without holding an HTTP request open.
@@ -35,7 +36,7 @@ configuration file.
 - Explain missing first-run services without requiring R2 or Cloudflare.
 - Scan optional R2 model roots and start selective background downloads with
   live byte progress, transfer speed, ETA, and refresh recovery.
-- Download Checkpoints, diffusion models, LoRAs, and GGUF language models from
+- Download Checkpoints, diffusion models, LoRAs, VAEs, and GGUF language models from
   direct public HTTP URLs without enabling R2. Partial files remain isolated,
   interrupted transfers can be retried, and GGUF files are registered with
   Ollama automatically.
@@ -48,9 +49,12 @@ subject state itself. Users never fill the internal JSON template or choose a
 subject ID. Character identity remains in Memory; scene, pose,
 camera, and background remain request-level task input.
 
-Resource choices are discovered through Orchestrator. Checkpoints and LoRAs
-come from the active Image Forge engine, LLM names come from Ollama, and
-workflows come from the active engine. The selections are attached to
+Resource choices are discovered through Orchestrator. Image models and
+workflows come from the selected drawing engine; language models come from
+Ollama or an explicitly configured OpenAI Compatible service. The latter uses
+non-streaming Chat Completions, with a manually entered model ID. Connections
+are saved in `Data/Configuration/ConceptForge/connections.json`; stored keys
+are not returned in WebUI responses or character data ZIPs. Selections are attached to
 each request and do not rewrite repository workflow files.
 
 Direct image downloads currently accept `.safetensors` and `.ckpt`; Concept

@@ -49,8 +49,9 @@ Every conversation automatically owns one current subject. Orchestrator asks
 Concept Forge to extract that internal JSON document from the bounded user and
 assistant context, validates it, and stores a revision only when its content
 changes. Generation compiles the current subject automatically and merges its
-stable traits with the request-level scene prompt before sending the workflow
-to Image Forge. Clients do not select or configure a subject ID.
+stable traits with the request-level scene prompt before sending an image
+request to the selected Image Forge plugin. Clients do not select or configure
+a subject ID.
 
 The explicit subject write endpoints remain available as developer/debugging
 interfaces; they are not part of the normal WebUI workflow.
@@ -73,8 +74,11 @@ otherwise selects the managed Illustrious default, then falls back to the
 first compatible checkpoint in stable alphabetical order. Every fallback is
 reported to the caller.
 
-`GET /resources` exposes the selectable workflow, Checkpoint, LoRA, and Ollama
-model inventories used by the WebUI. `POST /tasks` and `POST /conversation`
-accept an optional `selection` object. Workflow mutations are performed on an
-isolated task copy: explicit Checkpoint selection is validated against
-ComfyUI, and selected LoRAs are inserted as a standard `LoraLoader` chain.
+`GET /resources` exposes selectable image plugins, workflows, Checkpoints,
+VAEs, LoRAs, and Concept Forge connections and models. The WebUI can manage
+OpenAI Compatible connections through the `/concept/connections/*` endpoints
+and install or select drawing plugins through `/image/plugins/*`. `POST /tasks`
+and `POST /conversation` accept an optional `selection` object. For ComfyUI,
+workflow mutations are performed on an isolated task copy: explicit Checkpoint
+selection is validated against ComfyUI, and selected LoRAs are inserted as a
+standard `LoraLoader` chain. Diffusers follows its own SDXL execution path.

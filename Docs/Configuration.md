@@ -40,7 +40,7 @@ See the [command reference for initialization and configuration](Commands.md#1-i
 
 ## 4. Models, workflows, and outputs
 
-**Models are not part of the source release.** Default setup downloads starter models. Later you can download an image model or Concept Forge GGUF by public direct URL in **Storage**. Enable rclone only if you need a remote model library. Select installed resources in Storage instead of listing each checkpoint or LoRA in your environment file.
+**Models are not part of the source release.** Default setup downloads starter models. Later you can download a checkpoint/diffusion model, LoRA, VAE, or Concept Forge GGUF by public direct URL in separate **Storage** cards. Enable rclone only if you need a remote model library. Select installed resources in Forge instead of listing each checkpoint or LoRA in your environment file.
 
 | Content | Default location |
 | --- | --- |
@@ -49,7 +49,11 @@ See the [command reference for initialization and configuration](Commands.md#1-i
 | Outputs | `Data/Outputs/`; Gallery exports the entire directory as a ZIP |
 | Workflows | API Format JSON and adjacent manifests in `ImageForge/Workflows/` |
 
-WebUI selects registered workflows and installed models. Advanced users can point `EVERSPARK_WORKFLOW_TEMPLATE` to another API Format workflow. See [Image Forge](../ImageForge/README.md) for manifests and node requirements. A regular ComfyUI interface workflow is not directly executable as an API Format file. Character subjects, memory, and outputs are runtime data: save what you need before replacing a cloud machine. Even without rclone, use **Storage → Character and Memory ZIP** to download character JSON and Memory SQLite together; choose the saved ZIP and click **Validate and restore** to import it, then restart EverSpark. Save outputs, models, and private settings separately. A model source URL never enables automatic backups; see [Runtime and data](Runtime-and-Data.md).
+ComfyUI is the default drawing tool. In Forge, select the optional Diffusers plugin, click **Install tool**, then enable it if prompted. **Set as default** saves your choice without an `.env` edit. Diffusers currently accepts SDXL single-file checkpoints with compatible LoRA and VAE files. ComfyUI uses registered API Format workflows; advanced users can point `EVERSPARK_WORKFLOW_TEMPLATE` to another one. A regular ComfyUI interface workflow is not directly executable as an API Format file. See [Image Forge](../ImageForge/README.md) for plugin and node requirements.
+
+For a hosted language model, open **Model services** in the WebUI sidebar. Enter a name, API base URL ending in `/v1`, API Key, and the provider's exact model ID; test the connection, then select its service and model in Forge. You can also set the default used for subject revisions. The OpenAI Compatible adapter calls non-streaming Chat Completions (`/chat/completions`); it does not discover remote model IDs. Optional JSON mode is off by default for services that do not support `response_format`. Connections and keys are kept in `Data/Configuration/ConceptForge/connections.json` with owner-only permissions; the WebUI API does not return stored keys. A hosted provider receives the prompts sent to that service. Ollama remains available locally.
+
+Character subjects, memory, and outputs are runtime data: save what you need before replacing a cloud machine. Even without rclone, use **Storage → Character and Memory ZIP** to download character JSON and Memory SQLite together; choose the saved ZIP and click **Validate and restore** to import it, then restart EverSpark. Save outputs, models, and private settings, including model service connections, separately. A model source URL never enables automatic backups; see [Runtime and data](Runtime-and-Data.md).
 
 ## 5. rclone remote storage (optional)
 
