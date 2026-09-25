@@ -24,6 +24,11 @@
       "comfyui": {
         "base_url": "http://127.0.0.1:8188",
         "timeout": 60
+      },
+      "diffusers": {
+        "base_url": "http://127.0.0.1:8190",
+        "timeout": 60,
+        "default_checkpoint": "Illustrious-XL-v1.0.safetensors"
       }
     }
   },

@@ -34,6 +34,32 @@ from orchestrator.config.config import load_config  # noqa: E402
 from orchestrator.core.orchestrator import Orchestrator  # noqa: E402
 from orchestrator.core.server import OrchestratorServer  # noqa: E402
 from orchestrator.core.task_runner import TaskRunner  # noqa: E402
+
+
+class FakeGateway:
+    """Capture normalized image requests without starting a model runtime."""
+
+    def __init__(self, runner):
+        self.runner = runner
+        self.requests = []
+
+    def select(self, name=""):
+        return type("SelectedEngine", (), {"name": name or "comfyui", "health": lambda self: True})()
+
+    def submit(self, request, notify=None, engine=""):
+        self.requests.append(request)
+        workflow = self.runner.workflow.build(
+            request.positive_prompt, request.negative_prompt,
+            seed=request.seed, workflow_id=request.workflow)
+        checkpoint = self.runner.workflow.bind_checkpoint(
+            workflow, self.runner.image.list_checkpoints(), notify,
+            requested=request.checkpoint)
+        loras = (self.runner.workflow.inject_loras(
+            workflow, request.loras, self.runner.image.list_loras(),
+            workflow_id=request.workflow) if request.loras else [])
+        identifier = self.runner.image.queue_prompt(workflow)
+        return identifier, {"workflow": request.workflow or "test-workflow",
+                            "checkpoint": checkpoint, "vae": "", "loras": loras}
 from orchestrator.core.text import normalize_unicode  # noqa: E402
 
 
@@ -46,6 +72,18 @@ class UnicodeTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_existing_config_can_select_diffusers_without_new_adapter_section(self) -> None:
+        config_path = REPO_ROOT / "Orchestrator/orchestrator/config/default_config.json"
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        data["image_forge"]["adapters"].pop("diffusers")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "legacy-config.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with patch.dict(os.environ, {"EVERSPARK_IMAGE_BACKEND": "diffusers"}):
+                config = load_config(path)
+        self.assertEqual(config["image_forge"]["adapter"], "diffusers")
+        self.assertIn("diffusers", config["image_forge"]["adapters"])
+
     def test_local_paths_and_environment_overrides(self) -> None:
         with patch.dict(
             os.environ,
@@ -231,6 +269,7 @@ class BatchTests(unittest.TestCase):
         runner.concept = FakeConceptForge()
         runner.workflow = FakeWorkflow()
         runner.image = FakeImageForge()
+        runner.gateway = FakeGateway(runner)
         runner.supported_models = {"illustrious"}
         runner.max_model_retries = 3
         runner.max_batch_size = 20
@@ -293,6 +332,7 @@ class BatchTests(unittest.TestCase):
         runner.concept = FakeConceptForge()
         runner.workflow = WorkflowManager(config["workflow"])
         runner.image = FakeImageForge()
+        runner.gateway = FakeGateway(runner)
         runner.supported_models = {"illustrious"}
         runner.max_model_retries = 0
         runner.max_batch_size = 20
@@ -376,6 +416,7 @@ class SubjectIntegrationTests(unittest.TestCase):
             orchestrator.runner.concept = concept
             orchestrator.runner.workflow = Workflow()
             orchestrator.runner.image = Image()
+            orchestrator.runner.gateway = FakeGateway(orchestrator.runner)
             result = orchestrator.submit("Place her on a rooftop", "new-session")["result"]
             self.assertTrue(concept.assert_existing)
             self.assertEqual(result["subject"]["subject_id"], "old-character")
@@ -452,6 +493,7 @@ class SubjectIntegrationTests(unittest.TestCase):
             orchestrator.runner.concept = Concept()
             orchestrator.runner.workflow = Workflow()
             orchestrator.runner.image = Image()
+            orchestrator.runner.gateway = FakeGateway(orchestrator.runner)
             first = orchestrator.submit("画一个角色", "session")["result"]
             second = orchestrator.submit("改变背景", "session")["result"]
             third = orchestrator.submit("修改负面提示词", "session")["result"]
@@ -501,6 +543,7 @@ class SubjectIntegrationTests(unittest.TestCase):
             orchestrator.runner.concept = FakeConceptForge()
             orchestrator.runner.workflow = FakeWorkflow()
             orchestrator.runner.image = FakeImageForge()
+            orchestrator.runner.gateway = FakeGateway(orchestrator.runner)
 
             response = orchestrator.submit("Put her on a rooftop", "session-a")
             result = response["result"]

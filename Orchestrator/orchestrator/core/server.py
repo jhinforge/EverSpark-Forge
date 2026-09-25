@@ -56,11 +56,68 @@ class RequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/health":
             self._send(200, {"ok": True, "status": "standby"})
+        elif parsed.path == "/image/health":
+            try:
+                health = self.server.orchestrator.image_health()
+                self._send(200 if health["ok"] else 503, health)
+            except Exception as exc:
+                self._send(503, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/image/plugins":
+            try:
+                self._send(200, {"ok": True, **self.server.orchestrator.image_plugins()})
+            except Exception as exc:
+                self._send(502, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/image/plugins/jobs":
+            try:
+                job_id = parse_qs(parsed.query).get("job_id", [""])[0]
+                self._send(200, {"ok": True, "job": self.server.orchestrator.image_plugin_job(job_id)})
+            except ValueError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/image/results":
+            ids = [value for value in parse_qs(parsed.query).get("prompt_id", []) if value]
+            if not ids or len(ids) > 20:
+                self._send(400, {"ok": False, "error": "1 to 20 prompt_id values required"})
+                return
+            try:
+                self._send(200, {"ok": True, "results": self.server.orchestrator.image_results(ids)})
+            except KeyError:
+                self._send(404, {"ok": False, "error": "Unknown image job"})
+            except Exception as exc:
+                self._send(502, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/image/history":
+            try:
+                limit = int(parse_qs(parsed.query).get("limit", ["24"])[0])
+                self._send(200, {"ok": True, "images": self.server.orchestrator.image_history(limit)})
+            except ValueError:
+                self._send(400, {"ok": False, "error": "Invalid history limit"})
+            except Exception as exc:
+                self._send(502, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/image/file":
+            query = parse_qs(parsed.query)
+            try:
+                path = self.server.orchestrator.image_path(
+                    query.get("filename", [""])[0], query.get("subfolder", [""])[0],
+                    query.get("type", ["output"])[0])
+            except ValueError:
+                self._send(404, {"ok": False, "error": "Image is unavailable"})
+                return
+            import mimetypes
+            self.send_response(200)
+            self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(path.stat().st_size))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            with path.open("rb") as file:
+                while chunk := file.read(1024 * 1024):
+                    self.wfile.write(chunk)
         elif parsed.path == "/resources":
-            self._send(
-                200,
-                {"ok": True, **self.server.orchestrator.resources()},
-            )
+            try:
+                self._send(200, {"ok": True, **self.server.orchestrator.resources(
+                    parse_qs(parsed.query).get("engine", [""])[0])})
+            except ValueError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
+            except Exception as exc:
+                self._send(502, {"ok": False, "error": str(exc)})
         elif parsed.path == "/storage/resources":
             try:
                 self._send(
@@ -199,6 +256,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/downloads",
             "/downloads/cancel",
             "/downloads/retry",
+            "/image/plugins/install",
+            "/image/plugins/enable",
+            "/image/plugins/default",
         }:
             self._send(404, {"ok": False, "error": "Not found"})
             return
@@ -214,6 +274,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                     payload.get("selection"),
                 )
                 self._send(200, result)
+            elif request_path in {"/image/plugins/install", "/image/plugins/enable"}:
+                job = self.server.orchestrator.start_image_plugin(
+                    str(payload.get("plugin", "")), request_path.rsplit("/", 1)[-1])
+                self._send(202, {"ok": True, "job": job})
+            elif request_path == "/image/plugins/default":
+                result = self.server.orchestrator.set_default_image_plugin(str(payload.get("plugin", "")))
+                self._send(200, {"ok": True, **result})
             elif request_path == "/conversation":
                 result = self.server.orchestrator.discuss(
                     str(payload.get("text", "")),

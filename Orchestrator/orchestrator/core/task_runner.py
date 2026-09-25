@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import secrets
+from pathlib import Path
 from typing import Any, Callable
 
 from concept_forge.providers.ollama import GenerationPlan, OllamaProvider
 from concept_forge.subjects import CompiledSubject
-from image_forge.adapters.comfyui import ComfyUIAdapter
-from image_forge.workflow.manager import WorkflowManager
+from image_forge.adapters import create_engines, discover_plugins
+from image_forge.gateway import ImageGateway
+from image_forge.port import ImageRequest
+from image_forge.plugins import PluginManager
 
 
 class TaskError(RuntimeError):
@@ -21,12 +24,18 @@ class TaskRunner:
         adapter = str(image_config.get("adapter", "")).strip().lower()
         if provider != "ollama":
             raise TaskError(f"Unsupported Concept Forge provider: {provider}")
-        if adapter != "comfyui":
-            raise TaskError(f"Unsupported Image Forge adapter: {adapter}")
-
         self.concept = OllamaProvider(concept_config["providers"][provider])
-        self.image = ComfyUIAdapter(image_config["adapters"][adapter])
-        self.workflow = WorkflowManager(config["workflow"])
+        self.manifests = discover_plugins()
+        self.engines = create_engines(image_config["adapters"], config["workflow"],
+                                      self.manifests)
+        self.gateway = ImageGateway(
+            self.engines, config["memory"]["database"],
+            image_config.get("output_directory", str(
+                Path(config["memory"]["database"]).parents[1] / "Outputs")),
+            default_engine=adapter,
+        )
+        self.plugins = PluginManager(self.manifests, self.gateway)
+        self.image = self.gateway.select()
         self.supported_models = {
             str(model).strip().lower()
             for model in concept_config.get("supported_models", ["illustrious"])
@@ -45,9 +54,11 @@ class TaskRunner:
         previous_positive_prompt: str = "",
     ) -> dict[str, Any]:
         selected = selection or {}
-        workflow_id = self.workflow.selected_workflow_id(
-            str(selected.get("workflow", ""))
-        )
+        engine_name = str(selected.get("engine", "")).strip().lower()
+        selected_engine = self.gateway.select(engine_name)
+        if hasattr(self, "plugins") and not selected_engine.health():
+            raise TaskError(f"Enable {selected_engine.name} before generating")
+        workflow_id = str(selected.get("workflow", ""))
         checkpoint = str(selected.get("checkpoint", "")).strip()
         vae = str(selected.get("vae", "")).strip()
         llm_model = str(selected.get("llm", "")).strip()
@@ -94,42 +105,20 @@ class TaskRunner:
         )
 
         items = []
-        available_checkpoints: list[str] | None = None
-        available_loras: list[str] | None = None
-        available_vaes: list[str] | None = None
         selected_checkpoint = ""
         selected_vae = ""
         selected_loras: list[dict[str, Any]] = []
         for index in range(1, plan.count + 1):
             seed = secrets.randbelow(2**63)
-            workflow = self.workflow.build(
-                positive_prompt,
-                negative_prompt,
-                seed=seed,
-                workflow_id=workflow_id,
-            )
-            if available_checkpoints is None:
-                available_checkpoints = self.image.list_checkpoints()
-            selected_checkpoint = self.workflow.bind_checkpoint(
-                workflow,
-                available_checkpoints,
-                notify or (lambda _message: None),
-                requested=checkpoint,
-            )
-            if vae:
-                if available_vaes is None:
-                    available_vaes = self.image.list_vaes()
-                selected_vae = self.workflow.bind_vae(workflow, vae, available_vaes)
-            if loras:
-                if available_loras is None:
-                    available_loras = self.image.list_loras()
-                selected_loras = self.workflow.inject_loras(
-                    workflow,
-                    loras,
-                    available_loras,
-                    workflow_id=workflow_id,
-                )
-            prompt_id = self.image.queue_prompt(workflow)
+            prompt_id, resolved = self.gateway.submit(ImageRequest(
+                positive_prompt=positive_prompt, negative_prompt=negative_prompt,
+                seed=seed, workflow=workflow_id, checkpoint=checkpoint,
+                vae=vae, loras=loras), notify or (lambda _message: None),
+                engine=selected_engine.name)
+            workflow_id = resolved["workflow"]
+            selected_checkpoint = resolved["checkpoint"]
+            selected_vae = resolved["vae"]
+            selected_loras = resolved["loras"]
             items.append({"index": index, "prompt_id": prompt_id, "seed": seed})
 
         return {
@@ -140,6 +129,7 @@ class TaskRunner:
             "count": plan.count,
             "selection": {
                 "workflow": workflow_id,
+                "engine": selected_engine.name,
                 "checkpoint": selected_checkpoint,
                 "vae": selected_vae,
                 "llm": llm_model or str(getattr(self.concept, "model", "")),
@@ -153,21 +143,13 @@ class TaskRunner:
             ),
         }
 
-    def resources(self) -> dict[str, Any]:
+    def resources(self, engine: str = "") -> dict[str, Any]:
         llms = self.concept.list_models()
         default_llm = self._resolve_ollama_model(self.concept.model, llms)
-        return {
-            "workflows": self.workflow.list_workflows(),
-            "checkpoints": self.image.list_checkpoints(),
-            "loras": self.image.list_loras(),
-            "vaes": self.image.list_vaes(),
-            "llms": llms,
-            "defaults": {
-                "workflow": self.workflow.default_workflow_id,
-                "llm": default_llm or self.concept.model,
-                "checkpoint": self.workflow.managed_default_checkpoint,
-            },
-        }
+        resources = self.gateway.resources(engine)
+        resources["llms"] = llms
+        resources["defaults"]["llm"] = default_llm or self.concept.model
+        return resources
 
     @staticmethod
     def _resolve_ollama_model(requested: str, available: list[str]) -> str:

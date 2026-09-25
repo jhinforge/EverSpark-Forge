@@ -23,7 +23,8 @@ Usage: ./everspark setup [--plan] [--models all|concept|image]
 
 Downloads the selected official default models from Hugging Face. Concept setup
 also imports the local GGUF into Ollama unless --skip-concept-import is supplied.
-The managed ComfyUI and Ollama runtimes are installed before models.
+ComfyUI and Ollama runtimes are installed before models. Optional Diffusers
+can be installed later from the Forge drawing tool selector in WebUI.
 --plan only prints the sources and destinations and makes no changes.
 EOF
 }
@@ -69,6 +70,10 @@ if [ "${EVERSPARK_STORAGE_BACKEND:-local}" = "rclone" ]; then
 fi
 
 bash "${REPO_ROOT}/Runtime/Managed/install_runtime.sh"
+if [ -f "${REPO_ROOT}/Runtime/Managed/image_backend.py" ] &&
+   [ "$(python3 "${REPO_ROOT}/Runtime/Managed/image_backend.py")" = "diffusers" ]; then
+  bash "${REPO_ROOT}/Runtime/Managed/install_diffusers.sh"
+fi
 
 if [ "$SKIP_MODELS" = true ]; then
   bash "${LAUNCHER_DIR}/install.sh"

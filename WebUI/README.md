@@ -41,15 +41,15 @@ configuration file.
 
 ## Boundaries
 
-The browser never connects directly to Orchestrator or the configured Image
-Forge adapter. `WebUI/app.py` exposes a same-origin proxy and does not store
+The browser never connects directly to Orchestrator or an Image Forge engine.
+`WebUI/app.py` exposes a same-origin proxy and does not store
 subject state itself. Users never fill the internal JSON template or choose a
 subject ID. Character identity remains in Memory; scene, pose,
 camera, and background remain request-level task input.
 
 Resource choices are discovered through Orchestrator. Checkpoints and LoRAs
-come from the configured ComfyUI adapter, LLM names come from Ollama, and
-workflows come from the Image Forge registry. The selections are attached to
+come from the active Image Forge engine, LLM names come from Ollama, and
+workflows come from the active engine. The selections are attached to
 each request and do not rewrite repository workflow files.
 
 Direct image downloads currently accept `.safetensors` and `.ckpt`; Concept
@@ -63,7 +63,6 @@ Default endpoints can be overridden when needed:
 - `EVERSPARK_WEBUI_HOST`
 - `EVERSPARK_WEBUI_PORT`
 - `EVERSPARK_ORCHESTRATOR_URL`
-- `EVERSPARK_IMAGE_FORGE_URL`
+- `EVERSPARK_IMAGE_BACKEND` (optional initial drawing tool; Forge saves later default choices)
 - `EVERSPARK_WEBUI_REQUEST_TIMEOUT`
-- `EVERSPARK_IMAGE_FORGE_TIMEOUT`
 - `EVERSPARK_OUTPUT_DIR`

@@ -79,10 +79,16 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         raise ConfigError("concept_forge.providers must be an object")
     if not isinstance(adapters, dict):
         raise ConfigError("image_forge.adapters must be an object")
+    adapters.setdefault("diffusers", {
+        "base_url": "http://127.0.0.1:8190", "timeout": 60,
+        "default_checkpoint": "Illustrious-XL-v1.0.safetensors",
+    })
     if not isinstance(providers.get("ollama"), dict):
         raise ConfigError("Missing Concept Forge provider config: ollama")
-    if not isinstance(adapters.get("comfyui"), dict):
-        raise ConfigError("Missing Image Forge adapter config: comfyui")
+    selected_adapter = os.environ.get("EVERSPARK_IMAGE_BACKEND", config["image_forge"].get("adapter", "comfyui")).lower()
+    if selected_adapter not in {"comfyui", "diffusers"} or not isinstance(adapters.get(selected_adapter), dict):
+        raise ConfigError(f"Missing or unsupported Image Forge adapter: {selected_adapter}")
+    config["image_forge"]["adapter"] = selected_adapter
 
     _environment_override(
         config, "EVERSPARK_ORCHESTRATOR_HOST", ("orchestrator", "host")
@@ -104,6 +110,15 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         config,
         "COMFYUI_BASE_URL",
         ("image_forge", "adapters", "comfyui", "base_url"),
+    )
+    if "diffusers" in adapters:
+        _environment_override(
+            config, "EVERSPARK_DIFFUSERS_URL",
+            ("image_forge", "adapters", "diffusers", "base_url"),
+        )
+    config["image_forge"]["output_directory"] = _resolve_repo_path(
+        os.environ.get("EVERSPARK_OUTPUT_DIR", "Data/Outputs"),
+        "image_forge.output_directory"
     )
     _environment_override(
         config, "EVERSPARK_STORAGE_BACKEND", ("storage", "backend")

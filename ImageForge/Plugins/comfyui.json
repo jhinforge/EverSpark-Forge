@@ -1,0 +1,9 @@
+{
+  "id": "comfyui",
+  "name": "ComfyUI",
+  "module": "image_forge.adapters.comfyui",
+  "class": "ComfyUIAdapter",
+  "managed_service": "image",
+  "uses_workflow": true,
+  "runtime_marker": "Data/Runtime/ComfyUI/venv/bin/python"
+}

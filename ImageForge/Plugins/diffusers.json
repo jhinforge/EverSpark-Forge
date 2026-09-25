@@ -1,0 +1,9 @@
+{
+  "id": "diffusers",
+  "name": "Diffusers",
+  "module": "image_forge.adapters.diffusers",
+  "class": "DiffusersAdapter",
+  "managed_service": "diffusers",
+  "runtime_marker": "Data/Runtime/Diffusers/torch-profile",
+  "installer": "Runtime/Managed/install_diffusers.sh"
+}

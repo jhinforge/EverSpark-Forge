@@ -28,36 +28,6 @@ SPEC.loader.exec_module(app)
 PNG_BYTES = b"\x89PNG\r\n\x1a\npublic-test-image"
 
 
-class ParsingTests(unittest.TestCase):
-    def test_extracts_image_and_builds_local_proxy_url(self) -> None:
-        images = app.extract_images(
-            {
-                "outputs": {
-                    "9": {
-                        "images": [
-                            {
-                                "filename": "EverSpark_00001.png",
-                                "subfolder": "batch",
-                                "type": "output",
-                            }
-                        ]
-                    }
-                }
-            }
-        )
-        self.assertEqual(images[0]["node_id"], "9")
-        self.assertIn("/api/image/view?", images[0]["url"])
-        self.assertIn("subfolder=batch", images[0]["url"])
-        self.assertEqual(app.history_status({}, images), "completed")
-
-    def test_failed_and_running_history_states(self) -> None:
-        self.assertEqual(
-            app.history_status({"status": {"status_str": "error"}}, []),
-            "failed",
-        )
-        self.assertEqual(app.history_status({}, []), "running")
-
-
 class MockUpstreamHandler(BaseHTTPRequestHandler):
     received_task: dict | None = None
     revision = 1
@@ -91,8 +61,14 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
-        if parsed.path in {"/health", "/system_stats"}:
+        if parsed.path in {"/health", "/image/health"}:
             self._json(200, {"ok": True})
+        elif parsed.path == "/image/plugins":
+            self._json(200, {"ok": True, "default": "comfyui", "plugins": [
+                {"id": "comfyui", "name": "ComfyUI", "installed": True, "online": True},
+                {"id": "diffusers", "name": "Diffusers", "installed": False, "online": False}]})
+        elif parsed.path == "/image/plugins/jobs":
+            self._json(200, {"ok": True, "job": {"id": query.get("job_id", [""])[0], "status": "completed"}})
         elif parsed.path == "/resources":
             self._json(
                 200,
@@ -206,6 +182,12 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
             self._json(200, {"ok": True, "session_id": query.get("session_id", [""])[0], "document": self.subject()})
         elif parsed.path == "/memory/history":
             self._json(200, {"ok": True, "messages": []})
+        elif parsed.path == "/image/results":
+            self._json(200, {"ok": True, "results": [{
+                "prompt_id": "prompt-1", "status": "completed", "images": [{
+                    "filename": "EverSpark_00001.png", "subfolder": "", "type": "output",
+                    "url": "/api/image/view?filename=EverSpark_00001.png&subfolder=&type=output"
+                }]}]})
         elif parsed.path == "/history/prompt-1":
             self._json(
                 200,
@@ -244,7 +226,7 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     }
                 },
             )
-        elif parsed.path == "/view":
+        elif parsed.path == "/image/file":
             self.send_response(200)
             self.send_header("Content-Type", "image/png")
             self.send_header("Content-Length", str(len(PNG_BYTES)))
@@ -269,6 +251,10 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+        elif self.path in {"/image/plugins/install", "/image/plugins/enable"}:
+            self._json(202, {"ok": True, "job": {"id": "a" * 32, "plugin": payload["plugin"], "status": "running"}})
+        elif self.path == "/image/plugins/default":
+            self._json(200, {"ok": True, "default": payload["plugin"]})
         elif self.path == "/conversation":
             self._json(
                 200,
@@ -361,9 +347,7 @@ class WebUIIntegrationTests(unittest.TestCase):
                 host="127.0.0.1",
                 port=0,
                 orchestrator_url=upstream_url,
-                image_forge_url=upstream_url,
                 request_timeout=3,
-                image_timeout=3,
                 output_directory=cls.output_root,
             )
         )
@@ -541,6 +525,16 @@ class WebUIIntegrationTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as caught:
             urlopen(self.base_url + "/api/image/view?filename=../private", timeout=5)
         self.assertEqual(caught.exception.code, 400)
+
+    def test_image_plugin_management_is_proxied(self) -> None:
+        _, listing = self.request_json("/api/image/plugins")
+        self.assertEqual([item["id"] for item in listing["plugins"]], ["comfyui", "diffusers"])
+        _, installing = self.request_json("/api/image/plugins/install", {"plugin": "diffusers"})
+        self.assertEqual(installing["job"]["plugin"], "diffusers")
+        _, job = self.request_json("/api/image/plugins/jobs?job_id=" + "a" * 32)
+        self.assertEqual(job["job"]["status"], "completed")
+        _, default = self.request_json("/api/image/plugins/default", {"plugin": "diffusers"})
+        self.assertEqual(default["default"], "diffusers")
 
     def test_local_data_archive_download_and_restore_upload(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -86,6 +86,7 @@ Managed runtime plan
   PyTorch: ${TORCH_VERSION}
   Ollama: ${OLLAMA_VERSION}
   Service state: ${REPO_ROOT}/Data/Runtime/Services
+  Image engine: $(python3 "${REPO_ROOT}/Runtime/Managed/image_backend.py")
 EOF
   exit 0
 fi

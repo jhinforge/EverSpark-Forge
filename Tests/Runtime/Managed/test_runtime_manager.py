@@ -24,6 +24,27 @@ def free_port() -> int:
 
 
 class RuntimeManagerTests(unittest.TestCase):
+    def test_diffusers_is_an_optional_separate_service(self) -> None:
+        with patch.dict(os.environ, {"EVERSPARK_IMAGE_BACKEND": "diffusers",
+                                  "EVERSPARK_DIFFUSERS_URL": "http://127.0.0.1:8191"}):
+            services = runtime_manager.service_definitions()
+        self.assertEqual(services["image"].health_url, "http://127.0.0.1:8188/system_stats")
+        self.assertEqual(services["diffusers"].health_url, "http://127.0.0.1:8191/health")
+        self.assertEqual(services["diffusers"].log_file, "diffusers.log")
+
+    def test_config_file_selects_diffusers_worker_without_env_override(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_file = Path(directory) / "forge.json"
+            config_file.write_text('{"image_forge": {"adapter": "diffusers", "adapters": '
+                                   '{"diffusers": {"base_url": "http://127.0.0.1:8195"}}}}')
+            with patch.dict(os.environ, {
+                "EVERSPARK_ORCHESTRATOR_CONFIG": str(config_file),
+                "EVERSPARK_IMAGE_BACKEND": "", "EVERSPARK_DIFFUSERS_URL": "",
+            }):
+                services = runtime_manager.service_definitions()
+        self.assertEqual(services["image"].health_url, "http://127.0.0.1:8188/system_stats")
+        self.assertEqual(services["diffusers"].health_url, "http://127.0.0.1:8195/health")
+
     def test_existing_managed_comfy_config_gains_vae_without_losing_custom_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

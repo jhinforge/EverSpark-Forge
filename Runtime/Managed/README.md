@@ -4,6 +4,9 @@ This layer owns the disposable local service installations and process state
 under `Data/Runtime/`. It never stores personal configuration in the repository.
 
 - ComfyUI is installed at a pinned tag and verified commit in `Data/Runtime/ComfyUI/`.
+- ComfyUI runs as `image`. Diffusers installs on demand from the Forge drawing
+  tool selector into `Data/Runtime/Diffusers/venv`, then runs as the separate
+  optional `diffusers` service. Both use the existing GPU assignment.
 - Ollama is installed through its official Linux installer when unavailable.
 - PID identity includes the Linux process start time to avoid killing a reused PID.
 - Services bind to localhost by default and write raw process output to `Data/Logs/`.

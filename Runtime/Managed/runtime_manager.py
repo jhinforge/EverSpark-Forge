@@ -13,6 +13,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
+from image_backend import diffusers_url
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATE_DIR = REPO_ROOT / "Data" / "Runtime" / "Services"
@@ -67,6 +69,7 @@ def service_definitions() -> dict[str, ServiceDefinition]:
     values = {**_load_dotenv(REPO_ROOT / ".env"), **os.environ}
     ollama_url = values.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
     comfy_url = values.get("COMFYUI_BASE_URL", "http://127.0.0.1:8188").rstrip("/")
+    worker_url = diffusers_url(values).rstrip("/")
     orchestrator_url = values.get(
         "EVERSPARK_ORCHESTRATOR_URL", "http://127.0.0.1:8765"
     ).rstrip("/")
@@ -87,6 +90,13 @@ def service_definitions() -> dict[str, ServiceDefinition]:
             ("bash", str(REPO_ROOT / "ImageForge" / "Scripts" / "start_runtime.sh")),
             f"{comfy_url}/system_stats",
             "comfyui.log",
+            300,
+        ),
+        "diffusers": ServiceDefinition(
+            "diffusers",
+            ("bash", str(REPO_ROOT / "ImageForge" / "Scripts" / "start_diffusers.sh")),
+            f"{worker_url}/health",
+            "diffusers.log",
             300,
         ),
         "orchestrator": ServiceDefinition(

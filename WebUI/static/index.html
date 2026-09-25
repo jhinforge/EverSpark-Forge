@@ -139,6 +139,15 @@
               </div>
 
               <div class="generation-controls" aria-label="Generation resources">
+                <div class="resource-field engine-field">
+                  <label for="imageEngineSelect">Drawing tool</label>
+                  <span class="select-wrap"><select id="imageEngineSelect"></select></span>
+                  <div class="engine-actions">
+                    <span id="imageEngineStatus"></span>
+                    <button class="secondary-button" id="imageEngineAction" type="button" hidden></button>
+                    <button class="secondary-button" id="imageEngineDefault" type="button" hidden>Set as default</button>
+                  </div>
+                </div>
                 <label class="resource-field">
                   <span>Workflow</span>
                   <span class="select-wrap"><select id="workflowSelect"></select></span>

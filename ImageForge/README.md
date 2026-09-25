@@ -1,6 +1,37 @@
 # Image Forge
 
-Image workflow preparation and execution through pluggable adapters.
+Image workflow preparation and execution through pluggable adapters. Image
+Forge owns the backend-neutral request, job IDs, status, and gallery. WebUI
+accesses image results through Orchestrator, never through a model runtime.
+
+## Select a drawing engine
+
+ComfyUI is the default drawing tool. Image Forge discovers plugins from
+`ImageForge/Plugins/*.json`. In the Forge drawing tool selector, choose
+Diffusers and click **Install tool** (once), then **Enable tool** after a
+restart if needed. Choose **Set as default** to save the default in the
+memory database; no `.env` edit is needed. A generation request records its
+chosen tool, so jobs and the gallery continue working after changing the
+selector. The managed Diffusers worker runs as a separate optional service
+on port 8190 and shares checkpoint, LoRA, VAE and output directories with
+ComfyUI. Default and imported `.safetensors`/`.ckpt` checkpoints are listed,
+but this Diffusers adapter currently supports SDXL single-file checkpoints
+only. Set `image_forge.adapters.diffusers.default_checkpoint` in the config
+when changing the default model.
+
+Diffusers currently supports SDXL text-to-image, checkpoint selection, SDXL
+LoRA files, and optional compatible VAE files. Its LoRA model and CLIP strength
+must have the same value; different values are rejected instead of silently
+changing the user's settings. ComfyUI API Format workflows remain specific to
+the ComfyUI adapter. The engines may produce different images from the same
+seed and prompts. Diffusers may need access to model configuration files when
+loading a single-file checkpoint.
+
+The job catalog is stored alongside EverSpark Memory in its SQLite database;
+images remain in `Data/Outputs`. Earlier images in that directory appear in
+the gallery even if their ComfyUI job ID was never registered. Completed jobs
+remain visible after switching engines; an unfinished job is marked failed if
+its engine changes.
 
 The current migrated slice contains:
 

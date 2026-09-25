@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, quote, urlencode, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -40,9 +40,7 @@ class Settings:
     host: str = "127.0.0.1"
     port: int = 8780
     orchestrator_url: str = "http://127.0.0.1:8765"
-    image_forge_url: str = "http://127.0.0.1:8188"
     request_timeout: int = 600
-    image_timeout: int = 60
     output_directory: Path = REPO_ROOT / "Data" / "Outputs"
 
 
@@ -58,14 +56,9 @@ def load_settings() -> Settings:
         orchestrator_url=os.environ.get(
             "EVERSPARK_ORCHESTRATOR_URL", "http://127.0.0.1:8765"
         ).rstrip("/"),
-        image_forge_url=os.environ.get(
-            "EVERSPARK_IMAGE_FORGE_URL",
-            os.environ.get("COMFYUI_BASE_URL", "http://127.0.0.1:8188"),
-        ).rstrip("/"),
         request_timeout=int(
             os.environ.get("EVERSPARK_WEBUI_REQUEST_TIMEOUT", "600")
         ),
-        image_timeout=int(os.environ.get("EVERSPARK_IMAGE_FORGE_TIMEOUT", "60")),
         output_directory=output_directory,
     )
 
@@ -100,54 +93,6 @@ def request_json(
         return exc.code, body
 
 
-def image_proxy_url(image: dict[str, Any]) -> str:
-    return "/api/image/view?" + urlencode(
-        {
-            "filename": str(image.get("filename", "")),
-            "subfolder": str(image.get("subfolder", "")),
-            "type": str(image.get("type", "output")),
-        }
-    )
-
-
-def extract_images(history_item: dict[str, Any]) -> list[dict[str, str]]:
-    images: list[dict[str, str]] = []
-    outputs = history_item.get("outputs", {})
-    if not isinstance(outputs, dict):
-        return images
-    for node_id, output in outputs.items():
-        if not isinstance(output, dict):
-            continue
-        output_images = output.get("images", [])
-        if not isinstance(output_images, list):
-            continue
-        for image in output_images:
-            if not isinstance(image, dict) or not image.get("filename"):
-                continue
-            normalized = {
-                "node_id": str(node_id),
-                "filename": str(image["filename"]),
-                "subfolder": str(image.get("subfolder", "")),
-                "type": str(image.get("type", "output")),
-            }
-            normalized["url"] = image_proxy_url(normalized)
-            images.append(normalized)
-    return images
-
-
-def history_status(history_item: dict[str, Any], images: list[dict[str, str]]) -> str:
-    if images:
-        return "completed"
-    status = history_item.get("status", {})
-    if isinstance(status, dict):
-        status_text = str(status.get("status_str", "")).lower()
-        if status_text in {"error", "failed"}:
-            return "failed"
-        if status.get("completed") is True:
-            return "completed"
-    return "running"
-
-
 class WebUIServer(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -173,6 +118,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/resources": lambda: self._proxy_orchestrator_get(
                 "/resources", parsed.query
             ),
+            "/api/image/plugins": lambda: self._proxy_orchestrator_get("/image/plugins"),
+            "/api/image/plugins/jobs": lambda: self._proxy_orchestrator_get("/image/plugins/jobs", parsed.query),
             "/api/storage/resources": lambda: self._proxy_orchestrator_get(
                 "/storage/resources", parsed.query
             ),
@@ -219,6 +166,9 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         upstream_paths = {
+            "/api/image/plugins/install": "/image/plugins/install",
+            "/api/image/plugins/enable": "/image/plugins/enable",
+            "/api/image/plugins/default": "/image/plugins/default",
             "/api/subjects/generate": "/subjects/generate",
             "/api/subjects/update": "/subjects/update",
             "/api/subjects/revise": "/subjects/revise",
@@ -324,12 +274,12 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _collect_service_health(self) -> dict[str, dict[str, Any]]:
         checks = {
             "orchestrator": f"{self.server.settings.orchestrator_url}/health",
-            "image_forge": f"{self.server.settings.image_forge_url}/system_stats",
+            "image_forge": f"{self.server.settings.orchestrator_url}/image/health",
         }
         services: dict[str, dict[str, Any]] = {}
         for name, url in checks.items():
             try:
-                status, _ = request_json(url, self.server.settings.image_timeout)
+                status, _ = request_json(url, self.server.settings.request_timeout)
                 services[name] = {"online": 200 <= status < 300}
             except Exception as exc:
                 services[name] = {
@@ -365,35 +315,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not prompt_ids:
             self._json(400, {"ok": False, "error": "prompt_id is required"})
             return
-        results = []
-        try:
-            for prompt_id in prompt_ids:
-                safe_id = quote(prompt_id, safe="")
-                status, history = request_json(
-                    f"{self.server.settings.image_forge_url}/history/{safe_id}",
-                    self.server.settings.image_timeout,
-                )
-                if not 200 <= status < 300:
-                    raise RuntimeError(f"Image Forge history HTTP {status}")
-                item = history.get(prompt_id)
-                if not isinstance(item, dict):
-                    results.append(
-                        {"prompt_id": prompt_id, "status": "waiting", "images": []}
-                    )
-                    continue
-                images = extract_images(item)
-                results.append(
-                    {
-                        "prompt_id": prompt_id,
-                        "status": history_status(item, images),
-                        "images": images,
-                    }
-                )
-            self._json(200, {"ok": True, "results": results})
-        except (URLError, TimeoutError) as exc:
-            self._upstream_unavailable(exc, "Image Forge")
-        except Exception as exc:
-            self._json(502, {"ok": False, "error": str(exc)})
+        self._proxy_orchestrator_get("/image/results", urlencode(
+            [("prompt_id", item) for item in prompt_ids]))
 
     def _history(self, query: dict[str, list[str]]) -> None:
         try:
@@ -401,27 +324,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         except ValueError:
             self._json(400, {"ok": False, "error": "limit must be an integer"})
             return
-        try:
-            status, history = request_json(
-                f"{self.server.settings.image_forge_url}/history?"
-                + urlencode({"max_items": limit}),
-                self.server.settings.image_timeout,
-            )
-            if not 200 <= status < 300:
-                raise RuntimeError(f"Image Forge history HTTP {status}")
-            images = []
-            if isinstance(history, dict):
-                for prompt_id, item in reversed(list(history.items())):
-                    if not isinstance(item, dict):
-                        continue
-                    for image in extract_images(item):
-                        image["prompt_id"] = str(prompt_id)
-                        images.append(image)
-            self._json(200, {"ok": True, "images": images[:limit]})
-        except (URLError, TimeoutError) as exc:
-            self._upstream_unavailable(exc, "Image Forge")
-        except Exception as exc:
-            self._json(502, {"ok": False, "error": str(exc)})
+        self._proxy_orchestrator_get("/image/history", urlencode({"limit": limit}))
 
     def _proxy_image(self, query: dict[str, list[str]]) -> None:
         filename = query.get("filename", [""])[0]
@@ -433,19 +336,19 @@ class RequestHandler(BaseHTTPRequestHandler):
         if subfolder.startswith("/") or ".." in subfolder:
             self._json(400, {"ok": False, "error": "Invalid subfolder"})
             return
-        if folder_type not in {"output", "temp", "input"}:
+        if folder_type != "output":
             self._json(400, {"ok": False, "error": "Invalid image type"})
             return
         upstream_query = urlencode(
             {"filename": filename, "subfolder": subfolder, "type": folder_type}
         )
         request = Request(
-            f"{self.server.settings.image_forge_url}/view?{upstream_query}",
+            f"{self.server.settings.orchestrator_url}/image/file?{upstream_query}",
             method="GET",
         )
         try:
             with urlopen(
-                request, timeout=self.server.settings.image_timeout
+                request, timeout=self.server.settings.request_timeout
             ) as response:
                 body = response.read()
                 self.send_response(response.status)

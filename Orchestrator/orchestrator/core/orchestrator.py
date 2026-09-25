@@ -302,8 +302,33 @@ class Orchestrator:
             "negative_prompt": prompts["negative_prompt"] if prompts else "",
         }
 
-    def resources(self) -> dict[str, Any]:
-        return self.runner.resources()
+    def resources(self, engine: str = "") -> dict[str, Any]:
+        return self.runner.resources(engine)
+
+    def image_health(self) -> dict[str, Any]:
+        engine = self.runner.gateway.select()
+        return {"ok": engine.health(), "engine": engine.name}
+
+    def image_plugins(self) -> dict[str, Any]:
+        return self.runner.plugins.plugins()
+
+    def image_plugin_job(self, job_id: str) -> dict[str, Any]:
+        return self.runner.plugins.job(job_id)
+
+    def start_image_plugin(self, name: str, action: str) -> dict[str, Any]:
+        return self.runner.plugins.start(name, action)
+
+    def set_default_image_plugin(self, name: str) -> dict[str, Any]:
+        return self.runner.plugins.set_default(name)
+
+    def image_results(self, job_ids: list[str]) -> list[dict[str, Any]]:
+        return self.runner.gateway.results(job_ids)
+
+    def image_history(self, limit: int) -> list[dict[str, str]]:
+        return self.runner.gateway.history(limit)
+
+    def image_path(self, filename: str, subfolder: str, kind: str) -> Path:
+        return self.runner.gateway.image_path(filename, subfolder, kind)
 
     def storage_resources(self) -> dict[str, Any]:
         return self.storage.resources()

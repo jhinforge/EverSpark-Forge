@@ -8,10 +8,12 @@ const state = {
   selectedSubject: null,
   selectingSubject: false,
   mode: "discuss",
-  resources: { workflows: [], checkpoints: [], vaes: [], loras: [], llms: [], defaults: {} },
+  resources: { workflows: [], checkpoints: [], vaes: [], loras: [], llms: [], defaults: {}, loraStrengthMode: "independent" },
   remoteStorage: null,
   pathsLoaded: false,
   selectedLoras: [],
+  imagePlugins: [],
+  defaultImagePlugin: "comfyui",
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
   storagePollJobId: null,
@@ -64,6 +66,10 @@ const elements = {
   imageViewer: $("#imageViewer"),
   viewerImage: $("#viewerImage"),
   workflowSelect: $("#workflowSelect"),
+  imageEngineSelect: $("#imageEngineSelect"),
+  imageEngineStatus: $("#imageEngineStatus"),
+  imageEngineAction: $("#imageEngineAction"),
+  imageEngineDefault: $("#imageEngineDefault"),
   checkpointSelect: $("#checkpointSelect"),
   vaeSelect: $("#vaeSelect"),
   llmSelect: $("#llmSelect"),
@@ -241,13 +247,20 @@ function renderSelectedLoras() {
     model.value = String(item.strength_model);
     uiAttr(model, "title", "Model strength");
     uiAttr(model, "aria-label", "{name} model strength", { name: item.name });
-    model.addEventListener("change", () => { item.strength_model = Number(model.value); });
+    model.addEventListener("change", () => {
+      item.strength_model = Number(model.value);
+      if (state.resources.loraStrengthMode === "shared") {
+        item.strength_clip = item.strength_model;
+        clip.value = model.value;
+      }
+    });
     const clip = document.createElement("input");
     clip.type = "number";
     clip.step = "0.05";
     clip.min = "-10";
     clip.max = "10";
     clip.value = String(item.strength_clip);
+    clip.disabled = state.resources.loraStrengthMode === "shared";
     uiAttr(clip, "title", "CLIP strength");
     uiAttr(clip, "aria-label", "{name} CLIP strength", { name: item.name });
     clip.addEventListener("change", () => { item.strength_clip = Number(clip.value); });
@@ -273,6 +286,7 @@ function addSelectedLora() {
 
 function generationSelection() {
   return {
+    engine: elements.imageEngineSelect.value,
     workflow: elements.workflowSelect.value,
     checkpoint: elements.checkpointSelect.value,
     vae: elements.vaeSelect.value,
@@ -281,9 +295,78 @@ function generationSelection() {
   };
 }
 
+function renderImagePlugin() {
+  const plugin = state.imagePlugins.find((item) => item.id === elements.imageEngineSelect.value);
+  if (!plugin) return;
+  elements.imageEngineStatus.textContent = plugin.job_id ? t("Installing tool") :
+    !plugin.installed ? t("Not installed") : plugin.online ? t("Ready") : t("Offline");
+  elements.imageEngineAction.hidden = plugin.online || Boolean(plugin.job_id);
+  elements.imageEngineAction.textContent = t(plugin.installed ? "Enable tool" : "Install tool");
+  elements.imageEngineAction.disabled = !plugin.installed && !plugin.installable;
+  elements.imageEngineDefault.hidden = plugin.id === state.defaultImagePlugin || !plugin.installed;
+}
+
+async function loadImagePlugins() {
+  try {
+    const data = await api("/api/image/plugins");
+    state.imagePlugins = data.plugins || [];
+    state.defaultImagePlugin = data.default;
+    fillSelect(elements.imageEngineSelect, state.imagePlugins, (item) => item.id, (item) => item.name, data.default);
+    renderImagePlugin();
+  } catch (error) {
+    showNotice(error.message);
+  }
+}
+
+async function manageImagePlugin() {
+  const plugin = state.imagePlugins.find((item) => item.id === elements.imageEngineSelect.value);
+  if (!plugin) return;
+  const action = plugin.installed ? "enable" : "install";
+  elements.imageEngineAction.disabled = true;
+  try {
+    const data = await api(`/api/image/plugins/${action}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plugin: plugin.id }),
+    });
+    elements.imageEngineStatus.textContent = t(action === "install" ? "Installing tool" : "Enabling tool");
+    const poll = async () => {
+      try {
+        const result = await api(`/api/image/plugins/jobs?job_id=${encodeURIComponent(data.job.id)}`);
+        if (result.job.status === "running") { setTimeout(poll, 2500); return; }
+        await loadImagePlugins();
+        if (result.job.status === "failed") showNotice(result.job.error);
+        else await loadResources();
+      } catch (error) { showNotice(error.message); }
+    };
+    setTimeout(poll, 2500);
+  } catch (error) { showNotice(error.message); elements.imageEngineAction.disabled = false; }
+}
+
+async function defaultImagePlugin() {
+  try {
+    await api("/api/image/plugins/default", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plugin: elements.imageEngineSelect.value }),
+    });
+    await loadImagePlugins();
+  } catch (error) { showNotice(error.message); }
+}
+
 async function loadResources() {
   try {
-    const data = await api("/api/resources");
+    const engine = elements.imageEngineSelect.value;
+    const plugin = state.imagePlugins.find((item) => item.id === engine);
+    if (plugin && !plugin.online) {
+      for (const select of [elements.workflowSelect, elements.checkpointSelect,
+        elements.vaeSelect, elements.loraSelect]) {
+        select.replaceChildren();
+        select.disabled = true;
+      }
+      elements.addLoraButton.disabled = true;
+      return;
+    }
+    const data = await api(`/api/resources?engine=${encodeURIComponent(engine)}`);
+    if (engine !== elements.imageEngineSelect.value) return;
     state.resources = {
       workflows: data.workflows || [],
       checkpoints: data.checkpoints || [],
@@ -291,7 +374,12 @@ async function loadResources() {
       loras: data.loras || [],
       llms: data.llms || [],
       defaults: data.defaults || {},
+      loraStrengthMode: data.lora_strength_mode || "independent",
     };
+    if (state.resources.loraStrengthMode === "shared") {
+      state.selectedLoras.forEach((item) => { item.strength_clip = item.strength_model; });
+      renderSelectedLoras();
+    }
     fillSelect(elements.workflowSelect, state.resources.workflows, (item) => item.id, (item) => item.name, state.resources.defaults.workflow);
     fillSelect(elements.checkpointSelect, state.resources.checkpoints, (item) => item, (item) => item, state.resources.defaults.checkpoint);
     fillSelect(elements.vaeSelect, ["", ...state.resources.vaes], (item) => item, (item) => item || t("Checkpoint VAE"));
@@ -1245,6 +1333,10 @@ function renderResults(results) {
       }
       const label = document.createElement("span");
       uiText(label, item.status === "failed" ? "Generation failed" : "Image Forge is working");
+      if (item.status === "running" && Number.isFinite(Number(item.progress))) {
+        label.textContent += ` · ${Math.round(Number(item.progress))}%`;
+      }
+      if (item.status === "failed" && item.error) label.title = item.error;
       core.appendChild(label);
       card.appendChild(core);
       grid.appendChild(card);
@@ -1266,7 +1358,8 @@ async function pollResults(items) {
     state.pollTimer = null;
     elements.generateButton.disabled = false;
     setGenerationState(failed ? "Failed" : "Complete", failed ? "error" : "success");
-    if (failed) showNotice(t("Image Forge returned a failed task. Check the runtime logs."));
+    if (failed) showNotice(data.results.find((item) => item.status === "failed")?.error ||
+      t("Image Forge returned a failed task. Check the runtime logs."));
   } catch (error) {
     clearInterval(state.pollTimer);
     state.pollTimer = null;
@@ -1472,6 +1565,14 @@ function bindEvents() {
   elements.discussModeButton.addEventListener("click", () => setMode("discuss"));
   elements.generateModeButton.addEventListener("click", () => setMode("generate"));
   elements.workflowSelect.addEventListener("change", updateLoraAvailability);
+  elements.imageEngineSelect.addEventListener("change", () => {
+    state.selectedLoras = [];
+    renderSelectedLoras();
+    renderImagePlugin();
+    void loadResources();
+  });
+  elements.imageEngineAction.addEventListener("click", manageImagePlugin);
+  elements.imageEngineDefault.addEventListener("click", defaultImagePlugin);
   elements.addLoraButton.addEventListener("click", addSelectedLora);
   $("#viewRevisionsButton").addEventListener("click", showRevisions);
   $("#closeRevisionModal").addEventListener("click", () => elements.revisionModal.close());
@@ -1481,7 +1582,8 @@ function bindEvents() {
   });
   $("#refreshButton").addEventListener("click", async () => {
     hideNotice();
-    await Promise.all([loadSubjects(), loadRuntime(), loadResources(), loadRemoteStorage()]);
+    await Promise.all([loadSubjects(), loadRuntime(), loadImagePlugins(), loadRemoteStorage()]);
+    await loadResources();
   });
   $("#refreshHistoryButton").addEventListener("click", loadHistory);
   elements.downloadOutputsButton.addEventListener("click", downloadOutputsArchive);
@@ -1528,7 +1630,8 @@ async function initialize() {
   bindEvents();
   setMode("discuss");
   renderSelectedSubject();
-  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadResources(), loadRemoteStorage(), loadDirectDownload(), loadBackup()]);
+  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadImagePlugins(), loadRemoteStorage(), loadDirectDownload(), loadBackup()]);
+  await loadResources();
   setInterval(loadRuntime, 20000);
 }
 
