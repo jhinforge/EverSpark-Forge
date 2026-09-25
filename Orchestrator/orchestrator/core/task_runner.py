@@ -4,7 +4,9 @@ import secrets
 from pathlib import Path
 from typing import Any, Callable
 
-from concept_forge.providers.ollama import GenerationPlan, OllamaProvider
+from concept_forge.adapters import create_adapters
+from concept_forge.gateway import ConceptGateway
+from concept_forge.service import ConceptService, GenerationPlan
 from concept_forge.subjects import CompiledSubject
 from image_forge.adapters import create_engines, discover_plugins
 from image_forge.gateway import ImageGateway
@@ -22,9 +24,12 @@ class TaskRunner:
         image_config = config["image_forge"]
         provider = str(concept_config.get("provider", "")).strip().lower()
         adapter = str(image_config.get("adapter", "")).strip().lower()
-        if provider != "ollama":
-            raise TaskError(f"Unsupported Concept Forge provider: {provider}")
-        self.concept = OllamaProvider(concept_config["providers"][provider])
+        try:
+            self.concept = ConceptService(ConceptGateway(
+                create_adapters(concept_config["providers"]), provider,
+            ))
+        except ValueError as exc:
+            raise TaskError(str(exc)) from exc
         self.manifests = discover_plugins()
         self.engines = create_engines(image_config["adapters"], config["workflow"],
                                       self.manifests)
@@ -67,7 +72,7 @@ class TaskRunner:
             raise TaskError("selection.loras must be a list")
         if llm_model:
             available_llms = self.concept.list_models()
-            resolved_llm = self._resolve_ollama_model(llm_model, available_llms)
+            resolved_llm = self._resolve_model(llm_model, available_llms)
             if not resolved_llm:
                 raise TaskError(f"Selected LLM is unavailable: {llm_model}")
             llm_model = resolved_llm
@@ -145,14 +150,14 @@ class TaskRunner:
 
     def resources(self, engine: str = "") -> dict[str, Any]:
         llms = self.concept.list_models()
-        default_llm = self._resolve_ollama_model(self.concept.model, llms)
+        default_llm = self._resolve_model(self.concept.model, llms)
         resources = self.gateway.resources(engine)
         resources["llms"] = llms
         resources["defaults"]["llm"] = default_llm or self.concept.model
         return resources
 
     @staticmethod
-    def _resolve_ollama_model(requested: str, available: list[str]) -> str:
+    def _resolve_model(requested: str, available: list[str]) -> str:
         normalized = requested.strip()
         lookup = {name.casefold(): name for name in available}
         exact = lookup.get(normalized.casefold())

@@ -83,8 +83,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         "base_url": "http://127.0.0.1:8190", "timeout": 60,
         "default_checkpoint": "Illustrious-XL-v1.0.safetensors",
     })
-    if not isinstance(providers.get("ollama"), dict):
-        raise ConfigError("Missing Concept Forge provider config: ollama")
+    selected_provider = str(config["concept_forge"].get("provider", "ollama")).strip().lower()
+    if not isinstance(providers.get(selected_provider), dict):
+        raise ConfigError(f"Missing Concept Forge provider config: {selected_provider}")
     selected_adapter = os.environ.get("EVERSPARK_IMAGE_BACKEND", config["image_forge"].get("adapter", "comfyui")).lower()
     if selected_adapter not in {"comfyui", "diffusers"} or not isinstance(adapters.get(selected_adapter), dict):
         raise ConfigError(f"Missing or unsupported Image Forge adapter: {selected_adapter}")
@@ -96,16 +97,17 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     _environment_override(
         config, "EVERSPARK_ORCHESTRATOR_PORT", ("orchestrator", "port"), int
     )
-    _environment_override(
-        config,
-        "OLLAMA_BASE_URL",
-        ("concept_forge", "providers", "ollama", "base_url"),
-    )
-    _environment_override(
-        config,
-        "OLLAMA_MODEL",
-        ("concept_forge", "providers", "ollama", "model"),
-    )
+    if "ollama" in providers:
+        _environment_override(
+            config,
+            "OLLAMA_BASE_URL",
+            ("concept_forge", "providers", "ollama", "base_url"),
+        )
+        _environment_override(
+            config,
+            "OLLAMA_MODEL",
+            ("concept_forge", "providers", "ollama", "model"),
+        )
     _environment_override(
         config,
         "COMFYUI_BASE_URL",

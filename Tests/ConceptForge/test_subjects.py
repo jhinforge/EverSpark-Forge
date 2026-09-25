@@ -76,7 +76,7 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
     def test_subject_group_revision_receives_only_selected_template(self) -> None:
         provider = OllamaProvider({"base_url": "http://127.0.0.1:11434", "model": "test"})
         current = new_subject("test-character", "Test")
-        with patch.object(provider, "_post_json", return_value={
+        with patch.object(provider.gateway.select(), "_post_json", return_value={
             "message": {"content": json.dumps({"notes": "new note"})}
         }) as post:
             revised = provider.revise_subject_section("add note", "metadata", current)
@@ -86,13 +86,13 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
 
     def test_prompt_revision_changes_only_requested_document(self) -> None:
         provider = OllamaProvider({"base_url": "http://127.0.0.1:11434", "model": "test"})
-        with patch.object(provider, "_post_json", return_value={
+        with patch.object(provider.gateway.select(), "_post_json", return_value={
             "message": {"content": json.dumps({"negative_prompt": "bad anatomy, watermark"})}
         }) as post:
             result = provider.revise_prompt("add watermark", "negative_prompt", "bad anatomy")
         self.assertEqual(result, "bad anatomy, watermark")
         self.assertIn("bad anatomy", post.call_args.args[1]["messages"][1]["content"])
-        with patch.object(provider, "_post_json", return_value={
+        with patch.object(provider.gateway.select(), "_post_json", return_value={
             "message": {"content": json.dumps({"positive_prompt": "wrong key"})}
         }):
             with self.assertRaisesRegex(RuntimeError, "invalid prompt revision"):
@@ -104,7 +104,7 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
             {"base_url": "http://127.0.0.1:11434", "model": "test", "timeout": 1}
         )
         with patch.object(
-            provider,
+            provider.gateway.select(),
             "_post_json",
             return_value={"message": {"content": json.dumps(document)}},
         ) as post:
@@ -128,7 +128,7 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
             {"base_url": "http://127.0.0.1:11434", "model": "test", "timeout": 1}
         )
         with patch.object(
-            provider,
+            provider.gateway.select(),
             "_post_json",
             return_value={"message": {"content": json.dumps(document)}},
         ):
@@ -140,7 +140,7 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
         broken = dict(document)
         broken["extra"] = "not allowed"
         with patch.object(
-            provider,
+            provider.gateway.select(),
             "_post_json",
             return_value={"message": {"content": json.dumps(broken)}},
         ):
@@ -149,7 +149,7 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
 
     def test_provider_accepts_partial_identity_update(self) -> None:
         provider = OllamaProvider({"base_url": "http://127.0.0.1:11434", "model": "test"})
-        with patch.object(provider, "_post_json", return_value={
+        with patch.object(provider.gateway.select(), "_post_json", return_value={
             "message": {"content": json.dumps({"appearance": {"hair": {"color": "silver"}}})}
         }):
             result = provider.generate_subject("silver hair", "test-character")
@@ -169,7 +169,7 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
             {"base_url": "http://127.0.0.1:11434", "model": "test", "timeout": 1}
         )
         with patch.object(
-            provider,
+            provider.gateway.select(),
             "_post_json",
             return_value={"message": {"content": json.dumps(model_document)}},
         ):
@@ -192,7 +192,7 @@ class OllamaSubjectBuilderTests(unittest.TestCase):
             }
         )
         with patch.object(
-            provider,
+            provider.gateway.select(),
             "_post_json",
             return_value={
                 "message": {

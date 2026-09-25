@@ -1,6 +1,9 @@
 """EverSpark Concept Forge."""
 
 from .providers.ollama import GenerationPlan, OllamaProvider
+from .service import ConceptService
+from .gateway import ConceptGateway
+from .port import ChatRequest, ChatResponse, ConceptError
 from .subjects import (
     CompiledSubject,
     SubjectValidationError,
@@ -12,6 +15,11 @@ from .subjects import (
 
 __all__ = [
     "CompiledSubject",
+    "ChatRequest",
+    "ChatResponse",
+    "ConceptError",
+    "ConceptGateway",
+    "ConceptService",
     "GenerationPlan",
     "OllamaProvider",
     "SubjectValidationError",

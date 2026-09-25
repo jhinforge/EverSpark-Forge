@@ -1,0 +1,5 @@
+{
+  "id": "ollama",
+  "module": "concept_forge.adapters.ollama",
+  "class": "OllamaAdapter"
+}

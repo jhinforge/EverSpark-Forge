@@ -8,15 +8,19 @@ the model after each request to hand memory back to Image Forge.
 
 The current implementation contains:
 
-- the Ollama provider used by the v0.1 generation chain;
+- a provider-neutral chat contract and gateway, with an Ollama adapter registered through `Plugins/ollama.json`;
 - the versioned `Character Subject v1` JSON Schema;
 - strict local validation without third-party dependencies;
 - deterministic subject-to-prompt compilation;
 - protected document identity and sequential revisions;
 - automatic extraction and update from the user/model conversation context.
 
-Ollama remains an implementation provider: Orchestrator talks to the Concept
-Forge interface and does not own Ollama HTTP behavior.
+Orchestrator talks to Concept Forge through the service. The gateway routes
+normalized chat requests to a registered adapter; Ollama's `/api/chat` payload,
+`/api/tags` model list, `/no_think` setting, and HTTP errors stay in its adapter.
+Other providers can add their own input and output adapters without changing
+the subject, discussion, or prompt compilation logic. Only Ollama is installed
+as a Concept Forge provider in this release; the existing configuration remains valid.
 
 ## Character Subject v1
 
