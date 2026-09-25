@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import json
 import tempfile
 import threading
 import time
@@ -45,6 +46,19 @@ class FakeEngine:
 
 
 class ImageGatewayTests(unittest.TestCase):
+    def test_diffusers_status_reads_local_job_even_when_worker_http_is_busy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            jobs = Path(directory)
+            job_id = "c" * 32
+            adapter = DiffusersAdapter({"base_url": "http://127.0.0.1:1",
+                                        "job_directory": str(jobs)})
+            (jobs / f"{job_id}.json").write_text(json.dumps({"status": "queued", "images": []}))
+            self.assertEqual(adapter.poll(job_id)["status"], "running")
+            (jobs / f"{job_id}.json").write_text(json.dumps({
+                "status": "completed", "images": [{"filename": "sample.png"}]}))
+            with patch.object(adapter, "_get", side_effect=TimeoutError("worker busy")):
+                self.assertEqual(adapter.poll(job_id)["images"][0]["filename"], "sample.png")
+
     def test_registered_engines_route_by_task_and_keep_saved_default(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

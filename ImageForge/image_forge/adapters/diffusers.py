@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
@@ -16,6 +17,8 @@ class DiffusersAdapter:
         self.base_url = str(config.get("base_url", "http://127.0.0.1:8190")).rstrip("/")
         self.timeout = int(config.get("timeout", 60))
         self.default_checkpoint = str(config.get("default_checkpoint", "Illustrious-XL-v1.0.safetensors"))
+        self.job_directory = Path(config.get("job_directory", Path(__file__).resolve().parents[3]
+                                             / "Data/Runtime/Diffusers/jobs"))
 
     def _get(self, path: str) -> dict[str, Any]:
         with urlopen(Request(self.base_url + path), timeout=self.timeout) as response:
@@ -60,6 +63,17 @@ class DiffusersAdapter:
     def poll(self, job_id: str) -> dict[str, Any]:
         if len(job_id) != 32 or any(c not in "0123456789abcdef" for c in job_id):
             raise ValueError("Invalid image job ID")
+        # The managed worker writes each status atomically. Reading its local
+        # catalog keeps progress responsive while GPU inference is busy.
+        path = self.job_directory / f"{job_id}.json"
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+            if result.get("status") in {"queued", "running", "completed", "failed"}:
+                if result["status"] == "queued":
+                    result["status"] = "running"
+                return result
+        except (OSError, ValueError):
+            pass
         return self._get("/jobs/" + job_id)
 
     def health(self) -> bool:

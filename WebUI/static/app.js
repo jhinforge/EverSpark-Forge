@@ -16,6 +16,7 @@ const state = {
   defaultImagePlugin: "comfyui",
   sessionId: localStorage.getItem("everspark.session") || crypto.randomUUID(),
   pollTimer: null,
+  pollFailures: 0,
   storagePollJobId: null,
   remoteScanTimer: null,
   backupPollJobId: null,
@@ -132,13 +133,25 @@ async function api(path, options = {}) {
   try {
     data = await response.json();
   } catch (_error) {
-    if (response.status === 524) throw new Error(t("Cloudflare timed out waiting for the server (HTTP 524). Check the Storage scan status or retry over SSH."));
-    throw new Error(t("Invalid server response (HTTP {status})", { status: response.status }));
+    if (response.status === 524) {
+      const error = new Error(t("Cloudflare timed out waiting for the server (HTTP 524). Check the Storage scan status or retry over SSH."));
+      error.httpStatus = 524;
+      throw error;
+    }
+    const error = new Error(`${t("Invalid server response (HTTP {status})", { status: response.status })} · ${path.split("?")[0]}`);
+    error.httpStatus = response.status;
+    throw error;
   }
   if (!response.ok || data.ok === false) {
-    throw new Error(data.error || t("Request failed (HTTP {status})", { status: response.status }));
+    const error = new Error(data.error || t("Request failed (HTTP {status})", { status: response.status }));
+    error.httpStatus = response.status;
+    throw error;
   }
   return data;
+}
+
+function transientApiError(error) {
+  return [502, 503, 504, 524].includes(error.httpStatus) || error instanceof TypeError;
 }
 
 function showNotice(message, type = "error") {
@@ -1355,20 +1368,37 @@ async function pollResults(items) {
     renderResults(data.results);
     const failed = data.results.some((item) => item.status === "failed");
     const finished = data.results.every((item) => ["completed", "failed"].includes(item.status));
-    if (!finished) return;
-    clearInterval(state.pollTimer);
+    state.pollFailures = 0;
+    if (!finished) {
+      scheduleResultPoll(items);
+      return;
+    }
+    clearTimeout(state.pollTimer);
     state.pollTimer = null;
     elements.generateButton.disabled = false;
     setGenerationState(failed ? "Failed" : "Complete", failed ? "error" : "success");
     if (failed) showNotice(data.results.find((item) => item.status === "failed")?.error ||
       t("Image Forge returned a failed task. Check the runtime logs."));
   } catch (error) {
-    clearInterval(state.pollTimer);
+    if (transientApiError(error) && ++state.pollFailures <= 24) {
+      setGenerationState("Waiting for image service", "running");
+      scheduleResultPoll(items, 5000);
+      return;
+    }
+    clearTimeout(state.pollTimer);
     state.pollTimer = null;
     elements.generateButton.disabled = false;
     setGenerationState("Unavailable", "error");
     showNotice(error.message);
   }
+}
+
+function scheduleResultPoll(items, delay = 1800) {
+  if (state.pollTimer) clearTimeout(state.pollTimer);
+  state.pollTimer = setTimeout(() => {
+    state.pollTimer = null;
+    void pollResults(items);
+  }, delay);
 }
 
 async function waitForGeneration(jobId) {
@@ -1380,7 +1410,10 @@ async function waitForGeneration(jobId) {
       data = await api(`/api/generate/jobs?job_id=${encodeURIComponent(jobId)}`);
       failedChecks = 0;
     } catch (error) {
-      if (++failedChecks < 3) continue;
+      if (++failedChecks < (transientApiError(error) ? 36 : 3)) {
+        setGenerationState("Waiting for image service", "running");
+        continue;
+      }
       throw error;
     }
     if (data.job.status === "completed") return data.job.response;
@@ -1398,7 +1431,8 @@ async function generate() {
     if (!message) showNotice(t("Describe the scene before generating."));
     return;
   }
-  if (state.pollTimer) clearInterval(state.pollTimer);
+  if (state.pollTimer) clearTimeout(state.pollTimer);
+  state.pollFailures = 0;
   hideNotice();
   appendConversation("user", message);
   elements.scenePrompt.value = "";
@@ -1431,10 +1465,9 @@ async function generate() {
     try {
       accepted = await api("/api/generate/start", request);
     } catch (error) {
-      // A proxy can drop the acceptance response even after the server starts the task.
-      try {
-        accepted = await api(`/api/generate/jobs?job_id=${requestId}`);
-      } catch (_lookupError) { throw error; }
+      // The proxy may lose the acceptance response after the server starts the task.
+      if (!transientApiError(error)) throw error;
+      accepted = { job: { id: requestId } };
     }
     const data = await waitForGeneration(accepted.job.id);
     await Promise.all([loadCurrentSubject(), loadSubjects()]);
@@ -1443,9 +1476,6 @@ async function generate() {
     renderWaiting(items);
     setGenerationState("{count} queued", "running", { count: items.length });
     await pollResults(items);
-    if (!state.pollTimer && elements.generateButton.disabled) {
-      state.pollTimer = setInterval(() => pollResults(items), 1800);
-    }
   } catch (error) {
     elements.generateButton.disabled = false;
     setGenerationState("Failed", "error");

@@ -44,6 +44,7 @@
     "Install tool": "安装工具",
     "Repair tool": "修复工具",
     "Repair required": "需要修复",
+    "Waiting for image service": "正在等待绘图服务",
     "Enable tool": "启动工具",
     "Not installed": "未安装",
     "Offline": "未运行",
