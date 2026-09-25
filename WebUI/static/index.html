@@ -389,14 +389,12 @@
               <form class="direct-download-card" id="imageDownloadForm">
                 <div>
                   <span class="download-card-label">IMAGE FORGE</span>
-                  <h4>Image model</h4>
+                  <h4>Checkpoint or diffusion model</h4>
                 </div>
                 <label>
                   <span>Model type</span>
                   <select id="imageDownloadKind">
                     <option value="checkpoint">Checkpoint</option>
-                    <option value="lora">LoRA</option>
-                    <option value="vae">VAE</option>
                     <option value="diffusion_model">Diffusion model</option>
                   </select>
                 </label>
@@ -408,7 +406,37 @@
                   <span>File name <small>optional</small></span>
                   <input id="imageDownloadFilename" type="text" placeholder="model.safetensors">
                 </label>
-                <button class="secondary-button direct-download-start" type="submit">Download image model</button>
+                <button class="secondary-button direct-download-start" type="submit">Download base model</button>
+              </form>
+              <form class="direct-download-card" id="loraDownloadForm">
+                <div>
+                  <span class="download-card-label">IMAGE FORGE</span>
+                  <h4>LoRA model</h4>
+                </div>
+                <label>
+                  <span>Direct URL</span>
+                  <input id="loraDownloadUrl" type="url" inputmode="url" required placeholder="https://.../lora.safetensors">
+                </label>
+                <label>
+                  <span>File name <small>optional</small></span>
+                  <input id="loraDownloadFilename" type="text" placeholder="lora.safetensors">
+                </label>
+                <button class="secondary-button direct-download-start" type="submit">Download LoRA</button>
+              </form>
+              <form class="direct-download-card" id="vaeDownloadForm">
+                <div>
+                  <span class="download-card-label">IMAGE FORGE</span>
+                  <h4>VAE model</h4>
+                </div>
+                <label>
+                  <span>Direct URL</span>
+                  <input id="vaeDownloadUrl" type="url" inputmode="url" required placeholder="https://.../vae.safetensors">
+                </label>
+                <label>
+                  <span>File name <small>optional</small></span>
+                  <input id="vaeDownloadFilename" type="text" placeholder="vae.safetensors">
+                </label>
+                <button class="secondary-button direct-download-start" type="submit">Download VAE</button>
               </form>
               <form class="direct-download-card" id="conceptDownloadForm">
                 <div>

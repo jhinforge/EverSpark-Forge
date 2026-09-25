@@ -107,6 +107,12 @@ const elements = {
   imageDownloadKind: $("#imageDownloadKind"),
   imageDownloadUrl: $("#imageDownloadUrl"),
   imageDownloadFilename: $("#imageDownloadFilename"),
+  loraDownloadForm: $("#loraDownloadForm"),
+  loraDownloadUrl: $("#loraDownloadUrl"),
+  loraDownloadFilename: $("#loraDownloadFilename"),
+  vaeDownloadForm: $("#vaeDownloadForm"),
+  vaeDownloadUrl: $("#vaeDownloadUrl"),
+  vaeDownloadFilename: $("#vaeDownloadFilename"),
   conceptDownloadForm: $("#conceptDownloadForm"),
   conceptDownloadUrl: $("#conceptDownloadUrl"),
   conceptDownloadFilename: $("#conceptDownloadFilename"),
@@ -1661,6 +1667,14 @@ function bindEvents() {
       elements.imageDownloadUrl.value.trim(),
       elements.imageDownloadFilename.value.trim(),
     );
+  });
+  elements.loraDownloadForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void startDirectDownload("lora", elements.loraDownloadUrl.value.trim(), elements.loraDownloadFilename.value.trim());
+  });
+  elements.vaeDownloadForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void startDirectDownload("vae", elements.vaeDownloadUrl.value.trim(), elements.vaeDownloadFilename.value.trim());
   });
   elements.conceptDownloadForm.addEventListener("submit", (event) => {
     event.preventDefault();
