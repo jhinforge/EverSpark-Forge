@@ -1,6 +1,6 @@
 # EverSpark Forge command reference (v0.1)
 
-This reference describes the current `./everspark` entry point, its options, and their effects. Run these commands from the **repository root on cloud Linux**. The unprefixed `everspark` form works after `bash Launcher/install.sh` adds the launcher to your user PATH. Running the stack locally on Windows has not been verified.
+This reference describes the current `./everspark` entry point, its options, and their effects. Run these commands from the **repository root on cloud Linux**. A successful `./everspark setup` installs the unprefixed `everspark` command automatically; `setup --plan` does not. Running the stack locally on Windows has not been verified.
 
 For deployment steps see [Getting started](Getting-Started.md), for private files see [Configuration](Configuration.md), and for data locations see [Runtime and data](Runtime-and-Data.md). Run `./everspark help` for the top-level list. Square brackets indicate optional arguments; angle brackets are placeholders to replace, not characters to type literally.
 
@@ -13,7 +13,7 @@ For deployment steps see [Getting started](Getting-Started.md), for private file
 | `./everspark configure` | Reads `env.txt` or `.env` from `Configuration/Import/`, validates it, and imports it as the root `.env`. It can import rclone and Named Tunnel credentials. **Running it again replaces `.env` rather than appending settings.** Uploaded source files remain. Default local mode does not need it. |
 | `./everspark configure --from <directory>` | Reads private files from another directory. Use `--env <file>` to select one of two conflicting environment files; `--json` prints a machine-readable result. |
 | `./everspark setup --plan` | Displays planned managed runtimes, model sources, and local destinations **without installing or downloading**. Run this before first deployment. |
-| `./everspark setup` | Creates runtime directories, installs managed ComfyUI/Ollama and Python environments, downloads manifest starter models, and imports the Concept model into Ollama. Requires network and disk space; installing optional backends can require root. Address a failure and rerun it. |
+| `./everspark setup` | Creates runtime directories, installs managed ComfyUI/Ollama and Python environments, downloads manifest starter models, and imports the Concept model into Ollama. Requires network and disk space; installing optional backends can require root. Address a failure and rerun it. On success, the global `everspark` command is installed; `./everspark` remains available. Non-root users may need a new shell for PATH changes. |
 | `./everspark doctor` | Checks Linux platform, base commands, GPU visibility, and enabled backend settings. With rclone, it also checks remote model roots. It neither generates an image nor proves every model and workflow is usable. |
 
 Optional `setup` switches:

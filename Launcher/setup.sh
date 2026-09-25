@@ -71,6 +71,7 @@ fi
 bash "${REPO_ROOT}/Runtime/Managed/install_runtime.sh"
 
 if [ "$SKIP_MODELS" = true ]; then
+  bash "${LAUNCHER_DIR}/install.sh"
   exit 0
 fi
 
@@ -98,3 +99,5 @@ if { [ "$SELECTION" = all ] || [ "$SELECTION" = concept ]; } && [ "$SKIP_IMPORT"
   trap - EXIT
   cleanup_setup_concept
 fi
+
+bash "${LAUNCHER_DIR}/install.sh"

@@ -1,6 +1,6 @@
 # EverSpark Forge 命令手册（v0.1）
 
-本文按当前源码中的 `./everspark` 入口整理命令、参数和实际影响。以下命令从**云端 Linux 仓库根目录**执行；运行 `bash Launcher/install.sh` 将启动器加入用户 PATH 后，也可以直接输入 `everspark`。本地 Windows 运行环境尚未验证。
+本文按当前源码中的 `./everspark` 入口整理命令、参数和实际影响。以下命令从**云端 Linux 仓库根目录**执行；正式 `./everspark setup` 成功后会自动安装全局命令，之后也可以直接输入 `everspark`；`setup --plan` 不安装。本地 Windows 运行环境尚未验证。
 
 需要完整部署步骤请先看[首次运行指南](Getting-Started.zh-CN.md)；私人文件怎么准备见[配置指南](Configuration.zh-CN.md)，运行数据位置见[运行与数据](Runtime-and-Data.zh-CN.md)。可以随时运行 `./everspark help` 查看顶层清单。方括号表示可选参数，尖括号表示要换成自己的值；不要照抄括号。
 
@@ -13,7 +13,7 @@
 | `./everspark configure` | 从 `Configuration/Import/` 读取 `env.txt` 或 `.env`，验证并导入为仓库根目录的 `.env`；可导入 rclone 与 Named Tunnel 凭据。**再次执行会替换 `.env`，不会在旧配置上追加字段**；原始上传文件保留。默认本地模式无需运行。 |
 | `./everspark configure --from <目录>` | 从指定目录读取私人配置。`--env <文件>` 在两个环境文件冲突时明确选择一个；`--json` 输出适合程序读取的结果。 |
 | `./everspark setup --plan` | 显示准备安装的托管运行时、模型来源和目标位置，**不安装或下载**。首次部署建议先运行。 |
-| `./everspark setup` | 初始化目录、安装托管 ComfyUI/Ollama 与 Python 环境、下载清单中的起步模型，并将 Concept Forge 模型导入 Ollama。需要网络、磁盘空间；安装可选后端时还可能需要 root 权限。失败后处理错误再重试。 |
+| `./everspark setup` | 初始化目录、安装托管 ComfyUI/Ollama 与 Python 环境、下载清单中的起步模型，并将 Concept Forge 模型导入 Ollama。需要网络、磁盘空间；安装可选后端时还可能需要 root 权限。失败后处理错误再重试。成功后自动安装 `everspark` 命令，仓库内的 `./everspark` 仍可使用；普通用户首次安装后可能需打开新终端使 PATH 生效。 |
 | `./everspark doctor` | 检查 Linux 平台、基础命令、GPU 可见性和已启用后端的配置；rclone 模式还会尝试访问远程模型根路径。它不会替你生成图像，也不表示所有模型和工作流都可用。 |
 
 `setup` 的可选参数：
