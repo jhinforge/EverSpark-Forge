@@ -919,6 +919,14 @@ function resetModelServiceForm() {
   $("#cancelModelServiceEdit").classList.add("hidden");
 }
 
+function useDeepSeekPreset() {
+  resetModelServiceForm();
+  elements.modelServiceName.value = "DeepSeek";
+  elements.modelServiceUrl.value = "https://api.deepseek.com/v1";
+  elements.modelServiceModel.value = "deepseek-flash";
+  elements.modelServiceKey.focus();
+}
+
 function modelServicePayload() {
   return {
     id: elements.modelServiceId.value,
@@ -1815,6 +1823,7 @@ function bindEvents() {
   elements.workflowSelect.addEventListener("change", updateLoraAvailability);
   elements.conceptProviderSelect.addEventListener("change", updateConceptModels);
   elements.modelServiceForm.addEventListener("submit", saveModelService);
+  $("#useDeepSeekPreset").addEventListener("click", useDeepSeekPreset);
   $("#testModelService").addEventListener("click", testModelService);
   $("#cancelModelServiceEdit").addEventListener("click", resetModelServiceForm);
   $("#refreshModelServices").addEventListener("click", loadModelConnections);

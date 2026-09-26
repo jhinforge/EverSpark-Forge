@@ -32,6 +32,11 @@ the text before passing it to Orchestrator. Optional JSON mode is disabled by
 default for services that do not implement `response_format`.
 Connections persist under `Data/Configuration/ConceptForge/connections.json`
 with owner-only file permissions; API keys are never returned by the WebUI API.
+DeepSeek's OpenAI-format Chat Completions uses this same adapter. The optional
+**Fill DeepSeek settings** button fills `https://api.deepseek.com/v1` and
+`deepseek-flash`; the user supplies their own API Key, tests, saves, and selects
+the connection in Forge. The preset does not change the adapter or enable
+streaming or JSON mode.
 
 ## Character Subject v1
 
