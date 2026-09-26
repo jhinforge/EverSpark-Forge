@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "ConceptForge"))
 
 from concept_forge.connections import ConceptConnections  # noqa: E402
+from concept_forge.port import ConceptError  # noqa: E402
 from concept_forge.service import ConceptService  # noqa: E402
 
 
@@ -24,6 +25,26 @@ class CompatibleHandler(BaseHTTPRequestHandler):
         self.requests.append((self.path, body, self.headers.get("Authorization")))
         if self.headers.get("Authorization") != "Bearer private-key":
             self.send_error(401)
+            return
+        if body["model"] == "gateway-error":
+            data = json.dumps({"error": {"message":
+                "Gateway rejected Bearer private-key (key: private-key)"}}).encode()
+            self.send_response(502)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if body["model"] == "html-error":
+            self.send_error(502, "Proxy error")
+            return
+        if body["model"] == "flat-error":
+            data = json.dumps({"code": "UPSTREAM_FAILURE", "message": "Route unavailable"}).encode()
+            self.send_response(502)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
             return
         if body.get("response_format"):
             content = json.dumps({"model": "illustrious", "positive_prompt": "portrait",
@@ -86,6 +107,16 @@ class ModelConnectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "HTTPS"):
             self.manager.save({**self.payload, "base_url": "http://remote.example/v1"})
         self.assertFalse(self.path.exists())
+
+    def test_provider_error_is_visible_without_leaking_key(self):
+        with self.assertRaises(ConceptError) as raised:
+            self.manager.test({**self.payload, "model": "gateway-error"})
+        self.assertIn("OpenAI Compatible HTTP 502: Gateway rejected", str(raised.exception))
+        self.assertNotIn("private-key", str(raised.exception))
+        with self.assertRaisesRegex(ConceptError, "^OpenAI Compatible HTTP 502$"):
+            self.manager.test({**self.payload, "model": "html-error"})
+        with self.assertRaisesRegex(ConceptError, "OpenAI Compatible HTTP 502: Route unavailable"):
+            self.manager.test({**self.payload, "model": "flat-error"})
 
 
 if __name__ == "__main__":

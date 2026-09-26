@@ -3,11 +3,32 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from ..port import ChatRequest, ChatResponse, ConceptError
+
+
+def _upstream_error(exc: HTTPError, api_key: str) -> str:
+    """Expose a bounded provider error while keeping credentials out of the UI."""
+    message = f"OpenAI Compatible HTTP {exc.code}"
+    try:
+        body = json.loads(exc.read(8192).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, OSError):
+        return message
+    if not isinstance(body, dict):
+        return message
+    # Some compatible gateways use {"code": ..., "message": ...} instead.
+    error = body.get("error") if isinstance(body.get("error"), dict) else body
+    detail = error.get("message")
+    if not isinstance(detail, str):
+        return message
+    detail = detail.replace(api_key, "[redacted]")
+    detail = re.sub(r"(?i)bearer\s+[^\s,;]+", "Bearer [redacted]", detail)
+    detail = " ".join(detail.split())[:300]
+    return f"{message}: {detail}" if detail else message
 
 
 class OpenAICompatibleAdapter:
@@ -42,8 +63,7 @@ class OpenAICompatibleAdapter:
             with urlopen(wire, timeout=self.timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
-            # Do not forward arbitrary upstream bodies: some proxies echo request headers.
-            raise ConceptError(f"OpenAI Compatible HTTP {exc.code}") from exc
+            raise ConceptError(_upstream_error(exc, self.api_key)) from exc
         except URLError as exc:
             raise ConceptError(f"OpenAI Compatible connection failed: {exc.reason}") from exc
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
