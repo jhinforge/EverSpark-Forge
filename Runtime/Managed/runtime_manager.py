@@ -82,35 +82,35 @@ def service_definitions() -> dict[str, ServiceDefinition]:
             "concept",
             ("bash", str(REPO_ROOT / "ConceptForge" / "Scripts" / "start_runtime.sh")),
             f"{ollama_url}/api/tags",
-            "ollama-service.log",
+            "concept/ollama-service.log",
             90,
         ),
         "image": ServiceDefinition(
             "image",
             ("bash", str(REPO_ROOT / "ImageForge" / "Scripts" / "start_runtime.sh")),
             f"{comfy_url}/system_stats",
-            "comfyui.log",
+            "image/comfyui.log",
             300,
         ),
         "diffusers": ServiceDefinition(
             "diffusers",
             ("bash", str(REPO_ROOT / "ImageForge" / "Scripts" / "start_diffusers.sh")),
             f"{worker_url}/health",
-            "diffusers.log",
+            "image/diffusers.log",
             300,
         ),
         "orchestrator": ServiceDefinition(
             "orchestrator",
             ("bash", str(REPO_ROOT / "Orchestrator" / "Scripts" / "start_core.sh")),
             f"{orchestrator_url}/health",
-            "orchestrator-service.log",
+            "orchestrator/orchestrator-service.log",
             60,
         ),
         "webui": ServiceDefinition(
             "webui",
             ("bash", str(REPO_ROOT / "WebUI" / "Scripts" / "start_webui.sh")),
             f"http://{web_host}:{web_port}/api/health",
-            "webui-service.log",
+            "webui/webui-service.log",
             60,
         ),
     }
@@ -219,6 +219,7 @@ def start_service(definition: ServiceDefinition) -> dict[str, Any]:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / definition.log_file
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("ab", buffering=0) as log_handle:
         process = subprocess.Popen(
             definition.command,

@@ -43,7 +43,7 @@ All product-owned configuration uses the `EVERSPARK_*` namespace.
 Source `Runtime/Logging/log.sh`, then initialize a component:
 
 ```bash
-core_log_init comfyui.recovery "${EVERSPARK_LOG_DIR}/recovery.log"
+core_log_init comfyui.recovery "${EVERSPARK_LOG_DIR}/runtime/recovery.log"
 core_info recovery.start "Recovery started" "profile=$TORCH_PROFILE"
 core_run_step restore.core bash "$SCRIPT_DIR/restore_comfyui_core.sh"
 ```
@@ -69,7 +69,7 @@ from everspark_logging import get_logger
 
 logger = get_logger(
     "orchestrator",
-    "Data/Logs/orchestrator.log",
+    "Data/Logs/orchestrator/orchestrator.log",
 )
 logger.info("server.ready", "Server is ready", port=8765)
 ```
@@ -78,32 +78,32 @@ Call `logger.close()` during orderly service shutdown so file handlers are relea
 
 ## Managed file layout
 
-The caller migration will converge on:
+Managed logs are grouped by the component that owns them. Run `./everspark logs init`
+to create the directories under `EVERSPARK_LOG_DIR` (or `Data/Logs` by default).
+Services also create their directory on first write.
 
 ```text
 Data/Logs/
-  recovery.log
-  bootstrap.log
-  start_all.log
-  comfyui.log
-  boot_repair.log
-  boot_repair.nohup.log
-  auto_deps.log
-  ollama.log
-  ollama-service.log
-  orchestrator.log
-  webui.log
-  tunnel.log
-  cloudflared.log
-  r2.log
-  rclone.log
+  launcher/launcher.log
+  runtime/runtime-install.log
+  concept/conceptforge.log
+  concept/ollama-service.log
+  image/comfyui.log
+  image/diffusers.log
+  orchestrator/orchestrator.log
+  orchestrator/orchestrator-service.log
+  webui/webui.log
+  webui/webui-service.log
+  tunnel/cloudflared.log
+  storage/rclone.log
 ```
 
 The canonical file list and per-log policy live in
 `Runtime/Logging/log_manifest.json`. WebUI Runtime consumes this manifest instead
 of hard-coding paths.
 
-`comfyui.log` and `ollama-service.log` contain raw third-party process output.
+Existing flat files remain as historical logs; new events use the module paths.
+`image/comfyui.log` and `concept/ollama-service.log` contain raw third-party process output.
 The other service files contain EverSpark lifecycle or application records that
 follow the structured logging contract.
 

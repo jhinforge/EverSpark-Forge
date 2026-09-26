@@ -19,10 +19,11 @@ DEFAULT_PATH = Path(__file__).resolve().parents[2] / "Data/Configuration/Concept
 
 
 class ConceptConnections:
-    def __init__(self, config: dict[str, Any], path: Path = DEFAULT_PATH):
+    def __init__(self, config: dict[str, Any], path: Path = DEFAULT_PATH, logger: Any = None):
         self.path = path
         self.lock = threading.RLock()
         self.configured = config
+        self.logger = logger
         if path.is_file():
             data = json.loads(path.read_text(encoding="utf-8"))
             self.connections = data["connections"]
@@ -35,7 +36,8 @@ class ConceptConnections:
     def _settings(self) -> dict[str, dict[str, Any]]:
         settings = dict(self.configured["providers"])
         for entry in self.connections:
-            settings[entry["id"]] = {**entry, "provider_type": "openai_compatible"}
+            settings[entry["id"]] = {**entry, "provider_type": "openai_compatible",
+                                      "_logger": self.logger}
         return settings
 
     def _refresh(self) -> None:
@@ -127,7 +129,9 @@ class ConceptConnections:
             identifier = str(payload.get("id", ""))
             old = next((entry for entry in self.connections if entry["id"] == identifier), None)
             settings = self._validated(payload, old)
-        adapter = OpenAICompatibleAdapter({**settings, "timeout": 120})
+        adapter = OpenAICompatibleAdapter({**settings, "timeout": 120,
+                                           "_logger": self.logger,
+                                           "_trace_id": str(payload.get("_trace_id", ""))})
         response = adapter.chat(ChatRequest(
             [{"role": "user", "content": "Reply with OK."}], settings["model"]
         ))

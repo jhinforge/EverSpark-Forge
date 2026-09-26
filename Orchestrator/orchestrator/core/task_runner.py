@@ -18,12 +18,12 @@ class TaskError(RuntimeError):
 
 
 class TaskRunner:
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any], concept_logger: Any = None):
         concept_config = config["concept_forge"]
         image_config = config["image_forge"]
         adapter = str(image_config.get("adapter", "")).strip().lower()
         try:
-            self.concept_connections = ConceptConnections(concept_config)
+            self.concept_connections = ConceptConnections(concept_config, logger=concept_logger)
             self.concept = ConceptService(self.concept_connections.gateway)
         except ValueError as exc:
             raise TaskError(str(exc)) from exc

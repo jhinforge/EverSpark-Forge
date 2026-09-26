@@ -30,9 +30,13 @@ from log_manifest import ManifestError, collect_log_status  # noqa: E402
 LOG_DIR = Path(
     os.environ.get("EVERSPARK_LOG_DIR", str(REPO_ROOT / "Data" / "Logs"))
 ).expanduser()
+if not LOG_DIR.is_absolute():
+    LOG_DIR = REPO_ROOT / LOG_DIR
 LOG_FILE = Path(
-    os.environ.get("EVERSPARK_WEBUI_LOG", str(LOG_DIR / "webui.log"))
+    os.environ.get("EVERSPARK_WEBUI_LOG", str(LOG_DIR / "webui/webui.log"))
 ).expanduser()
+if not LOG_FILE.is_absolute():
+    LOG_FILE = REPO_ROOT / LOG_FILE
 
 
 @dataclass(frozen=True)
@@ -266,6 +270,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "text": message,
                 "session_id": session_id,
                 "selection": payload.get("selection", {}),
+                "request_id": uuid.uuid4().hex,
             },
         )
 
@@ -282,11 +287,28 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _proxy_orchestrator_post(
         self, path: str, payload: dict[str, Any]
     ) -> None:
-        status, body = request_json(
-            f"{self.server.settings.orchestrator_url}{path}",
-            self.server.settings.request_timeout,
-            payload,
-        )
+        trace_id = str(payload.get("request_id", ""))
+        started = time.monotonic()
+        if path == "/conversation":
+            self._log("info", "conversation.proxy.start", "WebUI forwarded conversation",
+                      trace_id=trace_id)
+        try:
+            status, body = request_json(
+                f"{self.server.settings.orchestrator_url}{path}",
+                self.server.settings.request_timeout,
+                payload,
+            )
+        except Exception as exc:
+            if path == "/conversation":
+                self._log("error", "conversation.proxy.failed", "WebUI proxy failed",
+                          trace_id=trace_id, error_type=type(exc).__name__,
+                          elapsed_ms=round((time.monotonic() - started) * 1000))
+            raise
+        if path == "/conversation":
+            self._log("ok" if status < 400 else "error", "conversation.proxy.result",
+                      "WebUI received conversation response", trace_id=trace_id,
+                      http_status=status,
+                      elapsed_ms=round((time.monotonic() - started) * 1000))
         self._json(status, body)
 
     def _health(self) -> None:

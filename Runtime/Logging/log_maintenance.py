@@ -15,6 +15,7 @@ from log_manifest import (
     collect_log_status,
     configured_log_dir,
     configured_manifest_path,
+    is_safe_log_parent,
     is_safe_regular_file,
     load_manifest,
     resolve_policy,
@@ -65,6 +66,10 @@ def _maintain_entry(
     path = root / str(entry["filename"])
     policy = resolve_policy(manifest, entry, environ)
     max_age_seconds = policy["max_age_days"] * 86400
+
+    if not is_safe_log_parent(root, path):
+        _action(actions, "skip", path, reason="unsafe_parent", dry_run=dry_run)
+        return actions
 
     if os.path.lexists(path) and not is_safe_regular_file(path):
         _action(
@@ -178,6 +183,21 @@ def maintain_logs(
     }
 
 
+def initialize_log_directories(
+    manifest_path: str | Path | None = None,
+    log_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    manifest = load_manifest(manifest_path)
+    root = Path(log_dir or configured_log_dir())
+    root.mkdir(parents=True, exist_ok=True, mode=0o750)
+    parents = sorted({(root / item["filename"]).parent for item in manifest["logs"]})
+    for parent in parents:
+        if not is_safe_log_parent(root, parent / "placeholder.log"):
+            raise ManifestError(f"unsafe log directory: {parent}")
+        parent.mkdir(parents=True, exist_ok=True, mode=0o750)
+    return {"ok": True, "log_dir": str(root), "directories": [str(p) for p in parents]}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="EverSpark managed log maintenance")
     parser.add_argument(
@@ -192,6 +212,7 @@ def parse_args() -> argparse.Namespace:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("status", help="Print managed log status as JSON.")
+    subparsers.add_parser("init", help="Create module log directories.")
     rotate = subparsers.add_parser("rotate", help="Apply rotation and retention policy.")
     rotate.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -205,6 +226,8 @@ def main() -> int:
                 "ok": True,
                 **collect_log_status(args.manifest, args.log_dir),
             }
+        elif args.command == "init":
+            result = initialize_log_directories(args.manifest, args.log_dir)
         else:
             result = maintain_logs(
                 args.manifest,

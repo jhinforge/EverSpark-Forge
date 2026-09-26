@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import stat
 import sys
 import tempfile
@@ -15,6 +16,8 @@ sys.path.insert(0, str(REPO_ROOT / "ConceptForge"))
 from concept_forge.connections import ConceptConnections  # noqa: E402
 from concept_forge.port import ConceptError  # noqa: E402
 from concept_forge.service import ConceptService  # noqa: E402
+sys.path.insert(0, str(REPO_ROOT / "Runtime/Logging"))
+from everspark_logging import LogConfig, get_logger  # noqa: E402
 
 
 class CompatibleHandler(BaseHTTPRequestHandler):
@@ -117,6 +120,22 @@ class ModelConnectionTests(unittest.TestCase):
             self.manager.test({**self.payload, "model": "html-error"})
         with self.assertRaisesRegex(ConceptError, "OpenAI Compatible HTTP 502: Route unavailable"):
             self.manager.test({**self.payload, "model": "flat-error"})
+
+    def test_provider_error_is_logged_in_concept_layer_without_key(self):
+        log = Path(self.tmp.name) / "concept/conceptforge.log"
+        logger = get_logger("conceptforge", log,
+                            config=LogConfig(logging.INFO, "json", False, "test-run"))
+        try:
+            manager = ConceptConnections(self.config, self.path, logger=logger)
+            with self.assertRaises(ConceptError):
+                manager.test({**self.payload, "model": "gateway-error", "_trace_id": "test-123"})
+        finally:
+            logger.close()
+        records = [json.loads(line) for line in log.read_text().splitlines()]
+        self.assertEqual([record["event"] for record in records], ["api.request", "api.http_error"])
+        self.assertEqual(records[1]["fields"]["http_status"], 502)
+        self.assertEqual(records[1]["fields"]["trace_id"], "test-123")
+        self.assertNotIn("private-key", log.read_text())
 
 
 if __name__ == "__main__":

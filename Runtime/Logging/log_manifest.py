@@ -90,8 +90,11 @@ def load_manifest(path: str | Path | None = None) -> dict[str, Any]:
             raise ManifestError(f"logs[{index}].id is invalid: {log_id}")
         if log_id in seen_ids:
             raise ManifestError(f"duplicate log id: {log_id}")
-        if not filename or Path(filename).name != filename:
-            raise ManifestError(f"logs[{index}].filename must be a basename")
+        parts = filename.split("/")
+        if (not parts or any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", part)
+                             or part in {".", ".."} for part in parts)
+                or "\\" in filename):
+            raise ManifestError(f"logs[{index}].filename must be a safe relative path")
         if filename in seen_files:
             raise ManifestError(f"duplicate log filename: {filename}")
         if not label:
@@ -170,6 +173,16 @@ def is_safe_regular_file(path: Path) -> bool:
     return stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
 
 
+def is_safe_log_parent(root: Path, path: Path) -> bool:
+    """Do not follow a symlink in a manifest-owned module directory."""
+    current = root
+    for part in path.relative_to(root).parts[:-1]:
+        current = current / part
+        if os.path.lexists(current) and (current.is_symlink() or not current.is_dir()):
+            return False
+    return True
+
+
 def collect_log_status(
     manifest_path: str | Path | None = None,
     log_dir: str | Path | None = None,
@@ -183,7 +196,8 @@ def collect_log_status(
         path = root / entry["filename"]
         rotations = rotated_files(path)
         path_present = os.path.lexists(path)
-        safe = not path_present or is_safe_regular_file(path)
+        safe = is_safe_log_parent(root, path) and (
+            not path_present or is_safe_regular_file(path))
         exists = path_present and safe
         size = path.stat().st_size if exists else 0
         rotated_size = sum(candidate.stat().st_size for _, candidate in rotations)

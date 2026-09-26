@@ -22,8 +22,8 @@ if [ -f "$EVERSPARK_CONFIG_FILE" ]; then
 fi
 
 LOG_DIR="${EVERSPARK_LOG_DIR:-${REPO_ROOT}/Data/Logs}"
-TUNNEL_LOG="${TUNNEL_LOG:-${LOG_DIR}/tunnel.log}"
-CLOUDFLARED_LOG="${CLOUDFLARED_LOG:-${LOG_DIR}/cloudflared.log}"
+TUNNEL_LOG="${TUNNEL_LOG:-${LOG_DIR}/tunnel/tunnel.log}"
+CLOUDFLARED_LOG="${CLOUDFLARED_LOG:-${LOG_DIR}/tunnel/cloudflared.log}"
 core_log_init tunnel.check "$TUNNEL_LOG"
 
 if [ "${EVERSPARK_NETWORK_BACKEND:-local}" != "cloudflare" ]; then

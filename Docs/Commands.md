@@ -74,6 +74,7 @@ Use `--models all|concept|image` to filter `plan`, `status`, or `download`. Adva
 | Command | What it does |
 | --- | --- |
 | `./everspark logs status` | Reports managed log status as JSON; does not rotate files. |
+| `./everspark logs init` | Creates module directories beneath the configured log root; keeps existing flat logs as history. |
 | `./everspark logs rotate --dry-run` | Previews which managed logs would be rotated, renamed, or removed without applying those actions. |
 | `./everspark logs rotate` | **Applies** rotation and retention. It can truncate the current log after copying it and delete old rotated files exceeding count or age limits. Export logs first if you need failure evidence. |
 

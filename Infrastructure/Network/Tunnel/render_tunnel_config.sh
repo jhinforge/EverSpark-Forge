@@ -12,7 +12,7 @@ source "${REPO_ROOT}/Shared/Shell/common.sh"
 source "${REPO_ROOT}/Configuration/load_config.sh"
 
 LOG_DIR="${EVERSPARK_LOG_DIR:-${REPO_ROOT}/Data/Logs}"
-TUNNEL_LOG="${TUNNEL_LOG:-${LOG_DIR}/tunnel.log}"
+TUNNEL_LOG="${TUNNEL_LOG:-${LOG_DIR}/tunnel/tunnel.log}"
 core_log_init tunnel.config "$TUNNEL_LOG"
 
 core_config_require CF_TUNNEL_UUID CF_HOSTNAME CF_LOCAL_PORT

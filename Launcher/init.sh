@@ -17,10 +17,21 @@ if [ -f "${REPO_ROOT}/.env" ]; then
 fi
 
 LOG_DIR="${EVERSPARK_LOG_DIR:-${REPO_ROOT}/Data/Logs}"
-core_log_init launcher.init "${LOG_DIR}/launcher.log"
+if [[ "$LOG_DIR" != /* ]]; then
+  LOG_DIR="${REPO_ROOT}/${LOG_DIR#./}"
+fi
+core_log_init launcher.init "${LOG_DIR}/launcher/launcher.log"
 
 directories=(
   "${REPO_ROOT}/Data/Logs"
+  "${LOG_DIR}/launcher"
+  "${LOG_DIR}/runtime"
+  "${LOG_DIR}/concept"
+  "${LOG_DIR}/image"
+  "${LOG_DIR}/orchestrator"
+  "${LOG_DIR}/webui"
+  "${LOG_DIR}/tunnel"
+  "${LOG_DIR}/storage"
   "${REPO_ROOT}/Data/Outputs"
   "${REPO_ROOT}/Data/Memory"
   "${REPO_ROOT}/Data/Runtime"

@@ -85,7 +85,7 @@ def _port() -> int:
 def _log_path() -> Path:
     values = discovery_environment()
     path = Path(values.get("EVERSPARK_LOG_DIR", "Data/Logs")).expanduser()
-    return (path if path.is_absolute() else REPO_ROOT / path) / "quick-tunnel.log"
+    return (path if path.is_absolute() else REPO_ROOT / path) / "tunnel/quick-tunnel.log"
 
 
 def _local_ready(port: int) -> bool:

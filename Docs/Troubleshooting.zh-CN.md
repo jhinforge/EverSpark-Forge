@@ -12,7 +12,7 @@
 ./everspark logs status
 ```
 
-`status` 报告各服务是否健康，以及日志位置；`doctor` 检查基本命令、GPU 可见性与已启用后端的配置；`logs status` 列出托管日志状态。WebUI 的 **Runtime** 页面也会显示服务就绪情况。默认日志在 `Data/Logs/`；如果设置了 `EVERSPARK_LOG_DIR`，请以实际配置和 `status` 输出为准。
+`status` 报告各服务是否健康，以及日志位置；`doctor` 检查基本命令、GPU 可见性与已启用后端的配置；`logs status` 列出托管日志状态。WebUI 的 **Runtime** 页面也会显示服务就绪情况。默认日志在 `Data/Logs/` 的模块文件夹下；运行 `./everspark logs init` 可先创建这些文件夹。如果设置了 `EVERSPARK_LOG_DIR`，请以实际配置和 `status` 输出为准；旧的根目录日志保留作历史记录。
 
 这些检查命令的含义及会修改日志文件的 `logs rotate` 见[命令手册：查看与整理日志](Commands.zh-CN.md#5-查看与整理日志)。
 
@@ -26,7 +26,7 @@
 
 ## 2. WebUI 打不开
 
-1. 在云端机器运行 `./everspark status webui`，检查 WebUI 是否健康。未启动时运行 `./everspark start`；启动失败则查看 `Data/Logs/webui-service.log`。
+1. 在云端机器运行 `./everspark status webui`，检查 WebUI 是否健康。未启动时运行 `./everspark start`；启动失败则查看 `Data/Logs/webui/webui-service.log`。
 2. 如果云端机器可以打开 `http://127.0.0.1:8780`，但自己的电脑打不开，运行 `./everspark access`，在**自己的电脑**执行输出的 SSH 转发命令，并保持 SSH 会话连接。浏览器打开输出的本地地址，默认 `http://127.0.0.1:8080`。
 3. 如果 `access` 没有给出完整命令，确认 SSH 公网地址和端口；必要时在私人配置中设置 `EVERSPARK_SSH_HOST`、`EVERSPARK_SSH_PORT`，再运行 `./everspark access`。
 4. 如果选用临时链接，先运行 `./everspark share status`；未启动时在云端机器运行 `./everspark share`，打开命令输出的链接。已有链接打不开时检查 WebUI 是否仍就绪、共享进程是否仍在，以及云端机器能否访问 Cloudflare；关闭后重新运行 `share` 可能得到不同链接。
@@ -37,10 +37,10 @@
 
 | 未就绪的服务 | 先检查 | 默认原始进程日志 |
 | --- | --- | --- |
-| Concept Forge | `./everspark status concept`，内置 Ollama；外部请求还需检查 Orchestrator | `Data/Logs/ollama-service.log` 或 `Data/Logs/orchestrator-service.log` |
-| Image Forge | `./everspark status image`，所选引擎及 GPU 是否可用 | `Data/Logs/comfyui.log` 或 `Data/Logs/diffusers.log` |
-| Orchestrator | `./everspark status orchestrator`，上游服务与配置 | `Data/Logs/orchestrator-service.log` |
-| WebUI | `./everspark status webui`，监听端口与进程 | `Data/Logs/webui-service.log` |
+| Concept Forge | `./everspark status concept`，内置 Ollama；外部请求还需检查 Orchestrator | `Data/Logs/concept/ollama-service.log` 或 `Data/Logs/orchestrator/orchestrator-service.log` |
+| Image Forge | `./everspark status image`，所选引擎及 GPU 是否可用 | `Data/Logs/image/comfyui.log` 或 `Data/Logs/image/diffusers.log` |
+| Orchestrator | `./everspark status orchestrator`，上游服务与配置 | `Data/Logs/orchestrator/orchestrator-service.log` |
+| WebUI | `./everspark status webui`，监听端口与进程 | `Data/Logs/webui/webui-service.log` |
 
 `status` 的 `external` 表示发现了健康的外部服务，并不等于服务已停止。`unhealthy` 表示托管进程仍在但健康检查未通过；先看日志，再按需执行 `./everspark restart <服务名>`。不要通过猜测进程号来结束服务。
 
@@ -54,28 +54,28 @@ ComfyUI 工作流必须是注册的 **API Format JSON**，并有相应清单。�
 
 ## 5. 点击生成后失败，或结果没有出现
 
-先看页面显示的任务错误与 **Gallery** 中的最近结果，再检查 `./everspark status`。ComfyUI 问题看 `Data/Logs/comfyui.log`，托管 Diffusers 进程看 `Data/Logs/diffusers.log`；插件安装任务也可能报告 `Data/Logs/image-plugin-diffusers.log`。任务提交或规划问题看 `Data/Logs/orchestrator-service.log`。早期安装的 Diffusers 如果显示 **需要修复**，在 Forge 点击**修复工具**补齐 PEFT，再测试 LoRA 或 VAE。
+先看页面显示的任务错误与 **Gallery** 中的最近结果，再检查 `./everspark status`。ComfyUI 问题看 `Data/Logs/image/comfyui.log`，托管 Diffusers 进程看 `Data/Logs/image/diffusers.log`；插件安装任务也可能报告 `Data/Logs/image/image-plugin-diffusers.log`。任务提交或规划问题看 `Data/Logs/orchestrator/orchestrator-service.log`。早期安装的 Diffusers 如果显示 **需要修复**，在 Forge 点击**修复工具**补齐 PEFT，再测试 LoRA 或 VAE。
 
-如果是换了工作流、Checkpoint、VAE 或 LoRA 后才失败，先记录当前选择及报错，再对照所选引擎的要求。如果浏览器显示 HTTP 502，先查看 Forge 的后台任务状态及 Gallery：生成和规划是异步执行的，图片可能已经完成；无法查询任务时收集 WebUI 与 Orchestrator 日志。OpenAI Compatible 报错时先在**模型服务**测试连接，再查看 `Data/Logs/orchestrator.log` 中的 `concept.connection_test.*` 记录（自定义日志目录以 `EVERSPARK_LOG_DIR` 为准）。同一 `job_id` 对应一次测试，记录请求目标、模型、非流式参数、HTTP 状态、耗时及上游请求 ID，不记录 API Key 或完整请求体。可运行 `tail -n 80 Data/Logs/orchestrator.log` 查看最近结果；更新后需重启 Orchestrator 才会记录新事件。服务需要支持非流式 Chat Completions 并返回 `choices[0].message.content` 文本，不支持 `response_format` 的服务保持可选 JSON 模式关闭。生成失败不等于输出目录已经备份；成功结果默认写在 `Data/Outputs/`，Gallery 的 **Download outputs ZIP** 可下载整个输出目录。
+如果是换了工作流、Checkpoint、VAE 或 LoRA 后才失败，先记录当前选择及报错，再对照所选引擎的要求。如果浏览器显示 HTTP 502，先查看 Forge 的后台任务状态及 Gallery：生成和规划是异步执行的，图片可能已经完成；无法查询任务时收集 WebUI、Orchestrator 日志。OpenAI Compatible 报错时先在**模型服务**测试连接，再按同一 `trace_id` 查看 `concept/conceptforge.log` 的上游 HTTP 结果和 `orchestrator/orchestrator.log` 的任务结果。Forge 讨论失败时也查看 `webui/webui.log` 的代理状态；如果没有代理结果，检查 Tunnel。路径均位于日志根目录，实际路径以 `EVERSPARK_LOG_DIR` 为准。记录不包含 API Key 或完整请求体；更新后重启 WebUI 和 Orchestrator。服务需要支持非流式 Chat Completions 并返回 `choices[0].message.content` 文本，不支持 `response_format` 的服务保持可选 JSON 模式关闭。生成失败不等于输出目录已经备份；成功结果默认写在 `Data/Outputs/`，Gallery 的 **Download outputs ZIP** 可下载整个输出目录。
 
-如果日志中没有测试事件，运行 `./everspark status orchestrator` 检查状态。`external` 表示服务由外部进程启动，托管的 `restart` 不会重启它；请从原启动方式重启。也检查 `.env` 中的 `ORCHESTRATOR_LOG` 是否覆盖了文件路径，或查看 `Data/Logs/orchestrator-service.log` 中的控制台日志。
+如果日志中没有测试事件，运行 `./everspark status orchestrator` 检查状态。`external` 表示服务由外部进程启动，托管的 `restart` 不会重启它；请从原启动方式重启。也检查 `.env` 中的 `ORCHESTRATOR_LOG` 是否覆盖了文件路径，或查看 `Data/Logs/orchestrator/orchestrator-service.log` 中的控制台日志。
 失败记录中的 `key_origin=form` 表示本次表单提供了 Key；`saved` 表示编辑已有连接时沿用了服务器保存的 Key。编辑表单不会回填旧 Key。
 
 ## 6. 旧角色在列表里，但当前对话没用上
 
-在 **Forge** 选择已有角色并点击 **Use in Forge**；只在 **Subjects** 列表中看到它，不代表当前对话已经选用了它。切回 Forge 检查当前角色卡，再提交生成。如果选择后页面没有更新，记录浏览器提示和 `Data/Logs/orchestrator-service.log`、`Data/Logs/webui-service.log` 中相同时间的错误。
+在 **Forge** 选择已有角色并点击 **Use in Forge**；只在 **Subjects** 列表中看到它，不代表当前对话已经选用了它。切回 Forge 检查当前角色卡，再提交生成。如果选择后页面没有更新，记录浏览器提示和 `Data/Logs/orchestrator/orchestrator-service.log`、`Data/Logs/webui/webui-service.log` 中相同时间的错误。
 
 ## 7. 本地 ZIP 导出/恢复或远程传输失败
 
-**角色与 Memory ZIP：** 在 **Storage → 角色与 Memory 压缩包** 下载失败时先确认 Orchestrator 就绪、`Data/Memory/everspark.db` 可用，并查看页面报错与 `Data/Logs/orchestrator-service.log`、`Data/Logs/webui-service.log`。选择 ZIP 后点击 **验证并恢复** 若失败，确认文件来自 EverSpark 的 **下载数据 ZIP**、文件大小不超过 128 MiB，且 ZIP 未损坏或更改。系统会验证清单、校验值、SQLite 完整性及四份角色 JSON 与数据库的一致性；不接受任意 ZIP。恢复成功后按提示重启 EverSpark。原数据位于 `Data/Recovery/`；暂存上传文件在 `Data/Imports/`，完成或失败后由 WebUI 清理。这个 ZIP 不包含输出图片或模型。
+**角色与 Memory ZIP：** 在 **Storage → 角色与 Memory 压缩包** 下载失败时先确认 Orchestrator 就绪、`Data/Memory/everspark.db` 可用，并查看页面报错与 `Data/Logs/orchestrator/orchestrator-service.log`、`Data/Logs/webui/webui-service.log`。选择 ZIP 后点击 **验证并恢复** 若失败，确认文件来自 EverSpark 的 **下载数据 ZIP**、文件大小不超过 128 MiB，且 ZIP 未损坏或更改。系统会验证清单、校验值、SQLite 完整性及四份角色 JSON 与数据库的一致性；不接受任意 ZIP。恢复成功后按提示重启 EverSpark。原数据位于 `Data/Recovery/`；暂存上传文件在 `Data/Imports/`，完成或失败后由 WebUI 清理。这个 ZIP 不包含输出图片或模型。
 
-**远程模型与数据：** 先运行 `./everspark doctor`。启用 rclone 时，需要有效的 `rclone.conf`、图片与 Concept 模型扫描根路径，以及可访问的 remote。Storage 页面中的手工目录或上传目标如果指向只读、聚合 remote，需改为实际可写的目标。检查页面的任务错误和 `Data/Logs/rclone.log`。
+**远程模型与数据：** 先运行 `./everspark doctor`。启用 rclone 时，需要有效的 `rclone.conf`、图片与 Concept 模型扫描根路径，以及可访问的 remote。Storage 页面中的手工目录或上传目标如果指向只读、聚合 remote，需改为实际可写的目标。检查页面的任务错误和 `Data/Logs/storage/rclone.log`。
 
 上传输出时选择 **Outputs folder**；它会按整个输出目录处理，无须逐张选择。远程恢复点也只针对成批保存的角色 JSON 与 Memory SQLite；恢复后按页面提示重启 EverSpark。输出图片和模型不会随任一种角色恢复方式一并取回。数据的位置及迁移步骤见[运行时与数据生命周期](Runtime-and-Data.zh-CN.md)。
 
 ## 8. 临时链接或 Named Tunnel 在外网打不开
 
-**使用 `./everspark share` 的临时链接：** 在云端机器运行 `./everspark status webui` 和 `./everspark share status`。启动失败先看命令报错及 `Data/Logs/quick-tunnel.log`（自定义日志目录时检查 `EVERSPARK_LOG_DIR`）。确认 WebUI 健康、云端机器可连接 Cloudflare；如尚未安装 `cloudflared`，自动安装需要 root 权限和下载网络。当前用户主目录下存在 `~/.cloudflared/config.yaml` 或 `config.yml` 时，临时链接会被拒绝；如要临时移开配置文件，应先确认自己没有依赖该配置运行的隧道。临时链接不使用 `CF_TUNNEL_UUID` 等 Named Tunnel 配置。
+**使用 `./everspark share` 的临时链接：** 在云端机器运行 `./everspark status webui` 和 `./everspark share status`。启动失败先看命令报错及 `Data/Logs/tunnel/quick-tunnel.log`（自定义日志目录时检查 `EVERSPARK_LOG_DIR`）。确认 WebUI 健康、云端机器可连接 Cloudflare；如尚未安装 `cloudflared`，自动安装需要 root 权限和下载网络。当前用户主目录下存在 `~/.cloudflared/config.yaml` 或 `config.yml` 时，临时链接会被拒绝；如要临时移开配置文件，应先确认自己没有依赖该配置运行的隧道。临时链接不使用 `CF_TUNNEL_UUID` 等 Named Tunnel 配置。
 
 **使用已配置的 Named Tunnel：** 先确认本地 WebUI 正常：在云端机器访问 `http://127.0.0.1:8780`，并检查 `./everspark status webui`。之后运行 `./everspark status` 检查 Tunnel。确认私人配置中的 Tunnel UUID、域名、凭据文件及 `CF_LOCAL_PORT`；导入时后者必须与 WebUI 端口一致。查看 `Data/Logs/` 中与 Tunnel 相关的日志。
 

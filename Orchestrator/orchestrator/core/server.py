@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -10,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 from concept_forge.subjects import SubjectValidationError
 from concept_forge.port import ConceptError
+from concept_forge.trace import trace_scope
 from everspark_memory import SubjectRevisionConflictError
 
 from ..config.config import ConfigError, load_config
@@ -30,7 +33,7 @@ LOG_DIR = Path(
 if not LOG_DIR.is_absolute():
     LOG_DIR = REPO_ROOT / LOG_DIR
 LOG_FILE = Path(
-    os.environ.get("ORCHESTRATOR_LOG", str(LOG_DIR / "orchestrator.log"))
+    os.environ.get("ORCHESTRATOR_LOG", str(LOG_DIR / "orchestrator/orchestrator.log"))
 ).expanduser()
 if not LOG_FILE.is_absolute():
     LOG_FILE = REPO_ROOT / LOG_FILE
@@ -315,11 +318,26 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif request_path == "/concept/connections/default":
                 self._send(200, {"ok": True, **self.server.orchestrator.default_concept_connection(str(payload.get("id", "")))})
             elif request_path == "/conversation":
-                result = self.server.orchestrator.discuss(
-                    str(payload.get("text", "")),
-                    str(payload.get("session_id", "")),
-                    payload.get("selection"),
-                )
+                candidate = str(payload.get("request_id", ""))
+                trace_id = candidate if len(candidate) == 32 and all(
+                    char in "0123456789abcdef" for char in candidate) else uuid.uuid4().hex
+                started = time.monotonic()
+                self._log("info", "conversation.start", "Conversation started", trace_id=trace_id)
+                try:
+                    with trace_scope(trace_id):
+                        result = self.server.orchestrator.discuss(
+                            str(payload.get("text", "")),
+                            str(payload.get("session_id", "")),
+                            payload.get("selection"),
+                        )
+                except Exception as exc:
+                    self._log("error", "conversation.failed", "Conversation failed",
+                              trace_id=trace_id, error_type=type(exc).__name__,
+                              elapsed_ms=round((time.monotonic() - started) * 1000))
+                    raise
+                self._log("ok", "conversation.ok", "Conversation completed",
+                          trace_id=trace_id,
+                          elapsed_ms=round((time.monotonic() - started) * 1000))
                 self._send(200, result)
             elif request_path == "/memory/clear":
                 session_id = str(payload.get("session_id", ""))
@@ -465,6 +483,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 def main() -> int:
     logger = get_logger("orchestrator", LOG_FILE)
+    concept_logger = get_logger("conceptforge", LOG_DIR / "concept/conceptforge.log")
     server: OrchestratorServer | None = None
     try:
         config = load_config()
@@ -475,11 +494,13 @@ def main() -> int:
             error=str(exc),
         )
         logger.close()
+        concept_logger.close()
         return 1
     host = str(config["orchestrator"]["host"])
     port = int(config["orchestrator"]["port"])
     try:
-        server = OrchestratorServer((host, port), Orchestrator(config, logger=logger), logger)
+        server = OrchestratorServer((host, port), Orchestrator(
+            config, logger=logger, concept_logger=concept_logger), logger)
         logger.ok(
             "server.ready",
             "EverSpark Orchestrator is ready",
@@ -502,6 +523,7 @@ def main() -> int:
             server.server_close()
             logger.ok("server.stopped", "EverSpark Orchestrator stopped")
         logger.close()
+        concept_logger.close()
     return 0
 
 

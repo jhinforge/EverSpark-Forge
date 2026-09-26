@@ -41,7 +41,7 @@ LOG_DIR="${EVERSPARK_LOG_DIR:-${REPO_ROOT}/Data/Logs}"
 if [[ "$LOG_DIR" != /* ]]; then
   LOG_DIR="${REPO_ROOT}/${LOG_DIR#./}"
 fi
-core_log_init runtime.install "${LOG_DIR}/runtime-install.log"
+core_log_init runtime.install "${LOG_DIR}/runtime/runtime-install.log"
 
 if [ "$TORCH_PROFILE_SUPPORTED" -ne 1 ]; then
   core_die runtime.torch.unsupported \

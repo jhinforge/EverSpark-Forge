@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, str(LOGGING_DIR))
 
-from log_maintenance import maintain_logs  # noqa: E402
+from log_maintenance import initialize_log_directories, maintain_logs  # noqa: E402
 from log_manifest import ManifestError, collect_log_status, load_manifest  # noqa: E402
 
 
@@ -45,7 +45,8 @@ def write_manifest(path: Path) -> None:
 class ManifestTests(unittest.TestCase):
     def test_bundled_manifest_is_valid(self) -> None:
         manifest = load_manifest(LOGGING_DIR / "log_manifest.json")
-        self.assertEqual(len(manifest["logs"]), 18)
+        self.assertEqual(len(manifest["logs"]), 23)
+        self.assertIn("concept/conceptforge.log", [item["filename"] for item in manifest["logs"]])
 
     def test_rejects_path_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -70,6 +71,36 @@ class ManifestTests(unittest.TestCase):
             self.assertEqual(status["configured"], 1)
             self.assertEqual(status["present"], 1)
             self.assertEqual(status["logs"][0]["filename"], "test.log")
+
+    def test_nested_log_directories_are_created_and_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "manifest.json"
+            write_manifest(manifest)
+            data = json.loads(manifest.read_text())
+            data["logs"][0]["filename"] = "concept/test.log"
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            logs = root / "logs"
+            initialize_log_directories(manifest, logs)
+            (logs / "concept/test.log").write_text("0123456789ABCDEF")
+            self.assertEqual(collect_log_status(manifest, logs, environ={})["present"], 1)
+            maintain_logs(manifest, logs, environ={})
+            self.assertEqual((logs / "concept/test.log.1").read_text(), "0123456789ABCDEF")
+
+    def test_nested_symlink_parent_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "manifest.json"
+            write_manifest(manifest)
+            data = json.loads(manifest.read_text())
+            data["logs"][0]["filename"] = "concept/test.log"
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            logs = root / "logs"
+            logs.mkdir()
+            (logs / "concept").symlink_to(root, target_is_directory=True)
+            with self.assertRaises(ManifestError):
+                initialize_log_directories(manifest, logs)
+            self.assertFalse(collect_log_status(manifest, logs, environ={})["logs"][0]["safe"])
 
 
 class MaintenanceTests(unittest.TestCase):

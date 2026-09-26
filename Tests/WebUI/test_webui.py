@@ -278,6 +278,7 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
             self._json(200, {"ok": True, "connected": True, "default": payload.get("id", "ollama"),
                              "connections": []})
         elif self.path == "/conversation":
+            type(self).received_conversation = payload
             self._json(
                 200,
                 {"ok": True, "reply": "Tell me more about the character.", "subject": self.subject()},
@@ -548,6 +549,7 @@ class WebUIIntegrationTests(unittest.TestCase):
             {"message": "She has silver hair", "session_id": "session-a"},
         )
         self.assertIn("reply", discussed)
+        self.assertRegex(MockUpstreamHandler.received_conversation["request_id"], r"^[0-9a-f]{32}$")
         _, current = self.request_json(
             "/api/subjects/current?session_id=session-a"
         )

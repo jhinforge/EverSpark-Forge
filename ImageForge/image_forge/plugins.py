@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -96,7 +97,10 @@ class PluginManager:
         return state
 
     def _run(self, manifest: PluginManifest, job_id: str, state: dict[str, Any]) -> None:
-        log_path = self.root / "Data/Logs" / f"image-plugin-{manifest.id}.log"
+        log_root = Path(os.environ.get("EVERSPARK_LOG_DIR", str(self.root / "Data/Logs"))).expanduser()
+        if not log_root.is_absolute():
+            log_root = self.root / log_root
+        log_path = log_root / "image" / f"image-plugin-{manifest.id}.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             if state["action"] == "install":

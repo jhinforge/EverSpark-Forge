@@ -39,9 +39,10 @@ def _safe_header(headers: Any, name: str) -> str:
 
 
 class Orchestrator:
-    def __init__(self, config: dict[str, Any], logger: Any | None = None):
+    def __init__(self, config: dict[str, Any], logger: Any | None = None,
+                 concept_logger: Any | None = None):
         self.logger = logger
-        self.runner = TaskRunner(config)
+        self.runner = TaskRunner(config, concept_logger=concept_logger)
         self.storage = R2StorageManager(config)
         self.downloads = DirectDownloadManager(config)
         self.backups = BackupManager(config)
@@ -421,7 +422,7 @@ class Orchestrator:
                     model=str(payload.get("model", "")), method="POST",
                     transport="urllib.request", stream=False, json_mode=False,
                 )
-            result = self.test_concept_connection(payload)
+            result = self.test_concept_connection({**payload, "_trace_id": job_id})
             update = {"status": "completed", "result": result}
             if logger is not None:
                 logger.ok(

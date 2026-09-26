@@ -107,8 +107,8 @@ class RcloneClient:
         ).expanduser()
         if not log_root.is_absolute():
             log_root = (REPO_ROOT / log_root).resolve()
-        log_root.mkdir(parents=True, exist_ok=True)
-        command.extend(["--log-file", str(log_root / "rclone.log"), "--log-level", "INFO"])
+        (log_root / "storage").mkdir(parents=True, exist_ok=True)
+        command.extend(["--log-file", str(log_root / "storage/rclone.log"), "--log-level", "INFO"])
         try:
             completed = self._run_command(
                 command,

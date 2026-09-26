@@ -30,7 +30,7 @@ class RuntimeManagerTests(unittest.TestCase):
             services = runtime_manager.service_definitions()
         self.assertEqual(services["image"].health_url, "http://127.0.0.1:8188/system_stats")
         self.assertEqual(services["diffusers"].health_url, "http://127.0.0.1:8191/health")
-        self.assertEqual(services["diffusers"].log_file, "diffusers.log")
+        self.assertEqual(services["diffusers"].log_file, "image/diffusers.log")
 
     def test_config_file_selects_diffusers_worker_without_env_override(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

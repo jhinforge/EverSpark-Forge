@@ -9,7 +9,7 @@ under `Data/Runtime/`. It never stores personal configuration in the repository.
   optional `diffusers` service. Both use the existing GPU assignment.
 - Ollama is installed through its official Linux installer when unavailable.
 - PID identity includes the Linux process start time to avoid killing a reused PID.
-- Services bind to localhost by default and write raw process output to `Data/Logs/`.
+- Services bind to localhost by default and write raw process output to module folders under `Data/Logs/` (or `EVERSPARK_LOG_DIR`).
 - Setup restores the shared Linux utility baseline used by the original runtime,
   including wget, aria2, FFmpeg, jq, zip/unzip, lsof, build tools, and zstd.
 

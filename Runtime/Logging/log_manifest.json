@@ -9,25 +9,25 @@
     {
       "id": "recovery",
       "label": "Recovery",
-      "filename": "recovery.log",
+      "filename": "runtime/recovery.log",
       "kind": "structured"
     },
     {
       "id": "bootstrap",
       "label": "Bootstrap",
-      "filename": "bootstrap.log",
+      "filename": "runtime/bootstrap.log",
       "kind": "structured"
     },
     {
       "id": "start-all",
       "label": "ComfyUI lifecycle",
-      "filename": "start_all.log",
+      "filename": "image/start_all.log",
       "kind": "structured"
     },
     {
       "id": "comfyui",
       "label": "ComfyUI process",
-      "filename": "comfyui.log",
+      "filename": "image/comfyui.log",
       "kind": "raw",
       "rotation": {
         "max_bytes": 209715200,
@@ -38,31 +38,31 @@
     {
       "id": "boot-repair",
       "label": "ComfyUI boot repair",
-      "filename": "boot_repair.log",
+      "filename": "runtime/boot_repair.log",
       "kind": "structured"
     },
     {
       "id": "boot-repair-runner",
       "label": "ComfyUI boot repair runner",
-      "filename": "boot_repair.nohup.log",
+      "filename": "runtime/boot_repair.nohup.log",
       "kind": "raw"
     },
     {
       "id": "auto-deps",
       "label": "Dependency repair",
-      "filename": "auto_deps.log",
+      "filename": "runtime/auto_deps.log",
       "kind": "structured"
     },
     {
       "id": "ollama",
       "label": "Ollama lifecycle",
-      "filename": "ollama.log",
+      "filename": "concept/ollama.log",
       "kind": "structured"
     },
     {
       "id": "ollama-service",
       "label": "Ollama process",
-      "filename": "ollama-service.log",
+      "filename": "concept/ollama-service.log",
       "kind": "raw",
       "rotation": {
         "max_bytes": 209715200,
@@ -73,61 +73,91 @@
     {
       "id": "runtime-install",
       "label": "Managed runtime installation",
-      "filename": "runtime-install.log",
+      "filename": "runtime/runtime-install.log",
       "kind": "structured"
     },
     {
       "id": "orchestrator",
       "label": "Orchestrator",
-      "filename": "orchestrator.log",
+      "filename": "orchestrator/orchestrator.log",
       "kind": "structured"
     },
     {
       "id": "orchestrator-service",
       "label": "Orchestrator process",
-      "filename": "orchestrator-service.log",
+      "filename": "orchestrator/orchestrator-service.log",
       "kind": "raw"
     },
     {
       "id": "webui",
       "label": "EverSpark WebUI",
-      "filename": "webui.log",
+      "filename": "webui/webui.log",
       "kind": "structured"
     },
     {
       "id": "webui-service",
       "label": "WebUI process",
-      "filename": "webui-service.log",
+      "filename": "webui/webui-service.log",
       "kind": "raw"
     },
     {
       "id": "tunnel",
       "label": "Tunnel lifecycle",
-      "filename": "tunnel.log",
+      "filename": "tunnel/tunnel.log",
       "kind": "structured"
     },
     {
       "id": "cloudflared",
       "label": "Cloudflared process",
-      "filename": "cloudflared.log",
+      "filename": "tunnel/cloudflared.log",
       "kind": "raw"
     },
     {
       "id": "r2",
       "label": "R2 lifecycle",
-      "filename": "r2.log",
+      "filename": "storage/r2.log",
       "kind": "structured"
     },
     {
       "id": "rclone",
       "label": "Rclone process",
-      "filename": "rclone.log",
+      "filename": "storage/rclone.log",
       "kind": "raw",
       "rotation": {
         "max_bytes": 104857600,
         "keep_files": 3,
         "max_age_days": 7
       }
+    },
+    {
+      "id": "launcher",
+      "label": "Launcher",
+      "filename": "launcher/launcher.log",
+      "kind": "structured"
+    },
+    {
+      "id": "diffusers",
+      "label": "Diffusers process",
+      "filename": "image/diffusers.log",
+      "kind": "raw"
+    },
+    {
+      "id": "image-plugin-diffusers",
+      "label": "Diffusers plugin installer",
+      "filename": "image/image-plugin-diffusers.log",
+      "kind": "raw"
+    },
+    {
+      "id": "quick-tunnel",
+      "label": "Quick Tunnel",
+      "filename": "tunnel/quick-tunnel.log",
+      "kind": "raw"
+    },
+    {
+      "id": "conceptforge",
+      "label": "Concept Forge API",
+      "filename": "concept/conceptforge.log",
+      "kind": "structured"
     }
   ]
 }
