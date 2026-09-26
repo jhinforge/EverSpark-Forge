@@ -145,7 +145,7 @@ outputs, and memory.
 The WebUI can select installed Ollama models or a configured OpenAI Compatible
 model service. Add a service in **Model services** using its `/v1` base URL,
 API Key, and exact model ID, test it, then select it in Forge. This uses the
-non-streaming Chat Completions endpoint; support for an individual provider
+Chat Completions endpoint with optional streaming; support for an individual provider
 depends on its implementation. Ollama remains the built-in default.
 
 Forge selects ComfyUI by default and can install and enable the optional

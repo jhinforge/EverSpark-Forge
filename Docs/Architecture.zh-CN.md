@@ -69,7 +69,7 @@ WebUI 的资源列表由 Orchestrator 汇总：工作流及图片模型来自所
 ## 5. v0.1 的实现范围
 
 - **已实现：** 讨论与生成共用会话；角色主体及修订持久化；API Format 图像工作流；运行状态；本地模型下载；可选远程模型与数据备份。
-- **当前边界：** OpenAI Compatible 连接要求非流式 Chat Completions 接口和手工填写的模型 ID；Diffusers 支持 SDXL 单文件 Checkpoint。ComfyUI 仍需注册 API Format 工作流和受支持的参数变更方式。
+- **当前边界：** OpenAI Compatible 连接要求 Chat Completions 接口（可选流式）和手工填写的模型 ID；Diffusers 支持 SDXL 单文件 Checkpoint。ComfyUI 仍需注册 API Format 工作流和受支持的参数变更方式。
 - **尚未实现：** 情节式记忆的自动提取、检索和整合。其他模型协议与绘图工具需要各自的适配器。
 
 需要修改模块时，可先从对应目录的 README 和本篇的请求流定位代码；模块单独调试的 CLI 入口见[命令手册：模块入口](Commands.zh-CN.md#6-模块入口开发与单独调试)。启动及故障定位分别见[首次运行](Getting-Started.zh-CN.md)和[排障指南](Troubleshooting.zh-CN.md)。

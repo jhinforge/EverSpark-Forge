@@ -84,6 +84,7 @@ const elements = {
   modelServiceModel: $("#modelServiceModel"),
   modelServiceKey: $("#modelServiceKey"),
   modelServiceJsonMode: $("#modelServiceJsonMode"),
+  modelServiceStream: $("#modelServiceStream"),
   loraSelect: $("#loraSelect"),
   addLoraButton: $("#addLoraButton"),
   selectedLoras: $("#selectedLoras"),
@@ -926,6 +927,7 @@ function modelServicePayload() {
     model: elements.modelServiceModel.value.trim(),
     api_key: elements.modelServiceKey.value,
     json_mode: elements.modelServiceJsonMode.checked,
+    stream: elements.modelServiceStream.checked,
   };
 }
 
@@ -983,6 +985,7 @@ function renderModelConnections() {
         elements.modelServiceModel.value = connection.model;
         elements.modelServiceKey.value = "";
         elements.modelServiceJsonMode.checked = connection.json_mode;
+        elements.modelServiceStream.checked = connection.stream === true;
         uiText($("#modelServiceFormTitle"), "Edit model service");
         $("#cancelModelServiceEdit").classList.remove("hidden");
         elements.modelServiceName.focus();

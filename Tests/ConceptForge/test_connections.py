@@ -49,6 +49,25 @@ class CompatibleHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
+        if body["model"] == "stream-required":
+            if not body.get("stream"):
+                self.send_error(502, "Streaming required")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            self.wfile.write(b'data: {"choices":[{"delta":{"role":"assistant"}}]}\n\n')
+            self.wfile.write(b'data: {"choices":[{"delta":{"content":"O"}}]}\n\n')
+            self.wfile.write(b'data: {"choices":[{"delta":{"content":"K"}}]}\n\n')
+            self.wfile.write(b'data: {"choices":[],"usage":{"total_tokens":3}}\n\n')
+            self.wfile.write(b'data: [DONE]\n\n')
+            return
+        if body["model"] == "broken-stream":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            self.wfile.write(b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n')
+            return
         if body.get("response_format"):
             content = json.dumps({"model": "illustrious", "positive_prompt": "portrait",
                                   "negative_prompt": "artifact", "count": 1, "status": "over"})
@@ -136,6 +155,24 @@ class ModelConnectionTests(unittest.TestCase):
         self.assertEqual(records[1]["fields"]["http_status"], 502)
         self.assertEqual(records[1]["fields"]["trace_id"], "test-123")
         self.assertNotIn("private-key", log.read_text())
+
+    def test_streaming_connection_collects_chunks_and_persists_setting(self):
+        payload = {**self.payload, "model": "stream-required", "stream": True,
+                   "json_mode": False}
+        with self.assertRaisesRegex(ConceptError, "HTTP 502"):
+            self.manager.test({**payload, "stream": False})
+        self.assertTrue(self.manager.test(payload)["connected"])
+        public = self.manager.save(payload)
+        identifier = public["connections"][-1]["id"]
+        self.assertTrue(public["connections"][-1]["stream"])
+        restored = ConceptConnections(self.config, self.path)
+        self.assertEqual(ConceptService(restored.gateway).discuss(
+            "hello", provider=identifier), "OK")
+        _, request, _ = CompatibleHandler.requests[-1]
+        self.assertTrue(request["stream"])
+        self.assertEqual(request["stream_options"], {"include_usage": True})
+        with self.assertRaisesRegex(ConceptError, "invalid stream"):
+            self.manager.test({**payload, "model": "broken-stream"})
 
 
 if __name__ == "__main__":

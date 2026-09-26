@@ -69,7 +69,7 @@ Local mode needs no remote storage, and public direct model downloads work indep
 ## 5. Scope in v0.1
 
 - **Implemented:** shared session for discussion and generation; persistent character subjects and revisions; API Format image workflows; runtime status; local model downloads; optional remote models and data backups.
-- **Current limits:** OpenAI Compatible requires the non-streaming Chat Completions protocol and an explicitly entered model ID; Diffusers supports SDXL single-file checkpoints. ComfyUI requires registered API Format workflows and supported parameter changes.
+- **Current limits:** OpenAI Compatible requires Chat Completions (optionally streamed) and an explicitly entered model ID; Diffusers supports SDXL single-file checkpoints. ComfyUI requires registered API Format workflows and supported parameter changes.
 - **Not yet implemented:** automatic episodic memory extraction, retrieval, and consolidation. Additional model protocols and drawing engines require their own adapters.
 
 For changes, start with the relevant module README and the request flow above. See [module CLI entry points](Commands.md#6-module-entry-points-development-and-isolated-diagnosis) for isolated diagnosis, [Getting started](Getting-Started.md) for installation, and [Troubleshooting](Troubleshooting.md) for failures.

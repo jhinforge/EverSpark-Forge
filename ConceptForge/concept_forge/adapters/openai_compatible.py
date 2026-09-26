@@ -34,6 +34,33 @@ def _upstream_error(exc: HTTPError, api_key: str) -> str:
     return f"{message}: {detail}" if detail else message
 
 
+def _stream_content(response: Any) -> str:
+    """Collect standard Chat Completions SSE chunks into a single response."""
+    pieces: list[str] = []
+    size = 0
+    for line in response:
+        size += len(line)
+        if size > 16 * 1024 * 1024:
+            raise ValueError("stream_too_large")
+        if not line.startswith(b"data:"):
+            continue
+        data = line[5:].strip()
+        if data == b"[DONE]":
+            return "".join(pieces)
+        if not data:
+            continue
+        event = json.loads(data.decode("utf-8"))
+        choices = event["choices"]
+        if not choices:  # stream_options.include_usage sends a final usage-only chunk.
+            continue
+        content = choices[0]["delta"].get("content")
+        if content is not None:
+            if not isinstance(content, str):
+                raise ValueError("invalid_delta")
+            pieces.append(content)
+    raise ValueError("missing_done")
+
+
 class OpenAICompatibleAdapter:
     name = "openai_compatible"
 
@@ -43,6 +70,7 @@ class OpenAICompatibleAdapter:
         self.model = str(config["model"])
         self.timeout = int(config.get("timeout", 180))
         self.json_mode = bool(config.get("json_mode", False))
+        self.stream = config.get("stream", False) is True
         self.logger = config.get("_logger")
         self.trace_id = str(config.get("_trace_id", ""))
 
@@ -54,8 +82,10 @@ class OpenAICompatibleAdapter:
         payload: dict[str, Any] = {
             "model": request.model or self.model,
             "messages": request.messages,
-            "stream": False,
+            "stream": self.stream,
         }
+        if self.stream:
+            payload["stream_options"] = {"include_usage": True}
         if request.json_mode and self.json_mode:
             payload["response_format"] = {"type": "json_object"}
         wire = Request(
@@ -71,11 +101,12 @@ class OpenAICompatibleAdapter:
                 "api.request", "Concept Forge request started",
                 trace_id=trace_id, host=urlparse(self.base_url).hostname or "",
                 model=payload["model"], path="/v1/chat/completions",
-                stream=False, json_mode="response_format" in payload,
+                stream=self.stream, json_mode="response_format" in payload,
             )
         try:
             with urlopen(wire, timeout=self.timeout) as response:
-                result = json.loads(response.read().decode("utf-8"))
+                result = (_stream_content(response) if self.stream else
+                          json.loads(response.read().decode("utf-8")))
         except HTTPError as exc:
             error = _upstream_error(exc, self.api_key)
             if self.logger is not None:
@@ -99,11 +130,17 @@ class OpenAICompatibleAdapter:
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             self._log_response_error(trace_id, payload["model"], started, "invalid_json")
             raise ConceptError("OpenAI Compatible returned invalid JSON") from exc
-        try:
-            content = result["choices"][0]["message"]["content"]
-        except (IndexError, KeyError, TypeError) as exc:
-            self._log_response_error(trace_id, payload["model"], started, "invalid_chat_response")
-            raise ConceptError("OpenAI Compatible returned an invalid chat response") from exc
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            self._log_response_error(trace_id, payload["model"], started, "invalid_stream")
+            raise ConceptError("OpenAI Compatible returned an invalid stream") from exc
+        if self.stream:
+            content = result
+        else:
+            try:
+                content = result["choices"][0]["message"]["content"]
+            except (IndexError, KeyError, TypeError) as exc:
+                self._log_response_error(trace_id, payload["model"], started, "invalid_chat_response")
+                raise ConceptError("OpenAI Compatible returned an invalid chat response") from exc
         if not isinstance(content, str):
             self._log_response_error(trace_id, payload["model"], started, "non_text_response")
             raise ConceptError("OpenAI Compatible returned a non-text response")

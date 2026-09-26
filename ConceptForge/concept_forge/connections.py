@@ -65,6 +65,7 @@ class ConceptConnections:
             custom = [{"id": entry["id"], "name": entry["name"],
                        "type": "openai_compatible", "base_url": entry["base_url"],
                        "model": entry["model"], "json_mode": entry["json_mode"],
+                       "stream": entry.get("stream", False),
                        "has_api_key": bool(entry["api_key"]), "builtin": False}
                       for entry in self.connections]
             return {"default": self.default, "connections": builtin + custom}
@@ -87,7 +88,8 @@ class ConceptConnections:
         if not base_url.endswith("/v1"):
             raise ValueError("API base URL must end in /v1")
         return {"name": name, "base_url": base_url, "api_key": api_key,
-                "model": model, "json_mode": payload.get("json_mode", False) is True}
+                "model": model, "json_mode": payload.get("json_mode", False) is True,
+                "stream": payload.get("stream", (existing or {}).get("stream", False)) is True}
 
     def save(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self.lock:

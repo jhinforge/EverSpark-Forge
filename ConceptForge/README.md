@@ -26,8 +26,10 @@ the provider's exact model ID, and its API Key. Test before using it, then choos
 the service and model in Forge, or set it as the default for subject revisions.
 Connection tests run as background jobs so a slow model response does not hold
 the WebUI request open; the page polls for the result and displays provider errors.
-The adapter sends non-streaming Chat Completions requests. Optional JSON mode
-is disabled by default for services that do not implement `response_format`.
+The adapter sends non-streaming Chat Completions requests by default. A connection
+can enable streaming with `stream_options.include_usage`; Concept Forge collects
+the text before passing it to Orchestrator. Optional JSON mode is disabled by
+default for services that do not implement `response_format`.
 Connections persist under `Data/Configuration/ConceptForge/connections.json`
 with owner-only file permissions; API keys are never returned by the WebUI API.
 

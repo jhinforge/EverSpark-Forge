@@ -59,7 +59,7 @@ EVERSPARK_SSH_USER=root
 
 ComfyUI 是默认绘图工具。可在 Forge 的绘图工具选择器中选择 Diffusers，点击 **安装工具**，按页面提示启用；**设为默认**会保存选择，无需修改 `.env`。Diffusers 当前支持 SDXL 单文件 Checkpoint 及兼容的 LoRA、VAE。ComfyUI 使用已注册的 API Format 工作流；高级使用者可以通过 `EVERSPARK_WORKFLOW_TEMPLATE` 指向其他 API Format 工作流文件。普通 ComfyUI 界面工作流不能直接当作 API Format 文件放入注册目录。限制与节点要求见 [Image Forge 说明](../ImageForge/README.md)。
 
-使用托管语言模型时，在 WebUI 侧边栏打开**模型服务**，填写连接名称、以 `/v1` 结尾的 API 基础地址、API Key 和平台要求的准确模型 ID。测试连接后在 Forge 选择服务与模型，也可设置角色修订使用的默认服务。OpenAI Compatible 适配器使用非流式 Chat Completions（`/chat/completions`），不会自动发现远端模型 ID。可选 JSON 模式默认关闭，以兼容不支持 `response_format` 的服务。连接和密钥保存在仅当前用户可读写的 `Data/Configuration/ConceptForge/connections.json`；WebUI API 不返回已保存的密钥。选择托管服务后，发送给该服务的提示词会传至对应平台；Ollama 仍可本地使用。
+使用托管语言模型时，在 WebUI 侧边栏打开**模型服务**，填写连接名称、以 `/v1` 结尾的 API 基础地址、API Key 和平台要求的准确模型 ID。测试连接后在 Forge 选择服务与模型，也可设置角色修订使用的默认服务。OpenAI Compatible 适配器默认使用非流式 Chat Completions（`/chat/completions`）；服务要求流式时可在连接中启用，EverSpark 会收齐文本后继续。不会自动发现远端模型 ID。可选 JSON 模式默认关闭，以兼容不支持 `response_format` 的服务。连接和密钥保存在仅当前用户可读写的 `Data/Configuration/ConceptForge/connections.json`；WebUI API 不返回已保存的密钥。选择托管服务后，发送给该服务的提示词会传至对应平台；Ollama 仍可本地使用。
 
 角色主体、记忆和输出都是运行数据。搬迁或重建云端机器前，请自行保留需要的数据。即使不配置 rclone，也可在 Storage 的 **角色与 Memory 压缩包** 区域下载角色 JSON 与 Memory SQLite 的 ZIP，之后选择该 ZIP 并点击 **验证并恢复**；恢复后需重启 EverSpark。输出图片、模型及私人配置（包括模型服务连接）需分别保存。远程备份是可选功能，不会因填写了模型来源地址就自动开始上传；详见[运行与数据生命周期](Runtime-and-Data.zh-CN.md)。
 

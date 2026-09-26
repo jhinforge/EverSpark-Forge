@@ -292,6 +292,8 @@
               <label>API Key <input id="modelServiceKey" type="password" autocomplete="new-password" placeholder="Enter or replace API Key"></label>
             </div>
             <label class="model-service-json"><input id="modelServiceJsonMode" type="checkbox"> Send JSON mode for structured requests</label>
+            <label class="model-service-json"><input id="modelServiceStream" type="checkbox"> Use streaming Chat Completions</label>
+            <p class="section-copy">For services that require streaming, EverSpark collects the response before continuing. The request includes stream_options.include_usage.</p>
             <p class="section-copy">Leave JSON mode off if your provider does not support response_format.</p>
             <div class="model-service-actions">
               <button class="secondary-button" id="testModelService" type="button">Test connection</button>
