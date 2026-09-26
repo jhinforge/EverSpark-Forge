@@ -438,6 +438,7 @@ class Orchestrator:
                     "concept.connection_test.failed", "Model connection test failed",
                     job_id=job_id, error_type=type(exc).__name__,
                     http_status=upstream.code if upstream is not None else None,
+                    key_origin="form" if payload.get("api_key") else "saved",
                     upstream_request_id=_safe_header(headers, "x-request-id"),
                     cf_ray=_safe_header(headers, "cf-ray"),
                     elapsed_ms=round((time.monotonic() - started) * 1000),

@@ -1002,6 +1002,7 @@ class APITests(unittest.TestCase):
         self.assertEqual(records[0]["fields"]["path"], "/v1/chat/completions")
         self.assertFalse(records[0]["fields"]["stream"])
         self.assertEqual(records[1]["fields"]["http_status"], 502)
+        self.assertEqual(records[1]["fields"]["key_origin"], "form")
         self.assertEqual(records[1]["fields"]["upstream_request_id"], "trace-123")
         self.assertNotIn("private-key", output.getvalue())
         self.fake.logger.close()
@@ -1025,6 +1026,7 @@ class APITests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["event"], "concept.connection_test.failed")
         self.assertEqual(records[0]["level"], "ERROR")
+        self.assertEqual(records[0]["fields"]["key_origin"], "form")
         self.assertNotIn("private-key", output.getvalue())
         self.fake.logger.close()
 
