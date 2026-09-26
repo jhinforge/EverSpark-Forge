@@ -79,14 +79,37 @@ class OpenAICompatibleAdapter:
         return [self.model]
 
     def chat(self, request: ChatRequest) -> ChatResponse:
+        stream = self.stream
+        json_mode = request.json_mode and self.json_mode
+        try:
+            return self._chat_attempt(request, stream, json_mode)
+        except ConceptError as exc:
+            status = exc.__cause__.code if isinstance(exc.__cause__, HTTPError) else None
+            if json_mode and status in {400, 422}:
+                self.json_mode = False
+                try:
+                    return self._chat_attempt(request, stream, False)
+                except ConceptError as retry_exc:
+                    exc = retry_exc
+                    status = exc.__cause__.code if isinstance(exc.__cause__, HTTPError) else None
+            # Only retry HTTP failures that can plausibly depend on response mode.
+            # Never retry authentication failures (401/403) or transport errors.
+            if status not in {400, 406, 415, 422, 502, 503}:
+                raise exc
+            result = self._chat_attempt(request, not stream, False)
+            self.stream = not stream
+            self.json_mode = False
+            return result
+
+    def _chat_attempt(self, request: ChatRequest, stream: bool, json_mode: bool) -> ChatResponse:
         payload: dict[str, Any] = {
             "model": request.model or self.model,
             "messages": request.messages,
-            "stream": self.stream,
+            "stream": stream,
         }
-        if self.stream:
+        if stream:
             payload["stream_options"] = {"include_usage": True}
-        if request.json_mode and self.json_mode:
+        if json_mode:
             payload["response_format"] = {"type": "json_object"}
         wire = Request(
             f"{self.base_url}/chat/completions",
@@ -101,11 +124,11 @@ class OpenAICompatibleAdapter:
                 "api.request", "Concept Forge request started",
                 trace_id=trace_id, host=urlparse(self.base_url).hostname or "",
                 model=payload["model"], path="/v1/chat/completions",
-                stream=self.stream, json_mode="response_format" in payload,
+                stream=stream, json_mode="response_format" in payload,
             )
         try:
             with urlopen(wire, timeout=self.timeout) as response:
-                result = (_stream_content(response) if self.stream else
+                result = (_stream_content(response) if stream else
                           json.loads(response.read().decode("utf-8")))
         except HTTPError as exc:
             error = _upstream_error(exc, self.api_key)
@@ -133,7 +156,7 @@ class OpenAICompatibleAdapter:
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             self._log_response_error(trace_id, payload["model"], started, "invalid_stream")
             raise ConceptError("OpenAI Compatible returned an invalid stream") from exc
-        if self.stream:
+        if stream:
             content = result
         else:
             try:

@@ -26,17 +26,17 @@ the provider's exact model ID, and its API Key. Test before using it, then choos
 the service and model in Forge, or set it as the default for subject revisions.
 Connection tests run as background jobs so a slow model response does not hold
 the WebUI request open; the page polls for the result and displays provider errors.
-The adapter sends non-streaming Chat Completions requests by default. A connection
-can enable streaming with `stream_options.include_usage`; Concept Forge collects
-the text before passing it to Orchestrator. Optional JSON mode is disabled by
-default for services that do not implement `response_format`.
+The adapter tries non-streaming Chat Completions first and retries selected HTTP
+errors with streaming (`stream_options.include_usage`). It collects streamed text
+before passing it to Orchestrator. Existing connections that enabled streaming
+retain that preference. Existing JSON-mode connections retry without
+`response_format` if the provider rejects it. Authentication errors are not retried.
 Connections persist under `Data/Configuration/ConceptForge/connections.json`
 with owner-only file permissions; API keys are never returned by the WebUI API.
 DeepSeek's OpenAI-format Chat Completions uses this same adapter. The optional
 **Fill DeepSeek settings** button fills `https://api.deepseek.com/v1` and
 `deepseek-flash`; the user supplies their own API Key, tests, saves, and selects
-the connection in Forge. The preset does not change the adapter or enable
-streaming or JSON mode.
+the connection in Forge. The preset uses the same automatic response-mode handling.
 
 ## Character Subject v1
 

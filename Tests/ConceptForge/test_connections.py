@@ -49,6 +49,12 @@ class CompatibleHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
+        if body["model"] == "forbidden":
+            self.send_error(403)
+            return
+        if body["model"] == "no-json-mode" and body.get("response_format"):
+            self.send_error(400, "Unsupported response_format")
+            return
         if body["model"] == "stream-required":
             if not body.get("stream"):
                 self.send_error(502, "Streaming required")
@@ -68,7 +74,7 @@ class CompatibleHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n')
             return
-        if body.get("response_format"):
+        if body.get("response_format") or body["model"] == "no-json-mode":
             content = json.dumps({"model": "illustrious", "positive_prompt": "portrait",
                                   "negative_prompt": "artifact", "count": 1, "status": "over"})
         else:
@@ -151,28 +157,46 @@ class ModelConnectionTests(unittest.TestCase):
         finally:
             logger.close()
         records = [json.loads(line) for line in log.read_text().splitlines()]
-        self.assertEqual([record["event"] for record in records], ["api.request", "api.http_error"])
+        self.assertEqual([record["event"] for record in records],
+                         ["api.request", "api.http_error"] * 2)
         self.assertEqual(records[1]["fields"]["http_status"], 502)
         self.assertEqual(records[1]["fields"]["trace_id"], "test-123")
         self.assertNotIn("private-key", log.read_text())
 
-    def test_streaming_connection_collects_chunks_and_persists_setting(self):
-        payload = {**self.payload, "model": "stream-required", "stream": True,
-                   "json_mode": False}
-        with self.assertRaisesRegex(ConceptError, "HTTP 502"):
-            self.manager.test({**payload, "stream": False})
+    def test_streaming_fallback_collects_chunks_without_user_setting(self):
+        payload = {**self.payload, "model": "stream-required", "json_mode": False}
         self.assertTrue(self.manager.test(payload)["connected"])
+        self.assertEqual([entry[1]["stream"] for entry in CompatibleHandler.requests],
+                         [False, True])
         public = self.manager.save(payload)
         identifier = public["connections"][-1]["id"]
-        self.assertTrue(public["connections"][-1]["stream"])
+        self.assertFalse(public["connections"][-1]["stream"])
         restored = ConceptConnections(self.config, self.path)
         self.assertEqual(ConceptService(restored.gateway).discuss(
             "hello", provider=identifier), "OK")
         _, request, _ = CompatibleHandler.requests[-1]
         self.assertTrue(request["stream"])
         self.assertEqual(request["stream_options"], {"include_usage": True})
+        before = len(CompatibleHandler.requests)
+        self.assertEqual(ConceptService(restored.gateway).discuss(
+            "hello again", provider=identifier), "OK")
+        self.assertEqual(len(CompatibleHandler.requests), before + 1)
         with self.assertRaisesRegex(ConceptError, "invalid stream"):
-            self.manager.test({**payload, "model": "broken-stream"})
+            self.manager.test({**payload, "model": "broken-stream", "stream": True})
+
+    def test_json_mode_falls_back_without_response_format(self):
+        public = self.manager.save({**self.payload, "model": "no-json-mode"})
+        identifier = public["connections"][-1]["id"]
+        service = ConceptService(self.manager.gateway)
+        self.assertEqual(service.generate_prompt("draw", provider=identifier).positive_prompt,
+                         "portrait")
+        self.assertEqual([bool(entry[1].get("response_format")) for entry in
+                          CompatibleHandler.requests], [True, False])
+
+    def test_forbidden_does_not_retry(self):
+        with self.assertRaisesRegex(ConceptError, "HTTP 403"):
+            self.manager.test({**self.payload, "model": "forbidden"})
+        self.assertEqual(len(CompatibleHandler.requests), 1)
 
 
 if __name__ == "__main__":
