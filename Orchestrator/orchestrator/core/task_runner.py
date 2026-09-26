@@ -54,6 +54,7 @@ class TaskRunner:
         selection: dict[str, Any] | None = None,
         saved_negative_prompt: str | None = None,
         previous_positive_prompt: str = "",
+        change_negative_prompt: bool = False,
     ) -> dict[str, Any]:
         selected = selection or {}
         engine_name = str(selected.get("engine", "")).strip().lower()
@@ -102,11 +103,16 @@ class TaskRunner:
         positive_prompt = self._merge_prompts(
             subject.positive_prompt if subject else "", plan.positive_prompt
         )
-        negative_prompt = (saved_negative_prompt if saved_negative_prompt is not None
-                           else plan.negative_prompt)
-        negative_prompt = self._merge_prompts(
-            negative_prompt, subject.negative_prompt if subject else ""
-        )
+        if saved_negative_prompt is not None:
+            negative_prompt = saved_negative_prompt
+        else:
+            default_negative = (selected_engine.default_negative_prompt(workflow_id)
+                                if not change_negative_prompt and
+                                hasattr(selected_engine, "default_negative_prompt") else "")
+            negative_prompt = self._merge_unique_terms(
+                default_negative, plan.negative_prompt,
+                subject.negative_prompt if subject else "",
+            )
 
         items = []
         selected_checkpoint = ""
@@ -183,6 +189,18 @@ class TaskRunner:
     @staticmethod
     def _merge_prompts(*prompts: str) -> str:
         return ", ".join(prompt.strip(" ,") for prompt in prompts if prompt.strip(" ,"))
+
+    @staticmethod
+    def _merge_unique_terms(*prompts: str) -> str:
+        terms: list[str] = []
+        seen: set[str] = set()
+        for prompt in prompts:
+            for raw in prompt.split(","):
+                term = raw.strip()
+                if term and term.casefold() not in seen:
+                    terms.append(term)
+                    seen.add(term.casefold())
+        return ", ".join(terms)
 
     def _get_valid_plan(
         self,

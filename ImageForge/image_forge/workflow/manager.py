@@ -78,6 +78,17 @@ class WorkflowManager:
     def selected_workflow_id(self, workflow_id: str = "") -> str:
         return self._definition(workflow_id).workflow_id
 
+    def default_negative_prompt(self, workflow_id: str = "") -> str:
+        definition = self._definition(workflow_id)
+        workflow = self._load_template(definition.api_path)
+        node = workflow.get(definition.negative_node)
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            raise WorkflowError("Registered workflow has no negative prompt node")
+        text = node["inputs"].get("text")
+        if not isinstance(text, str):
+            raise WorkflowError("Registered workflow negative prompt must be text")
+        return text.strip()
+
     def bind_checkpoint(
         self,
         workflow: dict[str, Any],

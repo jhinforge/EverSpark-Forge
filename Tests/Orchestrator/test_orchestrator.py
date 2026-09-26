@@ -27,6 +27,8 @@ for module_directory in (
 from concept_forge.providers.ollama import GenerationPlan  # noqa: E402
 from concept_forge.subjects import CompiledSubject, new_subject  # noqa: E402
 from image_forge.workflow.manager import WorkflowManager, WorkflowError  # noqa: E402
+from image_forge.adapters.comfyui import ComfyUIAdapter  # noqa: E402
+from image_forge.adapters.diffusers import DiffusersAdapter  # noqa: E402
 from image_forge.models.resolver import (  # noqa: E402
     CheckpointResolutionError,
     resolve_checkpoint,
@@ -184,6 +186,10 @@ class WorkflowTests(unittest.TestCase):
     def test_public_workflow_builds_with_managed_default_checkpoint(self) -> None:
         config = load_config()
         manager = WorkflowManager(config["workflow"])
+        self.assertIn("bad anatomy", manager.default_negative_prompt("base-illustrious"))
+        self.assertIn("lowres", ComfyUIAdapter({"base_url": "http://127.0.0.1:8188"}, manager)
+                      .default_negative_prompt("base-illustrious"))
+        self.assertIn("bad anatomy", DiffusersAdapter({}).default_negative_prompt())
         workflow = manager.build("positive", "negative", seed=1)
         self.assertEqual(workflow["34"]["inputs"]["text"], "positive")
         self.assertEqual(workflow["7"]["inputs"]["text"], "negative")
@@ -233,6 +239,39 @@ class WorkflowTests(unittest.TestCase):
 
 
 class BatchTests(unittest.TestCase):
+    def test_selected_diffusers_engine_seeds_first_negative_prompt(self) -> None:
+        class Concept:
+            model = "test-llm"
+
+            def generate_prompt(self, _text, _history):
+                return GenerationPlan("illustrious", "portrait", "bad anatomy, blurred", 1, "over")
+
+        class Gateway:
+            def __init__(self):
+                self.requests = []
+
+            def select(self, name=""):
+                return DiffusersAdapter({}) if name == "diffusers" else None
+
+            def submit(self, request, notify=None, engine=""):
+                self.requests.append((engine, request))
+                return "job", {"workflow": "diffusers-sdxl", "checkpoint": "test.safetensors",
+                               "vae": "", "loras": []}
+
+        runner = TaskRunner.__new__(TaskRunner)
+        runner.concept = Concept()
+        runner.gateway = Gateway()
+        runner.supported_models = {"illustrious"}
+        runner.max_model_retries = 0
+        runner.max_batch_size = 4
+        result = runner.run("portrait", selection={"engine": "diffusers",
+                                                  "workflow": "diffusers-sdxl"})
+        self.assertEqual(result["negative_prompt"].count("bad anatomy"), 1)
+        self.assertIn("watermark", result["negative_prompt"])
+        self.assertTrue(result["negative_prompt"].endswith("blurred"))
+        self.assertEqual(runner.gateway.requests[0][0], "diffusers")
+        self.assertEqual(runner.gateway.requests[0][1].negative_prompt, result["negative_prompt"])
+
     def test_batch_queues_unique_workflows_and_passes_history(self) -> None:
         class FakeConceptForge:
             received_history = None
@@ -468,11 +507,14 @@ class SubjectIntegrationTests(unittest.TestCase):
             def generate_prompt(self, _text, _history):
                 self.index += 1
                 self.histories.append(_history)
-                return GenerationPlan("illustrious", "portrait", f"negative-{self.index}", 1, "over")
+                return GenerationPlan("illustrious", "portrait", f"bad anatomy, negative-{self.index}", 1, "over")
 
         class Workflow:
             def selected_workflow_id(self, _id=""):
                 return "test"
+
+            def default_negative_prompt(self, _id=""):
+                return "lowres, bad anatomy, lowres"
 
             def build(self, positive, negative, **_kwargs):
                 return {"positive": positive, "negative": negative}
@@ -494,17 +536,25 @@ class SubjectIntegrationTests(unittest.TestCase):
             orchestrator.runner.concept = Concept()
             orchestrator.runner.workflow = Workflow()
             orchestrator.runner.image = Image()
-            orchestrator.runner.gateway = FakeGateway(orchestrator.runner)
+            class DefaultGateway(FakeGateway):
+                def select(self, name=""):
+                    engine = super().select(name)
+                    engine.default_negative_prompt = orchestrator.runner.workflow.default_negative_prompt
+                    return engine
+
+            orchestrator.runner.gateway = DefaultGateway(orchestrator.runner)
             first = orchestrator.submit("画一个角色", "session")["result"]
             second = orchestrator.submit("改变背景", "session")["result"]
             third = orchestrator.submit("修改负面提示词", "session")["result"]
-            self.assertEqual(first["negative_prompt"], "negative-1")
-            self.assertEqual(second["negative_prompt"], "negative-1")
-            self.assertEqual(third["negative_prompt"], "negative-3")
+            self.assertEqual(first["negative_prompt"], "lowres, bad anatomy, negative-1")
+            self.assertEqual(second["negative_prompt"], "lowres, bad anatomy, negative-1")
+            self.assertEqual(third["negative_prompt"], "bad anatomy, negative-3")
+            explicit_first = orchestrator.submit("修改负面提示词", "new-session")["result"]
+            self.assertEqual(explicit_first["negative_prompt"], "bad anatomy, negative-4")
             self.assertIn("portrait", orchestrator.runner.concept.histories[1][-1]["content"])
             self.assertEqual(orchestrator.memory.get_subject_prompt(
                 orchestrator.get_session_subject("session")["subject_id"]
-            )["negative_prompt"], "negative-3")
+            )["negative_prompt"], "bad anatomy, negative-3")
 
     def test_generation_extracts_and_uses_the_session_subject_without_an_id(self) -> None:
         class FakeConceptForge:

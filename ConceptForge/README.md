@@ -38,9 +38,13 @@ and metadata. Current data is stored under `Data/Subjects/<subject_id>/` as
 The prompt documents contain the complete last generated prompts, including
 scene details. SQLite retains subject indices, session links, task records, and
 revision history. Subjects can be viewed and revised by group through Concept
-Forge in the WebUI, without editing JSON by hand. The initial negative prompt
-is reused on later generations unless the user explicitly requests a negative
-prompt change. The previous positive prompt is provided as context for the next
+Forge in the WebUI, without editing JSON by hand. On the first generation,
+the selected image plugin's default negative terms and Concept Forge's generated
+terms form the saved negative prompt, with duplicate terms removed. ComfyUI
+reads its defaults from the selected API workflow; Diffusers supplies its SDXL
+defaults. The saved negative prompt is reused on later generations, even after
+switching drawing tools, unless the user explicitly requests a change. The
+previous positive prompt is provided as context for the next
 generation to carry reusable edits forward while updating its scene. Existing
 SQLite subjects and v1 prompt contracts migrate on startup. Scene, pose, camera,
 and background remain request-level state and are not persisted into the subject.

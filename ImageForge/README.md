@@ -27,6 +27,11 @@ the ComfyUI adapter. The engines may produce different images from the same
 seed and prompts. Diffusers may need access to model configuration files when
 loading a single-file checkpoint.
 
+For a character's first generation, ComfyUI reads default negative terms from
+the selected registered workflow's negative text node. Diffusers supplies its
+own SDXL default negative terms. Orchestrator combines these with the generated
+terms and saves the first prompt for later reuse until the user changes it.
+
 For Diffusers installations made before the PEFT dependency was added, Forge
 shows **Repair required**. Click **Repair tool** to stop the managed worker,
 install and verify PEFT, and start it again. A selected LoRA remains active

@@ -9,6 +9,12 @@ from urllib.request import Request, urlopen
 
 from ..port import ImageRequest
 
+DEFAULT_NEGATIVE_PROMPT = (
+    "lowres, bad anatomy, bad hands, extra fingers, missing fingers, "
+    "extra limbs, bad proportions, blurry, worst quality, low quality, "
+    "jpeg artifacts, text, watermark, signature"
+)
+
 
 class DiffusersAdapter:
     name = "diffusers"
@@ -34,6 +40,11 @@ class DiffusersAdapter:
                 "defaults": {"workflow": "diffusers-sdxl", "checkpoint": self.default_checkpoint},
                 "capabilities": ["text_to_image", "loras", "vae"],
                 "lora_strength_mode": "shared"}
+
+    def default_negative_prompt(self, workflow_id: str = "") -> str:
+        if workflow_id and workflow_id != "diffusers-sdxl":
+            raise ValueError("Diffusers supports the diffusers-sdxl workflow only")
+        return DEFAULT_NEGATIVE_PROMPT
 
     def submit(self, request: ImageRequest, notify: Any = None) -> tuple[str, dict[str, Any]]:
         if request.workflow and request.workflow != "diffusers-sdxl":

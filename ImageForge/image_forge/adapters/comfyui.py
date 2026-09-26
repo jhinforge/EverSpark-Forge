@@ -55,6 +55,11 @@ class ComfyUIAdapter:
         return job_id, {"workflow": workflow_id, "checkpoint": checkpoint,
                         "vae": vae, "loras": loras}
 
+    def default_negative_prompt(self, workflow_id: str = "") -> str:
+        if self.workflow is None:
+            raise ComfyUIError("ComfyUI workflow manager is unavailable")
+        return self.workflow.default_negative_prompt(workflow_id)
+
     def poll(self, job_id: str) -> dict[str, Any]:
         from urllib.parse import quote
 

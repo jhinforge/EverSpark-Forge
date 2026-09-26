@@ -150,6 +150,7 @@ class Orchestrator:
                                        if saved_prompts and saved_prompts["negative_prompt"] and not changes_negative else None),
                 previous_positive_prompt=(saved_prompts["positive_prompt"]
                                           if saved_prompts else ""),
+                change_negative_prompt=changes_negative,
             )
             latest = self.memory.get_subject(document["subject_id"])
             if latest is not None and latest == document:
