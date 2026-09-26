@@ -1006,6 +1006,28 @@ class APITests(unittest.TestCase):
         self.assertNotIn("private-key", output.getvalue())
         self.fake.logger.close()
 
+    def test_connection_failure_remains_visible_at_error_log_level(self) -> None:
+        output = io.StringIO()
+        self.fake.logger = get_logger(
+            "orchestrator", stream=output,
+            config=LogConfig(logging.ERROR, "json", True, "test-run"),
+        )
+        def fail(_payload):
+            raise ConceptError("OpenAI Compatible HTTP 401: Invalid API key")
+        self.fake.test_concept_connection = fail
+        job_id = "b" * 32
+        self.fake._connection_test_jobs[job_id] = {"id": job_id, "status": "running"}
+        self.fake._run_concept_connection_test(job_id, {
+            "base_url": "https://example.test/v1", "api_key": "private-key",
+            "model": "gpt-5.6-terra",
+        })
+        records = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["event"], "concept.connection_test.failed")
+        self.assertEqual(records[0]["level"], "ERROR")
+        self.assertNotIn("private-key", output.getvalue())
+        self.fake.logger.close()
+
     def test_storage_routes_use_the_infrastructure_boundary(self) -> None:
         status, scan = self._request("/storage/scan")
         self.assertEqual(status, 200)

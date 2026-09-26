@@ -434,7 +434,7 @@ class Orchestrator:
             if logger is not None:
                 upstream = exc.__cause__ if isinstance(exc.__cause__, HTTPError) else None
                 headers = upstream.headers if upstream is not None else None
-                logger.warning(
+                logger.error(
                     "concept.connection_test.failed", "Model connection test failed",
                     job_id=job_id, error_type=type(exc).__name__,
                     http_status=upstream.code if upstream is not None else None,

@@ -54,6 +54,8 @@ Read the on-page task error and recent **Gallery** results, then run `./everspar
 
 If the browser reports HTTP 502 while generating, first check the background task in Forge and the result in Gallery: planning and generation run asynchronously, and an image may have completed. Capture WebUI and Orchestrator logs if the task status still cannot be polled. For an OpenAI Compatible error, test the connection in **Model services** and check `concept.connection_test.*` in `Data/Logs/orchestrator.log` (or the configured `EVERSPARK_LOG_DIR`). A shared `job_id` ties the start and result together; records include the target, model, non-streaming setting, HTTP status, elapsed time, and upstream request ID without the API Key or full request body. Run `tail -n 80 Data/Logs/orchestrator.log` for recent results, and restart Orchestrator after updating to enable the new events. The adapter expects non-streaming Chat Completions and text in `choices[0].message.content`; optional JSON mode should remain off if the service rejects `response_format`.
 
+If no test event appears, run `./everspark status orchestrator`. An `external` service was started outside the managed runtime, so the managed `restart` does not restart it; use its original launch method. Also check whether `.env` overrides `ORCHESTRATOR_LOG` and inspect `Data/Logs/orchestrator-service.log` for console records.
+
 Successful images go to `Data/Outputs/`; **Download outputs ZIP** exports the entire folder. A failed generation does not imply any backup occurred.
 
 ## 6. An existing character is listed but not used
