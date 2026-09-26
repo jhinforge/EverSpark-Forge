@@ -1000,7 +1000,7 @@ class APITests(unittest.TestCase):
         self.assertEqual([record["event"] for record in records],
                          ["concept.connection_test.start", "concept.connection_test.failed"])
         self.assertEqual(records[0]["fields"]["path"], "/v1/chat/completions")
-        self.assertFalse(records[0]["fields"]["stream"])
+        self.assertNotIn("stream", records[0]["fields"])
         self.assertEqual(records[1]["fields"]["http_status"], 502)
         self.assertEqual(records[1]["fields"]["key_origin"], "form")
         self.assertEqual(records[1]["fields"]["upstream_request_id"], "trace-123")

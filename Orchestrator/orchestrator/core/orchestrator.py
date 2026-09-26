@@ -420,7 +420,7 @@ class Orchestrator:
                     path=("/v1/chat/completions" if parsed.path == "/v1"
                           else "[custom path]/chat/completions"),
                     model=str(payload.get("model", "")), method="POST",
-                    transport="urllib.request", stream=False, json_mode=False,
+                    transport="urllib.request", json_mode=False,
                 )
             result = self.test_concept_connection({**payload, "_trace_id": job_id})
             update = {"status": "completed", "result": result}
