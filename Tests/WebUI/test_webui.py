@@ -76,6 +76,9 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
             self._json(200, {"ok": True, "job": {"id": query.get("job_id", [""])[0], "status": "completed"}})
         elif parsed.path == "/concept/connections":
             self._json(200, {"ok": True, "default": "ollama", "connections": [{"id": "ollama", "name": "Ollama", "model": "local"}]})
+        elif parsed.path == "/concept/connections/test/jobs":
+            self._json(200, {"ok": True, "job": {"id": query.get("job_id", [""])[0],
+                                                 "status": "completed", "result": {"connected": True}}})
         elif parsed.path == "/resources":
             self._json(
                 200,
@@ -266,7 +269,10 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
             self._json(202, {"ok": True, "job": {"id": "a" * 32, "plugin": payload["plugin"], "status": "running"}})
         elif self.path == "/image/plugins/default":
             self._json(200, {"ok": True, "default": payload["plugin"]})
-        elif self.path in {"/concept/connections/save", "/concept/connections/test",
+        elif self.path == "/concept/connections/test":
+            type(self).received_connection = payload
+            self._json(202, {"ok": True, "job": {"id": "a" * 32, "status": "running"}})
+        elif self.path in {"/concept/connections/save",
                            "/concept/connections/remove", "/concept/connections/default"}:
             type(self).received_connection = payload
             self._json(200, {"ok": True, "connected": True, "default": payload.get("id", "ollama"),
@@ -485,8 +491,9 @@ class WebUIIntegrationTests(unittest.TestCase):
         payload = {"base_url": "https://example.test/v1", "api_key": "private-key",
                    "name": "Testing", "model": "exact-model"}
         status, tested = self.request_json("/api/concept/connections/test", payload)
-        self.assertEqual(status, 200)
-        self.assertTrue(tested["connected"])
+        self.assertEqual(status, 202)
+        _, polled = self.request_json("/api/concept/connections/test/jobs?job_id=" + tested["job"]["id"])
+        self.assertTrue(polled["job"]["result"]["connected"])
         self.assertEqual(MockUpstreamHandler.received_connection, payload)
 
     def test_remote_scan_is_proxied_without_waiting_for_model_listing(self) -> None:

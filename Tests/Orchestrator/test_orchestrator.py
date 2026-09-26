@@ -687,10 +687,16 @@ class APITests(unittest.TestCase):
             self._task_jobs = {}
             self.task_gate = None
             self.submit_calls = 0
+            self._connection_test_lock = threading.Lock()
+            self._connection_test_jobs = {}
+            self.connection_gate = None
 
         start_task = Orchestrator.start_task
         task_job = Orchestrator.task_job
         _execute_task = Orchestrator._execute_task
+        start_concept_connection_test = Orchestrator.start_concept_connection_test
+        _run_concept_connection_test = Orchestrator._run_concept_connection_test
+        concept_connection_test_job = Orchestrator.concept_connection_test_job
 
         def get_history(self, session_id):
             return [{"role": "user", "content": session_id}]
@@ -706,6 +712,8 @@ class APITests(unittest.TestCase):
             return {"default": "ollama", "connections": [{"id": "api_test", "model": payload["model"]}]}
 
         def test_concept_connection(self, payload):
+            if self.connection_gate is not None:
+                self.connection_gate.wait(2)
             return {"model": payload["model"], "connected": True}
 
         def remove_concept_connection(self, identifier):
@@ -928,8 +936,15 @@ class APITests(unittest.TestCase):
         payload = {"name": "Test", "base_url": "https://example.test/v1",
                    "api_key": "secret-key", "model": "actual-id"}
         status, tested = self._request("/concept/connections/test", payload)
-        self.assertEqual(status, 200)
-        self.assertTrue(tested["connected"])
+        self.assertEqual(status, 202)
+        job_id = tested["job"]["id"]
+        for _ in range(100):
+            _, test_job = self._request("/concept/connections/test/jobs?job_id=" + job_id)
+            if test_job["job"]["status"] == "completed":
+                break
+            time.sleep(.01)
+        self.assertTrue(test_job["job"]["result"]["connected"])
+        self.assertNotIn("secret-key", json.dumps(test_job))
         _, saved = self._request("/concept/connections/save", payload)
         self.assertEqual(saved["connections"][0]["model"], "actual-id")
         self.assertNotIn("secret-key", json.dumps(saved))
@@ -938,6 +953,27 @@ class APITests(unittest.TestCase):
         self.assertEqual(activated["default"], "api_test")
         _, removed = self._request("/concept/connections/remove", {"id": "api_test"})
         self.assertEqual(removed["removed"], "api_test")
+
+    def test_slow_connection_test_returns_a_job_without_exposing_credentials(self) -> None:
+        self.fake.connection_gate = threading.Event()
+        payload = {"name": "Slow", "base_url": "https://example.test/v1",
+                   "api_key": "private-key", "model": "slow-model"}
+        started_at = time.monotonic()
+        status, started = self._request("/concept/connections/test", payload)
+        self.assertEqual(status, 202)
+        self.assertLess(time.monotonic() - started_at, 1)
+        self.assertNotIn("private-key", json.dumps(started))
+        job_id = started["job"]["id"]
+        _, pending = self._request("/concept/connections/test/jobs?job_id=" + job_id)
+        self.assertEqual(pending["job"]["status"], "running")
+        self.fake.connection_gate.set()
+        for _ in range(100):
+            _, completed = self._request("/concept/connections/test/jobs?job_id=" + job_id)
+            if completed["job"]["status"] == "completed":
+                break
+            time.sleep(.01)
+        self.assertTrue(completed["job"]["result"]["connected"])
+        self.assertNotIn("private-key", json.dumps(completed))
 
     def test_storage_routes_use_the_infrastructure_boundary(self) -> None:
         status, scan = self._request("/storage/scan")

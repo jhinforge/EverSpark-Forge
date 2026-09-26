@@ -24,6 +24,8 @@ default. OpenAI Compatible connections can be added under **Model services** in
 the WebUI sidebar. Enter a connection name, an API base URL ending in `/v1`,
 the provider's exact model ID, and its API Key. Test before using it, then choose
 the service and model in Forge, or set it as the default for subject revisions.
+Connection tests run as background jobs so a slow model response does not hold
+the WebUI request open; the page polls for the result and displays provider errors.
 The adapter sends non-streaming Chat Completions requests. Optional JSON mode
 is disabled by default for services that do not implement `response_format`.
 Connections persist under `Data/Configuration/ConceptForge/connections.json`

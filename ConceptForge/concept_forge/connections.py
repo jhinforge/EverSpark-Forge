@@ -127,7 +127,7 @@ class ConceptConnections:
             identifier = str(payload.get("id", ""))
             old = next((entry for entry in self.connections if entry["id"] == identifier), None)
             settings = self._validated(payload, old)
-        adapter = OpenAICompatibleAdapter({**settings, "timeout": 30})
+        adapter = OpenAICompatibleAdapter({**settings, "timeout": 120})
         response = adapter.chat(ChatRequest(
             [{"role": "user", "content": "Reply with OK."}], settings["model"]
         ))

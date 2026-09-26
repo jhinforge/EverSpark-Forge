@@ -1034,8 +1034,30 @@ async function testModelService() {
   const button = $("#testModelService");
   button.disabled = true;
   try {
-    await modelServiceRequest("test", modelServicePayload());
-    showNotice(t("Model connection works."), "success");
+    const started = await modelServiceRequest("test", modelServicePayload());
+    if (!started.job?.id) throw new Error(t("Model connection test did not start."));
+    showNotice(t("Testing model connection..."), "success");
+    const deadline = Date.now() + 150000;
+    let failures = 0;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      let job;
+      try {
+        const response = await api(`/api/concept/connections/test/jobs?job_id=${encodeURIComponent(started.job.id)}`);
+        job = response.job;
+        failures = 0;
+      } catch (error) {
+        if (transientApiError(error) && ++failures < 4) continue;
+        throw error;
+      }
+      if (job?.status === "completed") {
+        showNotice(t("Model connection works."), "success");
+        return;
+      }
+      if (job?.status === "failed") throw new Error(job.error || t("Model connection test failed."));
+      if (job?.status !== "running") throw new Error(t("Invalid model connection test status."));
+    }
+    throw new Error(t("Model connection test timed out."));
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
 }

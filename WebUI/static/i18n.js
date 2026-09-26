@@ -278,6 +278,11 @@
     "{present}/{configured} managed logs are present.": "已找到 {present}/{configured} 份托管日志。",
     "The runtime log manifest is unavailable.": "运行日志清单不可用。",
     "Invalid server response (HTTP {status})": "服务器响应无效（HTTP {status}）",
+    "Testing model connection...": "正在测试模型连接…",
+    "Model connection test did not start.": "模型连接测试未能启动。",
+    "Model connection test failed.": "模型连接测试失败。",
+    "Invalid model connection test status.": "模型连接测试状态无效。",
+    "Model connection test timed out.": "模型连接测试超时。",
     "Request failed (HTTP {status})": "请求失败（HTTP {status}）",
   };
 

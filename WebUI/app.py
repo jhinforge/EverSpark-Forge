@@ -121,6 +121,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/generate/jobs": lambda: self._proxy_orchestrator_get("/tasks/jobs", parsed.query),
             "/api/image/plugins": lambda: self._proxy_orchestrator_get("/image/plugins"),
             "/api/concept/connections": lambda: self._proxy_orchestrator_get("/concept/connections"),
+            "/api/concept/connections/test/jobs": lambda: self._proxy_orchestrator_get(
+                "/concept/connections/test/jobs", parsed.query),
             "/api/image/plugins/jobs": lambda: self._proxy_orchestrator_get("/image/plugins/jobs", parsed.query),
             "/api/storage/resources": lambda: self._proxy_orchestrator_get(
                 "/storage/resources", parsed.query

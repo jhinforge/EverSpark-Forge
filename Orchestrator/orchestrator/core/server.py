@@ -70,6 +70,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send(502, {"ok": False, "error": str(exc)})
         elif parsed.path == "/concept/connections":
             self._send(200, {"ok": True, **self.server.orchestrator.concept_connections()})
+        elif parsed.path == "/concept/connections/test/jobs":
+            job_id = parse_qs(parsed.query).get("job_id", [""])[0]
+            try:
+                self._send(200, {"ok": True, "job": self.server.orchestrator.concept_connection_test_job(job_id)})
+            except ValueError as exc:
+                self._send(400, {"ok": False, "error": str(exc)})
         elif parsed.path == "/image/plugins/jobs":
             try:
                 job_id = parse_qs(parsed.query).get("job_id", [""])[0]
@@ -303,7 +309,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif request_path == "/concept/connections/save":
                 self._send(200, {"ok": True, **self.server.orchestrator.save_concept_connection(payload)})
             elif request_path == "/concept/connections/test":
-                self._send(200, {"ok": True, **self.server.orchestrator.test_concept_connection(payload)})
+                self._send(202, {"ok": True, "job": self.server.orchestrator.start_concept_connection_test(payload)})
             elif request_path == "/concept/connections/remove":
                 self._send(200, {"ok": True, **self.server.orchestrator.remove_concept_connection(str(payload.get("id", "")))})
             elif request_path == "/concept/connections/default":

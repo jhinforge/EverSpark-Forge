@@ -47,6 +47,8 @@ class Orchestrator:
         self._task_lock = threading.Lock()
         self._task_jobs_lock = threading.Lock()
         self._task_jobs: dict[str, dict[str, Any]] = {}
+        self._connection_test_lock = threading.Lock()
+        self._connection_test_jobs: dict[str, dict[str, Any]] = {}
 
     def start_task(
         self, user_text: str, session_id: str,
@@ -379,6 +381,40 @@ class Orchestrator:
 
     def test_concept_connection(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self.runner.concept_connections.test(payload)
+
+    def start_concept_connection_test(self, payload: dict[str, Any]) -> dict[str, Any]:
+        job_id = uuid.uuid4().hex
+        with self._connection_test_lock:
+            if len(self._connection_test_jobs) >= 100:
+                for old_id, old in self._connection_test_jobs.copy().items():
+                    if old["status"] in {"completed", "failed"}:
+                        del self._connection_test_jobs[old_id]
+                        break
+            if len(self._connection_test_jobs) >= 100:
+                raise BusyError("Too many model connection tests are running")
+            job = {"id": job_id, "status": "running"}
+            self._connection_test_jobs[job_id] = job
+        threading.Thread(target=self._run_concept_connection_test,
+                         args=(job_id, payload.copy()), daemon=True).start()
+        return job.copy()
+
+    def _run_concept_connection_test(self, job_id: str, payload: dict[str, Any]) -> None:
+        try:
+            result = self.test_concept_connection(payload)
+            update = {"status": "completed", "result": result}
+        except Exception as exc:
+            update = {"status": "failed", "error": str(exc)}
+        with self._connection_test_lock:
+            self._connection_test_jobs[job_id].update(update)
+
+    def concept_connection_test_job(self, job_id: str) -> dict[str, Any]:
+        if len(job_id) != 32 or any(char not in "0123456789abcdef" for char in job_id):
+            raise ValueError("Invalid model connection test ID")
+        with self._connection_test_lock:
+            job = self._connection_test_jobs.get(job_id)
+            if job is None:
+                raise ValueError("Unknown model connection test")
+            return job.copy()
 
     def remove_concept_connection(self, identifier: str) -> dict[str, Any]:
         return self.runner.concept_connections.remove(identifier)
