@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import io
+import logging
 import os
 import sys
 import tempfile
@@ -25,6 +27,7 @@ for module_directory in (
     sys.path.insert(0, str(REPO_ROOT / module_directory))
 
 from concept_forge.providers.ollama import GenerationPlan  # noqa: E402
+from concept_forge.port import ConceptError  # noqa: E402
 from concept_forge.subjects import CompiledSubject, new_subject  # noqa: E402
 from image_forge.workflow.manager import WorkflowManager, WorkflowError  # noqa: E402
 from image_forge.adapters.comfyui import ComfyUIAdapter  # noqa: E402
@@ -37,6 +40,7 @@ from orchestrator.config.config import load_config  # noqa: E402
 from orchestrator.core.orchestrator import Orchestrator  # noqa: E402
 from orchestrator.core.server import OrchestratorServer  # noqa: E402
 from orchestrator.core.task_runner import TaskRunner  # noqa: E402
+from everspark_logging import LogConfig, get_logger  # noqa: E402
 
 
 class FakeGateway:
@@ -974,6 +978,33 @@ class APITests(unittest.TestCase):
             time.sleep(.01)
         self.assertTrue(completed["job"]["result"]["connected"])
         self.assertNotIn("private-key", json.dumps(completed))
+
+    def test_connection_test_logs_http_failure_without_credentials(self) -> None:
+        output = io.StringIO()
+        self.fake.logger = get_logger(
+            "orchestrator", stream=output,
+            config=LogConfig(logging.INFO, "json", True, "test-run"),
+        )
+        def fail(_payload):
+            upstream = HTTPError("https://example.test/v1/chat/completions", 502,
+                                 "Bad Gateway", {"x-request-id": "trace-123", "cf-ray": "ray-456"}, None)
+            raise ConceptError("OpenAI Compatible HTTP 502: Upstream unavailable") from upstream
+        self.fake.test_concept_connection = fail
+        job_id = "a" * 32
+        self.fake._connection_test_jobs[job_id] = {"id": job_id, "status": "running"}
+        self.fake._run_concept_connection_test(job_id, {
+            "base_url": "https://example.test/v1", "api_key": "private-key",
+            "model": "gpt-5.6-terra",
+        })
+        records = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual([record["event"] for record in records],
+                         ["concept.connection_test.start", "concept.connection_test.failed"])
+        self.assertEqual(records[0]["fields"]["path"], "/v1/chat/completions")
+        self.assertFalse(records[0]["fields"]["stream"])
+        self.assertEqual(records[1]["fields"]["http_status"], 502)
+        self.assertEqual(records[1]["fields"]["upstream_request_id"], "trace-123")
+        self.assertNotIn("private-key", output.getvalue())
+        self.fake.logger.close()
 
     def test_storage_routes_use_the_infrastructure_boundary(self) -> None:
         status, scan = self._request("/storage/scan")

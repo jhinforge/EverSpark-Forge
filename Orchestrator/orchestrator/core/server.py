@@ -479,7 +479,7 @@ def main() -> int:
     host = str(config["orchestrator"]["host"])
     port = int(config["orchestrator"]["port"])
     try:
-        server = OrchestratorServer((host, port), Orchestrator(config), logger)
+        server = OrchestratorServer((host, port), Orchestrator(config, logger=logger), logger)
         logger.ok(
             "server.ready",
             "EverSpark Orchestrator is ready",

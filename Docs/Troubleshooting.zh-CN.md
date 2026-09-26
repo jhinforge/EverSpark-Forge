@@ -56,7 +56,7 @@ ComfyUI 工作流必须是注册的 **API Format JSON**，并有相应清单。�
 
 先看页面显示的任务错误与 **Gallery** 中的最近结果，再检查 `./everspark status`。ComfyUI 问题看 `Data/Logs/comfyui.log`，托管 Diffusers 进程看 `Data/Logs/diffusers.log`；插件安装任务也可能报告 `Data/Logs/image-plugin-diffusers.log`。任务提交或规划问题看 `Data/Logs/orchestrator-service.log`。早期安装的 Diffusers 如果显示 **需要修复**，在 Forge 点击**修复工具**补齐 PEFT，再测试 LoRA 或 VAE。
 
-如果是换了工作流、Checkpoint、VAE 或 LoRA 后才失败，先记录当前选择及报错，再对照所选引擎的要求。如果浏览器显示 HTTP 502，先查看 Forge 的后台任务状态及 Gallery：生成和规划是异步执行的，图片可能已经完成；无法查询任务时收集 WebUI 与 Orchestrator 日志。OpenAI Compatible 报错时先在**模型服务**测试连接，再查看 Orchestrator 日志；服务需要支持非流式 Chat Completions 并返回 `choices[0].message.content` 文本，不支持 `response_format` 的服务保持可选 JSON 模式关闭。生成失败不等于输出目录已经备份；成功结果默认写在 `Data/Outputs/`，Gallery 的 **Download outputs ZIP** 可下载整个输出目录。
+如果是换了工作流、Checkpoint、VAE 或 LoRA 后才失败，先记录当前选择及报错，再对照所选引擎的要求。如果浏览器显示 HTTP 502，先查看 Forge 的后台任务状态及 Gallery：生成和规划是异步执行的，图片可能已经完成；无法查询任务时收集 WebUI 与 Orchestrator 日志。OpenAI Compatible 报错时先在**模型服务**测试连接，再查看 `Data/Logs/orchestrator.log` 中的 `concept.connection_test.*` 记录（自定义日志目录以 `EVERSPARK_LOG_DIR` 为准）。同一 `job_id` 对应一次测试，记录请求目标、模型、非流式参数、HTTP 状态、耗时及上游请求 ID，不记录 API Key 或完整请求体。可运行 `tail -n 80 Data/Logs/orchestrator.log` 查看最近结果；更新后需重启 Orchestrator 才会记录新事件。服务需要支持非流式 Chat Completions 并返回 `choices[0].message.content` 文本，不支持 `response_format` 的服务保持可选 JSON 模式关闭。生成失败不等于输出目录已经备份；成功结果默认写在 `Data/Outputs/`，Gallery 的 **Download outputs ZIP** 可下载整个输出目录。
 
 ## 6. 旧角色在列表里，但当前对话没用上
 

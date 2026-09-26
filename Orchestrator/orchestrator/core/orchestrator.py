@@ -3,10 +3,13 @@ from __future__ import annotations
 import re
 
 import threading
+import time
 import uuid
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
+from urllib.parse import urlparse
 
 from concept_forge.subjects import compile_subject, update_subject, validate_subject
 from everspark_memory import SQLiteMemoryStore
@@ -30,8 +33,14 @@ class SubjectNotFoundError(LookupError):
     pass
 
 
+def _safe_header(headers: Any, name: str) -> str:
+    value = headers.get(name, "") if headers is not None else ""
+    return value if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", value) else ""
+
+
 class Orchestrator:
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any], logger: Any | None = None):
+        self.logger = logger
         self.runner = TaskRunner(config)
         self.storage = R2StorageManager(config)
         self.downloads = DirectDownloadManager(config)
@@ -399,11 +408,42 @@ class Orchestrator:
         return job.copy()
 
     def _run_concept_connection_test(self, job_id: str, payload: dict[str, Any]) -> None:
+        started = time.monotonic()
+        logger = getattr(self, "logger", None)
         try:
+            if logger is not None:
+                parsed = urlparse(str(payload.get("base_url", "")))
+                logger.info(
+                    "concept.connection_test.start", "Model connection test started",
+                    job_id=job_id, host=parsed.hostname or "",
+                    path=("/v1/chat/completions" if parsed.path == "/v1"
+                          else "[custom path]/chat/completions"),
+                    model=str(payload.get("model", "")), method="POST",
+                    transport="urllib.request", stream=False, json_mode=False,
+                )
             result = self.test_concept_connection(payload)
             update = {"status": "completed", "result": result}
+            if logger is not None:
+                logger.ok(
+                    "concept.connection_test.ok", "Model connection test completed",
+                    job_id=job_id, http_status=200,
+                    elapsed_ms=round((time.monotonic() - started) * 1000),
+                )
         except Exception as exc:
             update = {"status": "failed", "error": str(exc)}
+            if logger is not None:
+                upstream = exc.__cause__ if isinstance(exc.__cause__, HTTPError) else None
+                headers = upstream.headers if upstream is not None else None
+                logger.warning(
+                    "concept.connection_test.failed", "Model connection test failed",
+                    job_id=job_id, error_type=type(exc).__name__,
+                    http_status=upstream.code if upstream is not None else None,
+                    upstream_request_id=_safe_header(headers, "x-request-id"),
+                    cf_ray=_safe_header(headers, "cf-ray"),
+                    elapsed_ms=round((time.monotonic() - started) * 1000),
+                    error=(str(exc).replace(str(payload.get("api_key", "")), "[REDACTED]")
+                           if payload.get("api_key") else str(exc)),
+                )
         with self._connection_test_lock:
             self._connection_test_jobs[job_id].update(update)
 
