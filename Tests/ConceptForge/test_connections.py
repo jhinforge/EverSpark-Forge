@@ -11,12 +11,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "ConceptForge"))
+sys.path.insert(0, str(REPO_ROOT / "ForgeLayer" / "ConceptForge"))
 
 from concept_forge.connections import ConceptConnections  # noqa: E402
 from concept_forge.port import ConceptError  # noqa: E402
 from concept_forge.service import ConceptService  # noqa: E402
-sys.path.insert(0, str(REPO_ROOT / "Runtime/Logging"))
+sys.path.insert(0, str(REPO_ROOT / "Infrastructure/Logging"))
 from everspark_logging import LogConfig, get_logger  # noqa: E402
 
 

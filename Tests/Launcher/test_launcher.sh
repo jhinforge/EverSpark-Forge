@@ -46,41 +46,41 @@ grep -q 'ComfyUI: v0.37.0' <<< "$setup_plan"
 grep -q 'Ollama: 0.34.2' <<< "$setup_plan"
 
 EVERSPARK_LOG_DIR="${TEST_ROOT}/logs" bash "${REPO_ROOT}/everspark" init >/dev/null
-grep -q 'No .env file found; local defaults remain active' "${TEST_ROOT}/logs/launcher.log"
+grep -q 'No .env file found; local defaults remain active' "${TEST_ROOT}/logs/launcher/launcher.log"
 
 doctor_output="$(PATH="${PATH}" EVERSPARK_STORAGE_BACKEND=local EVERSPARK_NETWORK_BACKEND=local \
   bash "${REPO_ROOT}/everspark" doctor 2>&1)"
 grep -q 'EverSpark base runtime is ready' <<< "$doctor_output"
 
 install_root="${TEST_ROOT}/install"
-EVERSPARK_CLI_PATH="${install_root}/everspark" bash "${REPO_ROOT}/Launcher/install.sh" >/dev/null
+EVERSPARK_CLI_PATH="${install_root}/everspark" bash "${REPO_ROOT}/NodeCore/Launcher/install.sh" >/dev/null
 installed_help="$(bash "${install_root}/everspark" help)"
 grep -q 'EverSpark Forge CLI' <<< "$installed_help"
 
 # A completed setup installs the CLI; dry runs and failed setup do not.
 setup_root="${TEST_ROOT}/setup-fixture"
-mkdir -p "${setup_root}/Launcher" "${setup_root}/Runtime/Managed"
-cp "${REPO_ROOT}/Launcher/setup.sh" "${REPO_ROOT}/Launcher/install.sh" "${setup_root}/Launcher/"
+mkdir -p "${setup_root}/NodeCore/Launcher" "${setup_root}/NodeCore/Runtime/Managed"
+cp "${REPO_ROOT}/NodeCore/Launcher/setup.sh" "${REPO_ROOT}/NodeCore/Launcher/install.sh" "${setup_root}/NodeCore/Launcher/"
 cp "${REPO_ROOT}/everspark" "${setup_root}/everspark"
-printf '#!/usr/bin/env bash\nexit 0\n' > "${setup_root}/Launcher/init.sh"
-cat > "${setup_root}/Runtime/Managed/install_runtime.sh" <<'SH'
+printf '#!/usr/bin/env bash\nexit 0\n' > "${setup_root}/NodeCore/Launcher/init.sh"
+cat > "${setup_root}/NodeCore/Runtime/Managed/install_runtime.sh" <<'SH'
 #!/usr/bin/env bash
 if [ "${FAIL_RUNTIME:-0}" = 1 ]; then exit 9; fi
 SH
 setup_cli="${TEST_ROOT}/setup-cli/everspark"
-EVERSPARK_CLI_PATH="$setup_cli" bash "${setup_root}/Launcher/setup.sh" --plan --skip-models
+EVERSPARK_CLI_PATH="$setup_cli" bash "${setup_root}/NodeCore/Launcher/setup.sh" --plan --skip-models
 [ ! -e "$setup_cli" ]
 if FAIL_RUNTIME=1 EVERSPARK_CLI_PATH="$setup_cli" \
-    bash "${setup_root}/Launcher/setup.sh" --skip-models >/dev/null 2>&1; then
+    bash "${setup_root}/NodeCore/Launcher/setup.sh" --skip-models >/dev/null 2>&1; then
   printf 'failed setup unexpectedly installed the CLI\n' >&2
   exit 1
 fi
 [ ! -e "$setup_cli" ]
-EVERSPARK_CLI_PATH="$setup_cli" bash "${setup_root}/Launcher/setup.sh" --skip-models >/dev/null
+EVERSPARK_CLI_PATH="$setup_cli" bash "${setup_root}/NodeCore/Launcher/setup.sh" --skip-models >/dev/null
 [ "$(readlink -f "$setup_cli")" = "${setup_root}/everspark" ]
-EVERSPARK_CLI_PATH="$setup_cli" bash "${setup_root}/Launcher/setup.sh" --skip-models >/dev/null
+EVERSPARK_CLI_PATH="$setup_cli" bash "${setup_root}/NodeCore/Launcher/setup.sh" --skip-models >/dev/null
 printf 'another command\n' > "${TEST_ROOT}/collision"
-if EVERSPARK_CLI_PATH="${TEST_ROOT}/collision" bash "${setup_root}/Launcher/install.sh" >/dev/null 2>&1; then
+if EVERSPARK_CLI_PATH="${TEST_ROOT}/collision" bash "${setup_root}/NodeCore/Launcher/install.sh" >/dev/null 2>&1; then
   printf 'CLI installer overwrote an existing command\n' >&2
   exit 1
 fi
@@ -89,9 +89,9 @@ grep -q 'another command' "${TEST_ROOT}/collision"
 # A user without ~/.local/bin in PATH receives idempotent shell setup.
 cli_home="${TEST_ROOT}/cli-home"
 mkdir -p "$cli_home"
-HOME="$cli_home" PATH=/usr/bin:/bin bash "${setup_root}/Launcher/install.sh" >/dev/null
+HOME="$cli_home" PATH=/usr/bin:/bin bash "${setup_root}/NodeCore/Launcher/install.sh" >/dev/null
 [ -L "$cli_home/.local/bin/everspark" ]
-HOME="$cli_home" PATH=/usr/bin:/bin bash "${setup_root}/Launcher/install.sh" >/dev/null
+HOME="$cli_home" PATH=/usr/bin:/bin bash "${setup_root}/NodeCore/Launcher/install.sh" >/dev/null
 [ "$(grep -Fc 'export PATH="$HOME/.local/bin:$PATH"' "$cli_home/.bashrc")" = 1 ]
 
 orchestrator_help="$(bash "${REPO_ROOT}/everspark" orchestrator help)"

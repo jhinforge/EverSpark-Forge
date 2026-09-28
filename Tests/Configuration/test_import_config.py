@@ -10,7 +10,7 @@ from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "Configuration"))
+sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Configuration"))
 
 import import_config  # noqa: E402
 
@@ -41,7 +41,7 @@ def write_tunnel_files(source: Path, env_name: str = "env.txt") -> None:
 
 class ConfigurationImportTests(unittest.TestCase):
     def test_cli_defaults_to_repository_import_inbox(self) -> None:
-        expected = REPO_ROOT / "Configuration" / "Import"
+        expected = REPO_ROOT / "Infrastructure" / "Configuration" / "Import"
         imported = {
             "environment_file": str(REPO_ROOT / ".env"),
             "network_backend": "local",

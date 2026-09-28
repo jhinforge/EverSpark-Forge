@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "${TEST_DIR}/../../.." && pwd)"
 
 export EVERSPARK_LOG_CONSOLE=0
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/Runtime/Hardware/torch_profile.sh"
+source "${REPO_ROOT}/NodeCore/Runtime/Hardware/torch_profile.sh"
 
 [ "$(core_torch_profile_select 89 12.8 12.8)" = "cu128" ]
 [ "$(core_torch_profile_select 120 12.8 12.8)" = "cu128" ]

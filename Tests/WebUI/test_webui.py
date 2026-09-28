@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_PATH = REPO_ROOT / "WebUI" / "app.py"
-sys.path.insert(0, str(REPO_ROOT / "Runtime" / "Logging"))
+sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Logging"))
 SPEC = importlib.util.spec_from_file_location("everspark_webui", APP_PATH)
 assert SPEC and SPEC.loader
 app = importlib.util.module_from_spec(SPEC)

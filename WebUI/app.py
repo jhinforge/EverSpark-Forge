@@ -21,7 +21,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parent
 STATIC_ROOT = ROOT / "static"
 REPO_ROOT = ROOT.parent
-sys.path.insert(0, str(REPO_ROOT / "Runtime" / "Logging"))
+sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Logging"))
 
 from everspark_logging import EverSparkLogger, get_logger  # noqa: E402
 from log_manifest import ManifestError, collect_log_status  # noqa: E402

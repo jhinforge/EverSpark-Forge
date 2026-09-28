@@ -4,13 +4,8 @@ import secrets
 from pathlib import Path
 from typing import Any, Callable
 
-from concept_forge.connections import ConceptConnections
-from concept_forge.service import ConceptService, GenerationPlan
-from concept_forge.subjects import CompiledSubject
-from image_forge.adapters import create_engines, discover_plugins
-from image_forge.gateway import ImageGateway
-from image_forge.port import ImageRequest
-from image_forge.plugins import PluginManager
+from forge_layer.concept import ConceptConnections, ConceptService, CompiledSubject, GenerationPlan
+from forge_layer.image import ImageGateway, ImageRequest, PluginManager, create_engines, discover_plugins
 
 
 class TaskError(RuntimeError):

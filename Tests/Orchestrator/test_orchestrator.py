@@ -19,10 +19,11 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 for module_directory in (
     "Orchestrator",
-    "ConceptForge",
-    "ImageForge",
-    "Memory",
-    "Runtime/Logging",
+    "ForgeLayer",
+    "ForgeLayer/ConceptForge",
+    "ForgeLayer/ImageForge",
+    "ForgeLayer/ConceptForge/Memory",
+    "Infrastructure/Logging",
 ):
     sys.path.insert(0, str(REPO_ROOT / module_directory))
 

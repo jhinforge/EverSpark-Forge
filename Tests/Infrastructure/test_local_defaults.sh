@@ -7,7 +7,7 @@ TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/Configuration/load_config.sh"
+source "${REPO_ROOT}/Infrastructure/Configuration/load_config.sh"
 
 unset EVERSPARK_TEST_VALUE || true
 core_config_default EVERSPARK_TEST_VALUE local
@@ -21,7 +21,7 @@ bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/start_tunnel.sh"
 bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/check_tunnel.sh"
 bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/stop_tunnel.sh"
 
-grep -q "Cloudflare Tunnel is disabled" "${TEST_ROOT}/logs/tunnel.log"
+grep -q "Cloudflare Tunnel is disabled" "${TEST_ROOT}/logs/tunnel/tunnel.log"
 
 # Enabling the optional remote backend installs rclone exactly once. Keep this
 # test isolated from the host package manager by replacing only the command

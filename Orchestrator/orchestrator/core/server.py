@@ -10,10 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from concept_forge.subjects import SubjectValidationError
-from concept_forge.port import ConceptError
-from concept_forge.trace import trace_scope
-from everspark_memory import SubjectRevisionConflictError
+from forge_layer.concept import ConceptError, SubjectRevisionConflictError, SubjectValidationError, trace_scope
 
 from ..config.config import ConfigError, load_config
 from .orchestrator import BusyError, Orchestrator, SubjectNotFoundError
@@ -23,7 +20,7 @@ from r2_manager import StorageError  # noqa: E402
 from download_manager import DownloadError  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "Runtime" / "Logging"))
+sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Logging"))
 
 from everspark_logging import EverSparkLogger, get_logger  # noqa: E402
 

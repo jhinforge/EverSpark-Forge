@@ -5,11 +5,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/Runtime/Logging/log.sh"
+source "${REPO_ROOT}/Infrastructure/Logging/log.sh"
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/Shared/Shell/common.sh"
+source "${REPO_ROOT}/Infrastructure/Shared/Shell/common.sh"
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/Configuration/load_config.sh"
+source "${REPO_ROOT}/Infrastructure/Configuration/load_config.sh"
 
 LOG_DIR="${EVERSPARK_LOG_DIR:-${REPO_ROOT}/Data/Logs}"
 TUNNEL_LOG="${TUNNEL_LOG:-${LOG_DIR}/tunnel/tunnel.log}"

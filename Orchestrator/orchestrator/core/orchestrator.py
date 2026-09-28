@@ -11,8 +11,7 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
-from concept_forge.subjects import compile_subject, update_subject, validate_subject
-from everspark_memory import SQLiteMemoryStore
+from forge_layer.concept import SQLiteMemoryStore, compile_subject, update_subject, validate_subject
 
 from .task_runner import TaskRunner
 from .text import normalize_unicode

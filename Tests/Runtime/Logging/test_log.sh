@@ -3,7 +3,7 @@ set -euo pipefail
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${TEST_DIR}/../../.." && pwd)"
-LOGGING_DIR="${REPO_ROOT}/Runtime/Logging"
+LOGGING_DIR="${REPO_ROOT}/Infrastructure/Logging"
 TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 

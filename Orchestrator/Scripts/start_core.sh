@@ -9,6 +9,6 @@ if [ -f "${REPO_ROOT}/.env" ]; then
   source "${REPO_ROOT}/.env"
   set +a
 fi
-export PYTHONPATH="${REPO_ROOT}/Orchestrator:${REPO_ROOT}/ConceptForge:${REPO_ROOT}/ImageForge:${REPO_ROOT}/Memory:${REPO_ROOT}/Runtime/Logging${PYTHONPATH:+:${PYTHONPATH}}"
+export PYTHONPATH="${REPO_ROOT}/Orchestrator:${REPO_ROOT}/ForgeLayer:${REPO_ROOT}/ForgeLayer/ConceptForge:${REPO_ROOT}/ForgeLayer/ImageForge:${REPO_ROOT}/ForgeLayer/ConceptForge/Memory:${REPO_ROOT}/Infrastructure/Logging${PYTHONPATH:+:${PYTHONPATH}}"
 cd "$PROJECT_ROOT"
 exec python3 -m orchestrator.core.server

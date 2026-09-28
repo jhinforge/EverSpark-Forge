@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "Memory"))
+sys.path.insert(0, str(REPO_ROOT / "ForgeLayer" / "ConceptForge" / "Memory"))
 
 from everspark_memory import (  # noqa: E402
     SQLiteMemoryStore,
@@ -31,7 +31,7 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
                 connection.execute("INSERT INTO session_subjects VALUES (?, ?, ?, ?)",
                                    ("old-session", "ember-keeper", "earlier", "earlier"))
             store = SQLiteMemoryStore(str(database))
-            document = json.loads((REPO_ROOT / "ConceptForge/Examples/character_subject.example.json").read_text())
+            document = json.loads((REPO_ROOT / "ForgeLayer/ConceptForge/Examples/character_subject.example.json").read_text())
             store.save_subject(document)
             store.select_session_subject("new-session", "ember-keeper")
             self.assertEqual(store.get_session_subject_id("old-session"), "ember-keeper")
@@ -46,7 +46,7 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / "memory.db"
             store = SQLiteMemoryStore(str(database))
-            document = json.loads((REPO_ROOT / "ConceptForge" / "Examples" /
+            document = json.loads((REPO_ROOT / "ForgeLayer" / "ConceptForge" / "Examples" /
                                    "character_subject.example.json").read_text(encoding="utf-8"))
             document["prompt_contract"] = {
                 "positive_terms": ["solo"], "negative_terms": ["different hair color"],
@@ -81,7 +81,7 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / "memory.db"
             store = SQLiteMemoryStore(str(database))
-            document = json.loads((REPO_ROOT / "ConceptForge/Examples/character_subject.example.json").read_text())
+            document = json.loads((REPO_ROOT / "ForgeLayer/ConceptForge/Examples/character_subject.example.json").read_text())
             store.save_subject(document)
             store.save_subject_prompt("ember-keeper", "portrait, dramatic light", "bad anatomy")
             changed = json.loads(json.dumps(document))
@@ -156,7 +156,7 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
     def test_subject_versions_are_persistent_and_sequential(self) -> None:
         example_path = (
             REPO_ROOT
-            / "ConceptForge"
+            / "ForgeLayer" / "ConceptForge"
             / "Examples"
             / "character_subject.example.json"
         )

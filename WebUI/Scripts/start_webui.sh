@@ -12,6 +12,6 @@ if [ -f "${REPO_ROOT}/.env" ]; then
   set +a
 fi
 
-export PYTHONPATH="${REPO_ROOT}/Runtime/Logging${PYTHONPATH:+:${PYTHONPATH}}"
+export PYTHONPATH="${REPO_ROOT}/Infrastructure/Logging${PYTHONPATH:+:${PYTHONPATH}}"
 cd "$PROJECT_ROOT"
 exec python3 app.py

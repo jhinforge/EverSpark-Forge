@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/Runtime/Logging/log.sh"
+source "${REPO_ROOT}/Infrastructure/Logging/log.sh"
 
 EVERSPARK_CONFIG_FILE="${EVERSPARK_CONFIG_FILE:-${CORE_CONFIG_FILE:-${REPO_ROOT}/.env}}"
 if [ -f "$EVERSPARK_CONFIG_FILE" ]; then

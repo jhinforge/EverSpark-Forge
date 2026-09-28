@@ -49,9 +49,9 @@
     "max_history_messages": 20
   },
   "workflow": {
-    "directory": "ImageForge/Workflows",
+    "directory": "ForgeLayer/ImageForge/Workflows",
     "default_workflow": "base-illustrious",
-    "template": "ImageForge/Workflows/base_workflow_api.json",
+    "template": "ForgeLayer/ImageForge/Workflows/base_workflow_api.json",
     "positive_prompt_node": "34",
     "negative_prompt_node": "7",
     "seed_node": "31",

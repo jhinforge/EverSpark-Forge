@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "ImageForge"))
+sys.path.insert(0, str(ROOT / "ForgeLayer" / "ImageForge"))
 from image_forge.gateway import ImageGateway  # noqa: E402
 from image_forge.adapters import PluginManifest, discover_plugins  # noqa: E402
 from image_forge.plugins import PluginManager  # noqa: E402
@@ -116,7 +116,7 @@ class ImageGatewayTests(unittest.TestCase):
             gateway = ImageGateway(worker, str(root / "memory.db"), root / "outputs")
             manifest = PluginManifest("diffusers", "Diffusers", "image_forge.adapters.diffusers",
                                       "DiffusersAdapter", "diffusers", "Data/Runtime/Diffusers/peft-ready",
-                                      "Runtime/Managed/install_diffusers.sh")
+                                      "NodeCore/Runtime/Managed/install_diffusers.sh")
             manager = PluginManager({"diffusers": manifest}, gateway, root)
             self.assertFalse(manager.plugins()["plugins"][0]["installed"])
             actions = []
@@ -142,7 +142,7 @@ class ImageGatewayTests(unittest.TestCase):
                               else "start" for args in actions], ["stop", "install", "start"])
 
     def test_comfyui_adapter_translates_shared_request_into_workflow(self):
-        config = {"directory": str(ROOT / "ImageForge/Workflows"),
+        config = {"directory": str(ROOT / "ForgeLayer/ImageForge/Workflows"),
                   "default_workflow": "base-illustrious",
                   "managed_default_checkpoint": "Illustrious-XL-v1.0.safetensors"}
         adapter = ComfyUIAdapter({"base_url": "http://127.0.0.1:8188"},

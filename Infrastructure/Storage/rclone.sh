@@ -5,11 +5,11 @@
 
 _EVERSPARK_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck disable=SC1091
-source "${_EVERSPARK_REPO_ROOT}/Runtime/Logging/log.sh"
+source "${_EVERSPARK_REPO_ROOT}/Infrastructure/Logging/log.sh"
 # shellcheck disable=SC1091
-source "${_EVERSPARK_REPO_ROOT}/Shared/Shell/common.sh"
+source "${_EVERSPARK_REPO_ROOT}/Infrastructure/Shared/Shell/common.sh"
 # shellcheck disable=SC1091
-source "${_EVERSPARK_REPO_ROOT}/Runtime/System/apt.sh"
+source "${_EVERSPARK_REPO_ROOT}/NodeCore/Runtime/System/apt.sh"
 
 core_rclone_install() {
   if core_command_exists rclone; then

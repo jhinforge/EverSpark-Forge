@@ -29,7 +29,7 @@ write_fake_gpu_count() {
 export PATH="${TEST_ROOT}/bin:${PATH}"
 export EVERSPARK_LOG_CONSOLE=0
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/Runtime/Hardware/gpu_assignment.sh"
+source "${REPO_ROOT}/NodeCore/Runtime/Hardware/gpu_assignment.sh"
 
 write_fake_gpu_count 1
 export CUDA_VISIBLE_DEVICES=7

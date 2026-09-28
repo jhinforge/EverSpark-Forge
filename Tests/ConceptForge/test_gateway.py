@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "ConceptForge"))
+sys.path.insert(0, str(REPO_ROOT / "ForgeLayer" / "ConceptForge"))
 
 from concept_forge.adapters import create_adapters  # noqa: E402
 from concept_forge.adapters.ollama import OllamaAdapter  # noqa: E402

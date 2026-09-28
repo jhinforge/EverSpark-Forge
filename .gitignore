@@ -2,12 +2,13 @@
 .env
 .env.*
 !.env.example
-Configuration/user.yaml
-Configuration/user.yml
-Configuration/user.json
-Configuration/user.toml
-Configuration/Import/*
-!Configuration/Import/README.md
+Infrastructure/Configuration/user.yaml
+Infrastructure/Configuration/user.yml
+Infrastructure/Configuration/user.json
+Infrastructure/Configuration/user.toml
+Infrastructure/Configuration/Import/*
+!Infrastructure/Configuration/Import/README.md
+!Infrastructure/Configuration/Import/.gitkeep
 
 # Runtime state
 Data/*
