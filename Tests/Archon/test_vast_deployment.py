@@ -136,6 +136,47 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(failed["exit_code"], 1)
             self.assertIn("zstd", failed["detail"])
 
+    def test_rejected_duplicate_key_is_accepted_only_after_ssh_proof(self):
+        class DuplicateKeyProvider(Provider):
+            def __call__(self, request, timeout):
+                if request.full_url.endswith("/instances/99/ssh"):
+                    return io.BytesIO(json.dumps({"success": False,
+                        "error": "SSH key already attached"}).encode())
+                return super().__call__(request, timeout)
+
+        provider, store = DuplicateKeyProvider(), FakeCredentialStore()
+        store.set("key")
+        machines = VastInstances(store, opener=provider)
+        with self.assertRaisesRegex(VastError, "already attached"):
+            machines.attach_ssh(99, "ssh-ed25519 TEST")
+        calls = []
+        def run(argv, **kwargs):
+            calls.append(argv[-1])
+            return CompletedProcess(argv, 0, "abc123", "")
+        with tempfile.TemporaryDirectory() as directory:
+            manager = DeploymentManager(machines, Identity(), run=run,
+                state_path=Path(directory) / "states.json")
+            job = manager.start(99, "deploy")
+            for _ in range(100):
+                found = manager.job(job["id"])
+                if found["status"] != "running":
+                    break
+                time.sleep(.01)
+            self.assertEqual(found["status"], "completed")
+            self.assertEqual(calls[0], "true")
+            self.assertTrue(any("deploy.sh" in command for command in calls))
+
+            manager.run = lambda argv, **kwargs: CompletedProcess(argv, 255, "", "Permission denied")
+            failed = manager.start(99, "deploy")
+            for _ in range(100):
+                found = manager.job(failed["id"])
+                if found["status"] != "running":
+                    break
+                time.sleep(.01)
+            self.assertEqual(found["status"], "failed")
+            self.assertEqual(found["stage"], "attach_ssh_key")
+            self.assertIn("already attached", found["detail"])
+
     def test_one_instance_runs_one_remote_task_at_a_time(self):
         provider, store = Provider(), FakeCredentialStore()
         store.set("key")

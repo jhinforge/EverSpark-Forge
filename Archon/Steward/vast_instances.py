@@ -98,10 +98,29 @@ class VastInstances:
         try:
             with self.opener(request, timeout=15) as response:
                 payload = json.load(response)
-        except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+        except HTTPError as exc:
+            try:
+                detail = self._ssh_error(json.load(exc), public_key, key)
+            except (ValueError, OSError):
+                detail = ""
+            raise VastError(f"Vast SSH key request failed (HTTP {exc.code})"
+                            + (f": {detail}" if detail else "")) from None
+        except (URLError, TimeoutError, OSError, ValueError):
             raise VastError("Could not attach deployment SSH key to Vast instance") from None
         if not isinstance(payload, dict) or payload.get("success") is not True:
-            raise VastError("Vast rejected the deployment SSH key")
+            detail = self._ssh_error(payload, public_key, key)
+            raise VastError("Vast rejected the deployment SSH key"
+                            + (f": {detail}" if detail else ""))
+
+    @staticmethod
+    def _ssh_error(payload: object, public_key: str, api_key: str) -> str:
+        if not isinstance(payload, dict):
+            return "Unexpected Vast response"
+        for field in ("error", "msg"):
+            value = payload.get(field)
+            if isinstance(value, str) and value.strip():
+                return value.replace(public_key, "[SSH key]").replace(api_key, "[API key]")[:300]
+        return "Unexpected Vast response"
 
     def one(self, instance_id: int) -> dict:
         key = self.store.get()

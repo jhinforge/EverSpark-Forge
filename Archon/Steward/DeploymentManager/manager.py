@@ -94,7 +94,15 @@ class DeploymentManager:
         try:
             public_key = self.identity.public_key()
             stage = "attach_ssh_key"
-            self.machines.attach_ssh(instance_id, public_key)
+            try:
+                self.machines.attach_ssh(instance_id, public_key)
+            except VastError as attachment_error:
+                # A key previously attached to this instance may be rejected as
+                # a duplicate. Continue only if this exact local identity works.
+                try:
+                    self._ssh(machine, "true")
+                except (VastError, OSError, subprocess.SubprocessError):
+                    raise attachment_error from None
             if action == "deploy":
                 command = (f"test -d {REPO}/.git || {{ echo 'Pod repository is missing' >&2; exit 1; }}; "
                            f"bash {REPO}/Legate/Forge/ConceptForge/Scripts/deploy.sh")
