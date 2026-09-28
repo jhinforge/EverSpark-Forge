@@ -10,6 +10,7 @@ from urllib.request import Request, urlopen
 
 
 API_URL = "https://console.vast.ai/api/v1/instances"
+CREATE_URL = "https://console.vast.ai/api/v0/asks/"
 _CURSOR = re.compile(r"[A-Za-z0-9_+/=-]{0,1024}\Z")
 
 
@@ -51,6 +52,75 @@ class VastInstances:
 
     def remove(self) -> None:
         self.store.delete()
+
+    def create(self, offer: dict, image: str) -> dict:
+        key = self.store.get()
+        if not key:
+            raise VastError("Configure the Vast API Key first", 409)
+        disk = offer["disk_gb"]
+        if not isinstance(image, str) or not image.startswith("nvidia/cuda:"):
+            raise VastError("Invalid base image", 400)
+        # SSH mode supplies the first connection. Git is installed inside the
+        # container, then the source is cloned; Forge installation is separate.
+        onstart = (
+            "apt-get update && apt-get install -y git ca-certificates && "
+            "if [ ! -d /workspace/EverSpark-Forge/.git ]; then "
+            "git clone --branch refactor/distributed-architecture --single-branch "
+            "https://github.com/jhinforge/EverSpark-Forge.git /workspace/EverSpark-Forge; fi"
+        )
+        request = Request(f"{CREATE_URL}{offer['id']}/",
+            data=json.dumps({"image": image, "disk": disk, "runtype": "ssh_direct",
+                             "onstart": onstart, "cancel_unavail": True,
+                             "label": "EverSpark Forge"}).encode("utf-8"),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            method="PUT")
+        try:
+            with self.opener(request, timeout=20) as response:
+                payload = json.load(response)
+        except HTTPError as exc:
+            if exc.code in (401, 403):
+                raise VastError("Vast rejected the API Key", 401) from None
+            raise VastError(f"Vast could not create this instance (HTTP {exc.code})") from None
+        except (URLError, TimeoutError, OSError, ValueError):
+            raise VastError("Cannot reach Vast or read its rental response") from None
+        if not isinstance(payload, dict) or payload.get("success") is False or not isinstance(payload.get("new_contract"), int):
+            raise VastError("Vast did not create an instance; search again")
+        return {"instance_id": payload["new_contract"], "image": image, "disk_gb": disk}
+
+    def attach_ssh(self, instance_id: int, public_key: str) -> None:
+        key = self.store.get()
+        if not key:
+            raise VastError("Configure the Vast API Key first", 409)
+        request = Request(f"https://console.vast.ai/api/v0/instances/{instance_id}/ssh",
+            data=json.dumps({"ssh_key": public_key}).encode("utf-8"),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            method="POST")
+        try:
+            with self.opener(request, timeout=15) as response:
+                payload = json.load(response)
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+            raise VastError("Could not attach deployment SSH key to Vast instance") from None
+        if not isinstance(payload, dict) or payload.get("success") is not True:
+            raise VastError("Vast rejected the deployment SSH key")
+
+    def one(self, instance_id: int) -> dict:
+        key = self.store.get()
+        if not key:
+            raise VastError("Configure the Vast API Key first", 409)
+        if not isinstance(instance_id, int) or isinstance(instance_id, bool) or instance_id < 1:
+            raise VastError("Invalid instance ID", 400)
+        request = Request(f"https://console.vast.ai/api/v0/instances/{instance_id}",
+                          headers={"Authorization": f"Bearer {key}", "Accept": "application/json"})
+        try:
+            with self.opener(request, timeout=10) as response:
+                payload = json.load(response)
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+            raise VastError("Could not inspect Vast instance") from None
+        item = payload.get("instances") if isinstance(payload, dict) else None
+        if not isinstance(item, dict) or item.get("id") != instance_id:
+            raise VastError("Vast instance was not found", 404)
+        return {field: item.get(field) for field in (
+            "id", "actual_status", "ssh_host", "ssh_port", "gpu_name", "num_gpus")}
 
     def list(self, after_token: str = "") -> dict:
         key = self.store.get()

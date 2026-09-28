@@ -1,16 +1,9 @@
 from __future__ import annotations
 
 import secrets
-from pathlib import Path
 from typing import Any, Callable
 
-from concept_forge.connections import ConceptConnections
-from concept_forge.service import ConceptService, GenerationPlan
-from concept_forge.subjects import CompiledSubject
-from image_forge.adapters import create_engines, discover_plugins
-from image_forge.gateway import ImageGateway
-from image_forge.port import ImageRequest
-from image_forge.plugins import PluginManager
+from .forge_bindings import LocalForgeBindings
 
 
 class TaskError(RuntimeError):
@@ -18,25 +11,19 @@ class TaskError(RuntimeError):
 
 
 class TaskRunner:
-    def __init__(self, config: dict[str, Any], concept_logger: Any = None):
+    def __init__(self, config: dict[str, Any], concept_logger: Any = None,
+                 bindings: Any = None):
         concept_config = config["concept_forge"]
-        image_config = config["image_forge"]
-        adapter = str(image_config.get("adapter", "")).strip().lower()
         try:
-            self.concept_connections = ConceptConnections(concept_config, logger=concept_logger)
-            self.concept = ConceptService(self.concept_connections.gateway)
+            self.bindings = bindings or LocalForgeBindings(config, concept_logger)
         except ValueError as exc:
             raise TaskError(str(exc)) from exc
-        self.manifests = discover_plugins()
-        self.engines = create_engines(image_config["adapters"], config["workflow"],
-                                      self.manifests)
-        self.gateway = ImageGateway(
-            self.engines, config["memory"]["database"],
-            image_config.get("output_directory", str(
-                Path(config["memory"]["database"]).parents[1] / "Outputs")),
-            default_engine=adapter,
-        )
-        self.plugins = PluginManager(self.manifests, self.gateway)
+        self.concept_connections = self.bindings.concept_connections
+        self.concept = self.bindings.concept
+        self.manifests = self.bindings.manifests
+        self.engines = self.bindings.engines
+        self.gateway = self.bindings.gateway
+        self.plugins = self.bindings.plugins
         self.image = self.gateway.select()
         self.supported_models = {
             str(model).strip().lower()
@@ -50,7 +37,7 @@ class TaskRunner:
         user_text: str,
         history: list[dict[str, str]] | None = None,
         notify: Callable[[str], None] | None = None,
-        subject: CompiledSubject | None = None,
+        subject: Any = None,
         selection: dict[str, Any] | None = None,
         saved_negative_prompt: str | None = None,
         previous_positive_prompt: str = "",
@@ -120,7 +107,7 @@ class TaskRunner:
         selected_loras: list[dict[str, Any]] = []
         for index in range(1, plan.count + 1):
             seed = secrets.randbelow(2**63)
-            prompt_id, resolved = self.gateway.submit(ImageRequest(
+            prompt_id, resolved = self.gateway.submit(getattr(self, "bindings", LocalForgeBindings).image_request(
                 positive_prompt=positive_prompt, negative_prompt=negative_prompt,
                 seed=seed, workflow=workflow_id, checkpoint=checkpoint,
                 vae=vae, loras=loras), notify or (lambda _message: None),
@@ -209,7 +196,7 @@ class TaskRunner:
         notify: Callable[[str], None],
         llm_model: str = "",
         concept_provider: str = "",
-    ) -> GenerationPlan:
+    ) -> Any:
         attempts = self.max_model_retries + 1
         for attempt in range(attempts):
             kwargs = {}

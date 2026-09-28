@@ -1121,7 +1121,7 @@ function activeOfferFilters(filters) {
   const labels = [t("On-demand"), t("Verified"), t("Rentable"), t("NVIDIA")];
   const names = {
     gpu_name: "GPU model", num_gpus: "GPU count", min_gpu_ram_gb: "Minimum VRAM (GB)",
-    country: "Country code", max_hourly_usd: "Maximum $/hour",
+    country: "Country/region code", max_hourly_usd: "Maximum $/hour",
     min_reliability: "Minimum reliability", disk_gb: "Disk size (GB)",
   };
   for (const [key, label] of Object.entries(names)) {
@@ -1130,7 +1130,7 @@ function activeOfferFilters(filters) {
   return labels.join(" · ");
 }
 
-function renderOffer(offer) {
+function renderOffer(offer, diskGb) {
   const card = document.createElement("article");
   card.className = "machine-card";
   const title = document.createElement("h3");
@@ -1159,7 +1159,24 @@ function renderOffer(offer) {
   const down = offer.inet_down_cost == null ? "?" : Number(offer.inet_down_cost).toFixed(3);
   transfer.textContent = `${t("Upload / download")}: $${up} / $${down} per GB`;
   details.append(summary, id, disk, transfer);
-  card.append(title, price, location, memory, reliability, details);
+  const rent = document.createElement("button");
+  rent.className = "secondary-button";
+  uiText(rent, "Configure and rent");
+  rent.disabled = Number(offer.cuda_max_good) < 12.8 || !Number.isFinite(Number(offer.cuda_max_good));
+  rent.addEventListener("click", async () => {
+    const summary = `${t("Rent this on-demand Pod?")}\n${title.textContent} · ${location.textContent}\n${price.textContent} · ${diskGb} GB\nnvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04`;
+    if (!window.confirm(summary)) return;
+    rent.disabled = true;
+    try {
+      const result = await api("/api/machines/vast/rent", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offer_id: offer.id }),
+      });
+      showNotice(`Vast #${result.instance_id} · ${t("Loading machines…")}`, "success");
+      await loadMachines();
+    } catch (error) { showNotice(error.message); rent.disabled = false; }
+  });
+  card.append(title, price, location, memory, reliability, details, rent);
   elements.vastOfferList.appendChild(card);
 }
 
@@ -1183,7 +1200,7 @@ async function loadVastOffers(event) {
     });
     if (requestId !== state.vastOfferRequest) return;
     elements.vastOfferList.replaceChildren();
-    for (const offer of result.offers || []) renderOffer(offer);
+    for (const offer of result.offers || []) renderOffer(offer, result.disk_gb);
     if (!elements.vastOfferList.childElementCount) {
       offerMessage("No offers matched these filters.");
       const details = document.createElement("p");
@@ -1200,6 +1217,25 @@ async function loadVastOffers(event) {
   } finally {
     if (requestId === state.vastOfferRequest) button.disabled = false;
   }
+}
+
+async function runPodAction(instanceId, action, message = "") {
+  const result = await api(`/api/machines/vast/${action}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instance_id: instanceId, ...(action === "discuss" ? { message } : {}) }),
+  });
+  await loadMachines();
+  for (let attempt = 0; attempt < 900; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const data = await api(`/api/machines/vast/deployment-job?id=${encodeURIComponent(result.job.id)}`);
+    if (data.job.status === "running") continue;
+    await loadMachines();
+    if (data.job.status === "failed") { showNotice(t("Deployment failed")); return; }
+    if (action === "discuss") showNotice(data.job.reply, "success");
+    else showNotice(action === "deploy" ? t("Concept Forge ready") : t("Source updated; deploy again"), "success");
+    return;
+  }
+  showNotice(t("Deployment in progress"));
 }
 
 function renderMachine(machine) {
@@ -1224,6 +1260,36 @@ function renderMachine(machine) {
     const address = document.createElement("p");
     address.textContent = `SSH: ${machine.ssh_host}:${machine.ssh_port || "?"}`;
     card.appendChild(address);
+  }
+  const forge = document.createElement("p");
+  const labels = {not_deployed: "Not deployed", deploying: "Deployment in progress",
+    ready: "Concept Forge ready", deployment_failed: "Deployment failed",
+    source_updated: "Source updated; deploy again",
+    updating: "Source updating", update_failed: "Source update failed"};
+  forge.textContent = t(labels[machine.forge?.status] || "Not deployed") +
+    (machine.forge?.revision ? ` · ${machine.forge.revision}` : "");
+  card.appendChild(forge);
+  if (machine.actual_status === "running" && machine.ssh_host) {
+    const actions = document.createElement("div");
+    actions.className = "machine-actions";
+    for (const [action, label] of [["deploy", "Deploy Concept Forge"],
+                                    ["update-source", "Update source"],
+                                    ["discuss", "Test discussion"]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost-button";
+      uiText(button, label);
+      if (action === "discuss" && machine.forge?.status !== "ready") button.disabled = true;
+      button.addEventListener("click", () => {
+        const message = action === "discuss" ? window.prompt(t("Enter a message to test the remote Concept Forge")) : "";
+        if (action === "discuss" && !message?.trim()) return;
+        button.disabled = true;
+        runPodAction(machine.id, action, message || "").catch((error) => showNotice(error.message))
+          .finally(() => { button.disabled = false; });
+      });
+      actions.appendChild(button);
+    }
+    card.appendChild(actions);
   }
   elements.vastInstanceList.appendChild(card);
 }
@@ -2064,6 +2130,12 @@ function bindEvents() {
   });
   $("#vastCredentialForm").addEventListener("submit", saveVastKey);
   $("#vastOfferForm").addEventListener("submit", loadVastOffers);
+  $("#toggleVastOffers").addEventListener("click", (event) => {
+    const panel = $("#vastOffersPanel");
+    panel.hidden = !panel.hidden;
+    event.currentTarget.setAttribute("aria-expanded", String(!panel.hidden));
+    uiText(event.currentTarget, panel.hidden ? "Expand" : "Collapse");
+  });
   elements.removeVastKey.addEventListener("click", removeVastKey);
   $("#refreshMachines").addEventListener("click", () => { void loadMachines(); });
   elements.moreVastInstances.addEventListener("click", () => {

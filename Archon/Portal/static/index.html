@@ -269,6 +269,8 @@
               <button class="ghost-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
             </div>
           </form>
+          <div class="section-toolbar machine-heading"><h3>Search Vast offers</h3><button class="ghost-button" id="toggleVastOffers" type="button" aria-expanded="true">Collapse</button></div>
+          <div id="vastOffersPanel">
           <form class="storage-panel offer-search" id="vastOfferForm">
             <div>
               <p class="section-kicker">AVAILABLE PODS</p>
@@ -279,7 +281,7 @@
               <label>GPU model<input name="gpu_name" type="text" list="vastGpuNames" placeholder="Any (e.g. RTX 3090)" maxlength="64"><datalist id="vastGpuNames"></datalist></label>
               <label>GPU count<input name="num_gpus" type="number" min="1" max="32" step="1" placeholder="Any"></label>
               <label>Minimum VRAM (GB)<input name="min_gpu_ram_gb" type="number" min="1" max="192" step="1" placeholder="Any"></label>
-              <label>Country code<input name="country" type="text" maxlength="2" pattern="[A-Za-z]{2}" placeholder="Any (e.g. JP)"></label>
+              <label>Country/region code<input name="country" type="text" maxlength="2" pattern="[A-Za-z]{2}" placeholder="Any (e.g. JP)"></label>
               <label>Maximum $/hour<input name="max_hourly_usd" type="number" min="0.01" max="1000" step="0.01" placeholder="Any"></label>
               <label>Minimum reliability<input name="min_reliability" type="number" min="0" max="1" step="0.01" value="0.98"></label>
               <label>Disk size (GB)<input name="disk_gb" type="number" min="8" max="1000" step="1" value="50" required></label>
@@ -289,6 +291,7 @@
             <p class="section-copy" id="vastOfferSummary">Hourly offers reflect the selected disk size. Bandwidth may cost extra.</p>
           </form>
           <div class="machine-list" id="vastOfferList" aria-live="polite"></div>
+          </div>
           <div class="section-toolbar machine-heading"><div><p class="section-kicker">MY PODS</p><h3>Existing instances</h3></div></div>
           <div class="machine-list" id="vastInstanceList" aria-live="polite"></div>
           <button class="secondary-button" id="moreVastInstances" type="button" hidden>Load more</button>

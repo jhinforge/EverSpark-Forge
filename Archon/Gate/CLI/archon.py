@@ -40,6 +40,8 @@ def start() -> int:
     from Archon.Steward.vast_instances import VastInstances
     from Archon.Steward.vast_offers import VastOffers
     from Archon.Vault.windows_credentials import WindowsCredentialStore
+    from Archon.Vault.ssh_identity import SSHIdentity
+    from Archon.Steward.DeploymentManager.manager import DeploymentManager
     from Archon.Portal.app import LOG_DIR, LOG_FILE, WebUIServer, get_logger, load_settings
 
     logger = get_logger("webui", LOG_FILE)
@@ -52,7 +54,8 @@ def start() -> int:
         store = WindowsCredentialStore() if sys.platform == "win32" else None
         machines = VastInstances(store) if store else None
         offers = VastOffers(store) if store else None
-        backend = ControlServer(("127.0.0.1", backend_port), machines, offers)
+        deployments = DeploymentManager(machines, SSHIdentity()) if machines else None
+        backend = ControlServer(("127.0.0.1", backend_port), machines, offers, deployments)
         portal = WebUIServer(load_settings(), logger)
         worker = threading.Thread(target=backend.serve_forever, name="archon-backend", daemon=True)
         worker.start()

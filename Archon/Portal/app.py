@@ -129,6 +129,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "/machines/vast/instances", parsed.query),
             "/api/machines/vast/gpu-names": lambda: self._proxy_control_get(
                 "/machines/vast/gpu-names"),
+            "/api/machines/vast/deployment-job": lambda: self._proxy_control_get(
+                "/machines/vast/deployment-job", parsed.query),
             "/api/resources": lambda: self._proxy_orchestrator_get(
                 "/resources", parsed.query
             ),
@@ -199,7 +201,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         }
         try:
             if path in {"/api/machines/vast/credential", "/api/machines/vast/credential/remove",
-                        "/api/machines/vast/offers"}:
+                        "/api/machines/vast/offers", "/api/machines/vast/rent",
+                        "/api/machines/vast/deploy", "/api/machines/vast/update-source",
+                        "/api/machines/vast/discuss"}:
                 if not self._local_control_request():
                     return
                 if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":

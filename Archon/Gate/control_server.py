@@ -8,14 +8,16 @@ from urllib.parse import urlsplit
 
 from Archon.Steward.vast_instances import VastError
 from Archon.Vault.windows_credentials import CredentialError
+from Legate.Envoy.base_image import select_base_image
 
 
 class ControlServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], machines=None, offers=None):
+    def __init__(self, address: tuple[str, int], machines=None, offers=None, deployments=None):
         self.machines = machines
         self.offers = offers
+        self.deployments = deployments
         super().__init__(address, ControlHandler)
 
 
@@ -35,7 +37,18 @@ class ControlHandler(BaseHTTPRequestHandler):
                 elif path == "/machines/vast/instances":
                     from urllib.parse import parse_qs
                     cursor = parse_qs(parsed.query).get("after_token", [""])[0]
-                    self._send(200, {"ok": True, **self.server.machines.list(cursor)})
+                    result = self.server.machines.list(cursor)
+                    if self.server.deployments:
+                        for machine in result["instances"]:
+                            machine["forge"] = self.server.deployments.status(machine["id"])
+                    self._send(200, {"ok": True, **result})
+                elif path == "/machines/vast/deployment-job":
+                    from urllib.parse import parse_qs
+                    job_id = parse_qs(parsed.query).get("id", [""])[0]
+                    if not self.server.deployments:
+                        self._send(503, {"ok": False, "error": "Deployment is unavailable"})
+                    else:
+                        self._send(200, {"ok": True, "job": self.server.deployments.job(job_id)})
                 elif path == "/machines/vast/gpu-names":
                     if self.server.offers is None:
                         self._send(503, {"ok": False, "error": "Offer search is unavailable"})
@@ -115,6 +128,24 @@ class ControlHandler(BaseHTTPRequestHandler):
                         self._send(503, {"ok": False, "error": "Offer search is unavailable"})
                     else:
                         self._send(200, {"ok": True, **self.server.offers.search(payload)})
+                elif path == "/machines/vast/rent":
+                    if not self.server.offers or not self.server.deployments or set(payload) != {"offer_id"}:
+                        raise VastError("Invalid rental request", 400)
+                    offer = self.server.offers.quote(payload["offer_id"])
+                    try:
+                        image = select_base_image(offer)
+                    except ValueError as exc:
+                        raise VastError(str(exc), 400) from None
+                    self._send(200, {"ok": True, **self.server.machines.create(offer, image)})
+                elif path in {"/machines/vast/deploy", "/machines/vast/update-source",
+                              "/machines/vast/discuss"}:
+                    if not self.server.deployments or set(payload) - {"instance_id", "message"}:
+                        raise VastError("Invalid deployment request", 400)
+                    action = {"/machines/vast/deploy": "deploy",
+                              "/machines/vast/update-source": "update",
+                              "/machines/vast/discuss": "discuss"}[path]
+                    self._send(202, {"ok": True, "job": self.server.deployments.start(
+                        payload.get("instance_id"), action, payload.get("message", ""))})
                 else:
                     self._send(404, {"ok": False, "error": "Not found"})
             except (ValueError, UnicodeError):

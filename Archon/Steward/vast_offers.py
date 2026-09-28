@@ -36,6 +36,15 @@ class VastOffers:
         self.opener = opener
         self._gpu_names = ()
         self._gpu_names_at = 0
+        self._quotes = {}
+
+    def quote(self, offer_id: int) -> dict:
+        if not isinstance(offer_id, int) or isinstance(offer_id, bool) or offer_id < 1:
+            raise VastError("Invalid offer ID", 400)
+        quote = self._quotes.get(offer_id)
+        if not quote or time.time() - quote["seen_at"] > 300:
+            raise VastError("Offer expired; search again before renting", 409)
+        return dict(quote)
 
     def gpu_names(self) -> dict:
         key = self.store.get()
@@ -142,10 +151,13 @@ class VastOffers:
         if (not isinstance(payload, dict) or payload.get("success") is False or
                 not isinstance(payload.get("offers"), list)):
             raise VastError("Vast returned an invalid offer list")
-        fields = ("id", "gpu_name", "num_gpus", "gpu_ram", "geolocation",
+        fields = ("id", "gpu_name", "num_gpus", "gpu_ram", "geolocation", "cuda_max_good",
                   "dph_total", "reliability", "disk_space", "storage_cost",
                   "inet_up_cost", "inet_down_cost", "verified")
         offers = [{field: offer.get(field) for field in fields}
                   for offer in payload["offers"] if isinstance(offer, dict)]
+        seen_at = time.time()
+        self._quotes = {item["id"]: {**item, "seen_at": seen_at, "disk_gb": int(disk)}
+                        for item in offers if isinstance(item["id"], int)}
         return {"offers": offers, "disk_gb": int(disk),
                 "fetched_at": int(time.time()), "limit": 50}
