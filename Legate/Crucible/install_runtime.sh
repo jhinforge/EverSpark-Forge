@@ -153,13 +153,7 @@ core_info runtime.torch.profile "Selected managed PyTorch compatibility profile"
 
 mkdir -p "${REPO_ROOT}/Data/Runtime" "${REPO_ROOT}/Data/Models/ImageForge/checkpoints"
 
-if ! command -v ollama >/dev/null 2>&1; then
-  core_info runtime.ollama.install "Installing pinned Ollama runtime" \
-    "version=${OLLAMA_VERSION}"
-  curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION="$OLLAMA_VERSION" sh
-fi
-core_ok runtime.ollama.ready "Ollama runtime is available" \
-  "version=$(ollama --version 2>/dev/null || true)"
+bash "${REPO_ROOT}/Legate/Forge/ConceptForge/Scripts/install_runtime.sh"
 
 if [ ! -d "${COMFY_ROOT}/.git" ]; then
   if [ -e "$COMFY_ROOT" ]; then

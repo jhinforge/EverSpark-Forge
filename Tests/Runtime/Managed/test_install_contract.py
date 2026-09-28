@@ -32,6 +32,23 @@ class ManagedInstallContractTests(unittest.TestCase):
             with self.subTest(package=package):
                 self.assertRegex(installer, rf"(?m)^  {package}$")
 
+    def test_pod_and_terminal_share_concept_install_steps(self) -> None:
+        root = REPO_ROOT / "Legate"
+        full_runtime = (root / "Crucible/install_runtime.sh").read_text(encoding="utf-8")
+        full_setup = (root / "Crucible/setup.sh").read_text(encoding="utf-8")
+        pod = (root / "Forge/ConceptForge/Scripts/deploy.sh").read_text(encoding="utf-8")
+        concept_runtime = (root / "Forge/ConceptForge/Scripts/install_runtime.sh").read_text(encoding="utf-8")
+        models = (root / "Crucible/install_models.sh").read_text(encoding="utf-8")
+        self.assertIn('ConceptForge/Scripts/install_runtime.sh', full_runtime)
+        self.assertIn('ConceptForge/Scripts/install_runtime.sh', pod)
+        self.assertIn('Crucible/install_models.sh', full_setup)
+        self.assertIn('Crucible/install_models.sh', pod)
+        self.assertIn('python3-venv zstd', concept_runtime)
+        self.assertIn('OLLAMA_VERSION="$OLLAMA_VERSION" sh', concept_runtime)
+        self.assertIn('download --models "$SELECTION"', models)
+        self.assertIn('import-concept', models)
+        self.assertIn('--models concept --keep-concept-running', pod)
+
 
 if __name__ == "__main__":
     unittest.main()

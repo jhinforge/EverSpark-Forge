@@ -3,7 +3,6 @@ set -euo pipefail
 
 LAUNCHER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${LAUNCHER_DIR}/../.." && pwd)"
-MODEL_TOOLS="${REPO_ROOT}/Data/Runtime/ModelTools"
 SELECTION="all"
 PLAN_ONLY=false
 SKIP_IMPORT=false
@@ -80,29 +79,8 @@ if [ "$SKIP_MODELS" = true ]; then
   exit 0
 fi
 
-python3 -m venv "$MODEL_TOOLS"
-"${MODEL_TOOLS}/bin/python" -m pip install --disable-pip-version-check 'huggingface_hub>=1,<2'
-"${MODEL_TOOLS}/bin/python" "${REPO_ROOT}/Legate/Crucible/Models/model_manager.py" download --models "$SELECTION"
-
-if { [ "$SELECTION" = all ] || [ "$SELECTION" = concept ]; } && [ "$SKIP_IMPORT" = false ]; then
-  concept_was_running=false
-  if python3 "${REPO_ROOT}/Legate/Warden/runtime_manager.py" status concept \
-    | grep -q '"managed": true'; then
-    concept_was_running=true
-  fi
-  python3 "${REPO_ROOT}/Legate/Warden/runtime_manager.py" start concept
-  cleanup_setup_concept() {
-    if [ "$concept_was_running" = false ]; then
-      python3 "${REPO_ROOT}/Legate/Warden/runtime_manager.py" stop concept \
-        >/dev/null 2>&1 || true
-    fi
-  }
-  trap cleanup_setup_concept EXIT
-  export OLLAMA_HOST="${EVERSPARK_OLLAMA_HOST:-127.0.0.1:11434}"
-  export OLLAMA_MODELS="${OLLAMA_MODELS:-${REPO_ROOT}/Data/Models/ConceptForge/Ollama}"
-  "${MODEL_TOOLS}/bin/python" "${REPO_ROOT}/Legate/Crucible/Models/model_manager.py" import-concept
-  trap - EXIT
-  cleanup_setup_concept
-fi
+model_options=(--models "$SELECTION")
+if [ "$SKIP_IMPORT" = true ]; then model_options+=(--skip-concept-import); fi
+bash "${REPO_ROOT}/Legate/Crucible/install_models.sh" "${model_options[@]}"
 
 bash "${REPO_ROOT}/Archon/Gate/CLI/install.sh"
