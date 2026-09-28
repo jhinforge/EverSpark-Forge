@@ -13,8 +13,9 @@ from Archon.Vault.windows_credentials import CredentialError
 class ControlServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], machines=None):
+    def __init__(self, address: tuple[str, int], machines=None, offers=None):
         self.machines = machines
+        self.offers = offers
         super().__init__(address, ControlHandler)
 
 
@@ -104,6 +105,11 @@ class ControlHandler(BaseHTTPRequestHandler):
                 elif path == "/machines/vast/credential/remove":
                     self.server.machines.remove()
                     self._send(200, {"ok": True, "configured": False})
+                elif path == "/machines/vast/offers":
+                    if self.server.offers is None:
+                        self._send(503, {"ok": False, "error": "Offer search is unavailable"})
+                    else:
+                        self._send(200, {"ok": True, **self.server.offers.search(payload)})
                 else:
                     self._send(404, {"ok": False, "error": "Not found"})
             except (ValueError, UnicodeError):

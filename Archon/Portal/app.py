@@ -196,7 +196,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/subjects/compile": "/subjects/compile",
         }
         try:
-            if path in {"/api/machines/vast/credential", "/api/machines/vast/credential/remove"}:
+            if path in {"/api/machines/vast/credential", "/api/machines/vast/credential/remove",
+                        "/api/machines/vast/offers"}:
                 if not self._local_control_request():
                     return
                 if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":

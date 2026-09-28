@@ -345,6 +345,12 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .machine-card p { margin-top: 9px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .machine-card .machine-state { color: var(--cyan); }
 .machine-empty { grid-column: 1 / -1; padding: 20px; border: 1px solid var(--line); border-radius: 13px; color: var(--muted); background: var(--panel); }
+.offer-search { display: grid; gap: 16px; }
+.offer-search h3 { margin: 7px 0; font-size: 19px; }
+.offer-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; }
+.offer-filters label { display: grid; gap: 7px; color: var(--muted); font-size: 12px; }
+.offer-filters input, .offer-filters select { width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--text); background: var(--panel-solid); }
+.machine-heading { margin-top: 28px; }
 .model-service-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .model-service-fields label { display: grid; gap: 7px; color: var(--muted); font-size: 11px; }
 .model-service-fields input { min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--text); background: var(--panel-solid); }

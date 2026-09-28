@@ -38,6 +38,7 @@ def start() -> int:
     sys.path.insert(0, str(REPO_ROOT))
     from Archon.Gate.control_server import ControlServer
     from Archon.Steward.vast_instances import VastInstances
+    from Archon.Steward.vast_offers import VastOffers
     from Archon.Vault.windows_credentials import WindowsCredentialStore
     from Archon.Portal.app import LOG_DIR, LOG_FILE, WebUIServer, get_logger, load_settings
 
@@ -48,8 +49,10 @@ def start() -> int:
     worker = None
     try:
         backend_port = int(os.environ.get("EVERSPARK_ORCHESTRATOR_PORT", "8765"))
-        machines = VastInstances(WindowsCredentialStore()) if sys.platform == "win32" else None
-        backend = ControlServer(("127.0.0.1", backend_port), machines)
+        store = WindowsCredentialStore() if sys.platform == "win32" else None
+        machines = VastInstances(store) if store else None
+        offers = VastOffers(store) if store else None
+        backend = ControlServer(("127.0.0.1", backend_port), machines, offers)
         portal = WebUIServer(load_settings(), logger)
         worker = threading.Thread(target=backend.serve_forever, name="archon-backend", daemon=True)
         worker.start()

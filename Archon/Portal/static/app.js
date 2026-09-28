@@ -26,6 +26,7 @@ const state = {
   storageJob: null,
   backupJob: null,
   vastNextToken: null,
+  vastOfferRequest: 0,
 };
 localStorage.setItem("everspark.session", state.sessionId);
 
@@ -134,6 +135,8 @@ const elements = {
   vastCredentialStatus: $("#vastCredentialStatus"),
   vastApiKey: $("#vastApiKey"),
   vastInstanceList: $("#vastInstanceList"),
+  vastOfferList: $("#vastOfferList"),
+  vastOfferSummary: $("#vastOfferSummary"),
   moreVastInstances: $("#moreVastInstances"),
   removeVastKey: $("#removeVastKey"),
   cancelDirectDownload: $("#cancelDirectDownload"),
@@ -1081,7 +1084,7 @@ function setView(name) {
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
-  if (name === "machines") loadMachines();
+  if (name === "machines") { loadMachines(); loadVastOffers(); }
   if (name === "models") loadModelConnections();
   if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadRestorePoints()]);
 }
@@ -1091,6 +1094,79 @@ function machineMessage(message) {
   empty.className = "machine-empty";
   uiText(empty, message);
   elements.vastInstanceList.replaceChildren(empty);
+}
+
+function offerMessage(message) {
+  const empty = document.createElement("p");
+  empty.className = "machine-empty";
+  uiText(empty, message);
+  elements.vastOfferList.replaceChildren(empty);
+}
+
+function renderOffer(offer) {
+  const card = document.createElement("article");
+  card.className = "machine-card";
+  const title = document.createElement("h3");
+  title.textContent = `${offer.num_gpus || 0} × ${offer.gpu_name || "GPU unknown"}`;
+  const price = document.createElement("p");
+  price.className = "machine-state";
+  price.textContent = Number.isFinite(Number(offer.dph_total)) && offer.dph_total != null
+    ? `$${Number(offer.dph_total).toFixed(3)} / hour` : t("Price unavailable");
+  const location = document.createElement("p");
+  location.textContent = offer.geolocation || t("Location unknown");
+  const memory = document.createElement("p");
+  memory.textContent = offer.gpu_ram != null && Number.isFinite(Number(offer.gpu_ram))
+    ? `${(Number(offer.gpu_ram) / 1024).toFixed(1)} GB VRAM / GPU` : t("VRAM unknown");
+  const reliability = document.createElement("p");
+  reliability.textContent = offer.reliability != null && Number.isFinite(Number(offer.reliability))
+    ? `${t("Reliability")}: ${(Number(offer.reliability) * 100).toFixed(1)}%` : t("Reliability unknown");
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  uiText(summary, "Offer details");
+  const id = document.createElement("p");
+  id.textContent = `${t("Offer ID")}: ${offer.id}`;
+  const disk = document.createElement("p");
+  disk.textContent = `${t("Available disk")}: ${offer.disk_space ?? "?"} GB`;
+  const transfer = document.createElement("p");
+  const up = offer.inet_up_cost == null ? "?" : Number(offer.inet_up_cost).toFixed(3);
+  const down = offer.inet_down_cost == null ? "?" : Number(offer.inet_down_cost).toFixed(3);
+  transfer.textContent = `${t("Upload / download")}: $${up} / $${down} per GB`;
+  details.append(summary, id, disk, transfer);
+  card.append(title, price, location, memory, reliability, details);
+  elements.vastOfferList.appendChild(card);
+}
+
+async function loadVastOffers(event) {
+  if (event) event.preventDefault();
+  const requestId = ++state.vastOfferRequest;
+  const button = $("#searchVastOffers");
+  button.disabled = true;
+  offerMessage("Searching available Pods…");
+  try {
+    const credential = await api("/api/machines/vast/credential");
+    if (!credential.configured) {
+      offerMessage("Save a Vast API Key to search offers.");
+      return;
+    }
+    const form = new FormData($("#vastOfferForm"));
+    const filters = Object.fromEntries([...form.entries()].filter(([, value]) => value !== ""));
+    const result = await api("/api/machines/vast/offers", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(filters),
+    });
+    if (requestId !== state.vastOfferRequest) return;
+    elements.vastOfferList.replaceChildren();
+    for (const offer of result.offers || []) renderOffer(offer);
+    if (!elements.vastOfferList.childElementCount) offerMessage("No offers matched these filters.");
+    const fetched = new Date(result.fetched_at * 1000).toLocaleTimeString();
+    uiText(elements.vastOfferSummary, "Offer summary", {
+      count: (result.offers || []).length, disk: result.disk_gb, time: fetched,
+    });
+  } catch (error) {
+    if (requestId === state.vastOfferRequest) offerMessage(error.message);
+  } finally {
+    if (requestId === state.vastOfferRequest) button.disabled = false;
+  }
 }
 
 function renderMachine(machine) {
@@ -1163,6 +1239,7 @@ async function saveVastKey(event) {
     uiText(elements.vastCredentialStatus, "Vast API Key saved on this machine.");
     elements.removeVastKey.hidden = false;
     renderMachinesPage(result);
+    void loadVastOffers();
     showNotice(t("Vast connection verified and saved."), "success");
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
@@ -1175,6 +1252,9 @@ async function removeVastKey() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
     });
     elements.vastApiKey.value = "";
+    ++state.vastOfferRequest;
+    $("#searchVastOffers").disabled = false;
+    offerMessage("Save a Vast API Key to search offers.");
     await loadMachines();
   } catch (error) { showNotice(error.message); }
 }
@@ -1945,9 +2025,10 @@ function bindEvents() {
     hideNotice();
     await Promise.all([loadSubjects(), loadRuntime(), loadImagePlugins(), loadRemoteStorage()]);
     await loadResources();
-    if ($("#machinesView").classList.contains("active")) await loadMachines();
+    if ($("#machinesView").classList.contains("active")) await Promise.all([loadMachines(), loadVastOffers()]);
   });
   $("#vastCredentialForm").addEventListener("submit", saveVastKey);
+  $("#vastOfferForm").addEventListener("submit", loadVastOffers);
   elements.removeVastKey.addEventListener("click", removeVastKey);
   $("#refreshMachines").addEventListener("click", () => { void loadMachines(); });
   elements.moreVastInstances.addEventListener("click", () => {
