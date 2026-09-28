@@ -38,6 +38,7 @@
     "Country code": "国家代码",
     "Country/region code": "国家/地区代码",
     "Collapse": "折叠",
+    "No error output": "没有错误输出",
     "Expand": "展开",
     "Configure and rent": "配置并租用",
     "Deploy Concept Forge": "部署 Concept Forge",

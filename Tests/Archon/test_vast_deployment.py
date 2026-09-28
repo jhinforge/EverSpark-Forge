@@ -108,6 +108,34 @@ class DeploymentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             select_base_image({"cuda_max_good": 12.1})
 
+    def test_failed_job_identifies_ssh_or_pod_execution(self):
+        provider, store = Provider(), FakeCredentialStore()
+        store.set("key")
+
+        def complete(manager):
+            job = manager.start(99, "deploy")
+            for _ in range(100):
+                found = manager.job(job["id"])
+                if found["status"] != "running":
+                    return found
+                time.sleep(.01)
+            self.fail("Deployment job did not finish")
+
+        with tempfile.TemporaryDirectory() as directory:
+            machines = VastInstances(store, opener=provider)
+            manager = DeploymentManager(machines, Identity(), state_path=Path(directory) / "states.json",
+                run=lambda args, **kw: CompletedProcess(args, 255, "", "Permission denied (publickey)."))
+            failed = complete(manager)
+            self.assertEqual(failed["stage"], "ssh_connection")
+            self.assertEqual(failed["exit_code"], 255)
+            self.assertIn("Permission denied", failed["detail"])
+
+            manager.run = lambda args, **kw: CompletedProcess(args, 1, "", "zstd: command not found")
+            failed = complete(manager)
+            self.assertEqual(failed["stage"], "pod_command")
+            self.assertEqual(failed["exit_code"], 1)
+            self.assertIn("zstd", failed["detail"])
+
     def test_one_instance_runs_one_remote_task_at_a_time(self):
         provider, store = Provider(), FakeCredentialStore()
         store.set("key")

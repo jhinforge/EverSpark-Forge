@@ -1230,7 +1230,12 @@ async function runPodAction(instanceId, action, message = "") {
     const data = await api(`/api/machines/vast/deployment-job?id=${encodeURIComponent(result.job.id)}`);
     if (data.job.status === "running") continue;
     await loadMachines();
-    if (data.job.status === "failed") { showNotice(t("Deployment failed")); return; }
+    if (data.job.status === "failed") {
+      const stage = data.job.stage || "unknown";
+      const code = data.job.exit_code == null ? "" : ` (exit ${data.job.exit_code})`;
+      showNotice(`${t("Deployment failed")} · ${stage}${code}: ${data.job.detail || t("No error output")}`);
+      return;
+    }
     if (action === "discuss") showNotice(data.job.reply, "success");
     else showNotice(action === "deploy" ? t("Concept Forge ready") : t("Source updated; deploy again"), "success");
     return;

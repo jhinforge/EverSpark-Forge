@@ -18,6 +18,14 @@ REPO = "/workspace/EverSpark-Forge"
 _HOST = re.compile(r"[A-Za-z0-9.-]{1,253}\Z")
 
 
+class RemoteCommandError(VastError):
+    def __init__(self, stage: str, exit_code: int, detail: str):
+        super().__init__("Remote operation failed")
+        self.stage = stage
+        self.exit_code = exit_code
+        self.detail = detail[-1600:] or "No output from remote command"
+
+
 class DeploymentManager:
     def __init__(self, machines, identity, *, run=subprocess.run, state_path: Path | None = None):
         self.machines = machines
@@ -82,23 +90,33 @@ class DeploymentManager:
     def _execute(self, job_id: str, machine: dict, message: str) -> None:
         action = self.jobs[job_id]["action"]
         instance_id = machine["id"]
+        stage = "ssh_identity"
         try:
-            self.machines.attach_ssh(instance_id, self.identity.public_key())
+            public_key = self.identity.public_key()
+            stage = "attach_ssh_key"
+            self.machines.attach_ssh(instance_id, public_key)
             if action == "deploy":
-                command = f"test -d {REPO}/.git && bash {REPO}/Legate/Forge/ConceptForge/Scripts/deploy.sh"
+                command = (f"test -d {REPO}/.git || {{ echo 'Pod repository is missing' >&2; exit 1; }}; "
+                           f"bash {REPO}/Legate/Forge/ConceptForge/Scripts/deploy.sh")
             elif action == "update":
                 command = f"bash {REPO}/Legate/Envoy/update_source.sh"
             else:
                 command = (f"python3 {REPO}/Legate/Forge/ConceptForge/verify.py "
                            f"{shlex.quote(message.strip())}")
+            stage = "remote_execution"
             output = self._ssh(machine, command)
             update = {"status": "completed"}
             if action == "discuss":
                 update["reply"] = output[-4000:]
             else:
-                update["revision"] = self._ssh(machine, f"git -C {REPO} rev-parse --short HEAD").strip()
-        except (VastError, OSError, subprocess.SubprocessError, RuntimeError, ValueError):
-            update = {"status": "failed"}
+                stage = "read_revision"
+                update["revision"] = self._ssh(machine, f"git -C {REPO} rev-parse --short HEAD",
+                                               stage="read_revision").strip()
+        except (VastError, OSError, subprocess.SubprocessError, RuntimeError, ValueError) as exc:
+            update = {"status": "failed", "stage": getattr(exc, "stage", stage),
+                      "detail": getattr(exc, "detail", str(exc))[-1600:]}
+            if isinstance(exc, RemoteCommandError):
+                update["exit_code"] = exc.exit_code
         with self.lock:
             self.jobs[job_id].update(update)
             if action != "discuss":
@@ -109,7 +127,7 @@ class DeploymentManager:
                     **({"revision": update["revision"]} if "revision" in update else {})}
                 self._save()
 
-    def _ssh(self, machine: dict, command: str) -> str:
+    def _ssh(self, machine: dict, command: str, *, stage: str = "pod_command") -> str:
         host, port = machine["ssh_host"], machine["ssh_port"]
         if not isinstance(host, str) or not _HOST.fullmatch(host) or not isinstance(port, int) or not 1 <= port <= 65535:
             raise VastError("Invalid SSH address from Vast")
@@ -119,5 +137,7 @@ class DeploymentManager:
                            "-i", str(self.identity.private_key), "-p", str(port),
                            f"root@{host}", command], capture_output=True, text=True, timeout=1800)
         if result.returncode:
-            raise VastError("Remote operation failed")
+            detail = "\n".join(part for part in (result.stderr.strip(), result.stdout.strip()) if part)
+            raise RemoteCommandError("ssh_connection" if result.returncode == 255 else stage,
+                                     result.returncode, detail)
         return result.stdout.strip()
