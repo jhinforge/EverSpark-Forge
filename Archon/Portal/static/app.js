@@ -1779,15 +1779,16 @@ async function loadRuntime() {
     const orchestrator = Boolean(data.services?.orchestrator?.online);
     const imageForge = Boolean(data.services?.image_forge?.online);
     const logging = Boolean(data.logging?.ready);
+    const controlOnly = data.mode === "archon-only";
     elements.runtimeGrid.replaceChildren(
-      runtimeCard("Orchestrator", orchestrator, orchestrator ? "Task routing and subject APIs are online." : "Start with ./everspark orchestrator start"),
-      runtimeCard("Image Forge", imageForge, imageForge ? "The configured image adapter is responding." : "Start or configure the image execution adapter."),
+      runtimeCard("Orchestrator", orchestrator, controlOnly ? "Archon control backend is online." : orchestrator ? "Task routing and subject APIs are online." : "Start with ./everspark orchestrator start"),
+      runtimeCard("Image Forge", imageForge, controlOnly ? "No Legate is connected; Forge execution is unavailable." : imageForge ? "The configured image adapter is responding." : "Start or configure the image execution adapter."),
       runtimeCard("Runtime logs", logging, logging ? "{present}/{configured} managed logs are present." : "The runtime log manifest is unavailable.",
         { present: data.logging?.present, configured: data.logging?.configured }),
     );
     elements.healthDot.className = `pulse-dot ${data.ready ? "online" : "partial"}`;
-    uiText(elements.healthTitle, data.ready ? "System ready" : "Setup required");
-    uiText(elements.healthDetail, data.ready ? "All local services responding" : "Open Runtime for details");
+    uiText(elements.healthTitle, controlOnly && data.ready ? "Archon ready" : data.ready ? "System ready" : "Setup required");
+    uiText(elements.healthDetail, controlOnly && data.ready ? "Control only · no Legate connected" : data.ready ? "All local services responding" : "Open Runtime for details");
   } catch (error) {
     elements.healthDot.className = "pulse-dot partial";
     uiText(elements.healthTitle, "Status unavailable");

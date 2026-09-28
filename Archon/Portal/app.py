@@ -331,6 +331,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 }
         return services
 
+    def _control_mode(self) -> bool:
+        return os.environ.get("EVERSPARK_ARCHON_ONLY") == "1"
+
     def _runtime_status(self) -> None:
         services = self._collect_service_health()
         try:
@@ -349,7 +352,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "ok": True,
                 "services": services,
                 "logging": logging_status,
-                "ready": all(item["online"] for item in services.values()),
+                "mode": "archon-only" if self._control_mode() else "full",
+                "ready": (services["orchestrator"]["online"] if self._control_mode()
+                          else all(item["online"] for item in services.values())),
             },
         )
 

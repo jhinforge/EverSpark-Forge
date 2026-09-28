@@ -33,6 +33,7 @@ Usage:
   ./everspark orchestrator <command>
   ./everspark webui <command>
   ./everspark logs <command>
+  ./everspark archon start
 
 Modules:
   image         Image Forge execution through adapters such as ComfyUI
@@ -40,6 +41,7 @@ Modules:
   orchestrator  Session coordination and task execution
   webui         User-facing local interface
   logs          Managed log status, rotation, and retention
+  archon        Local control-only Portal and backend (no Forge)
 
 Run directly from a clone, or use Archon/Gate/CLI/install.sh to add `everspark` to
 your user PATH.
@@ -131,6 +133,9 @@ case "${module,,}" in
     ;;
   webui)
     run_handler "WebUI" "${REPO_ROOT}/Archon/Portal/cli.sh" "$@"
+    ;;
+  archon)
+    exec python3 "${REPO_ROOT}/Archon/Gate/CLI/archon.py" "$@"
     ;;
   logs)
     run_handler "Runtime Logging" "${REPO_ROOT}/Aegis/Logging/cli.sh" "$@"
