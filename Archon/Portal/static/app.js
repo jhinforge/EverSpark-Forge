@@ -27,6 +27,7 @@ const state = {
   backupJob: null,
   vastNextToken: null,
   vastOfferRequest: 0,
+  podJobs: {},
 };
 localStorage.setItem("everspark.session", state.sessionId);
 
@@ -1224,11 +1225,18 @@ async function runPodAction(instanceId, action, message = "") {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ instance_id: instanceId, ...(action === "discuss" ? { message } : {}) }),
   });
+  state.podJobs[instanceId] = "queued";
   await loadMachines();
   for (let attempt = 0; attempt < 900; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const data = await api(`/api/machines/vast/deployment-job?id=${encodeURIComponent(result.job.id)}`);
-    if (data.job.status === "running") continue;
+    if (data.job.status === "running") {
+      state.podJobs[instanceId] = data.job.stage || "queued";
+      const progress = document.querySelector(`[data-pod-progress="${instanceId}"]`);
+      if (progress) progress.textContent = `${t("Task stage")}: ${state.podJobs[instanceId]}`;
+      continue;
+    }
+    delete state.podJobs[instanceId];
     await loadMachines();
     if (data.job.status === "failed") {
       const stage = data.job.stage || "unknown";
@@ -1274,6 +1282,12 @@ function renderMachine(machine) {
   forge.textContent = t(labels[machine.forge?.status] || "Not deployed") +
     (machine.forge?.revision ? ` · ${machine.forge.revision}` : "");
   card.appendChild(forge);
+  if (state.podJobs[machine.id]) {
+    const progress = document.createElement("p");
+    progress.dataset.podProgress = String(machine.id);
+    progress.textContent = `${t("Task stage")}: ${state.podJobs[machine.id]}`;
+    card.appendChild(progress);
+  }
   if (machine.actual_status === "running" && machine.ssh_host) {
     const actions = document.createElement("div");
     actions.className = "machine-actions";

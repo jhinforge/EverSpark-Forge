@@ -103,6 +103,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(any("update_source.sh" in call[-1] for call in commands))
         self.assertTrue(any(call[0].endswith("/ssh") and call[2]["ssh_key"].startswith("ssh-ed25519")
                             for call in provider.calls))
+        self.assertEqual(sum(call[0].endswith("/ssh") for call in provider.calls), 1)
 
     def test_image_requires_compatible_offer(self):
         with self.assertRaises(ValueError):
@@ -167,6 +168,7 @@ class DeploymentTests(unittest.TestCase):
             self.assertTrue(any("deploy.sh" in command for command in calls))
 
             manager.run = lambda argv, **kwargs: CompletedProcess(argv, 255, "", "Permission denied")
+            manager.states[99] = {"status": "not_deployed"}
             failed = manager.start(99, "deploy")
             for _ in range(100):
                 found = manager.job(failed["id"])
@@ -174,7 +176,7 @@ class DeploymentTests(unittest.TestCase):
                     break
                 time.sleep(.01)
             self.assertEqual(found["status"], "failed")
-            self.assertEqual(found["stage"], "attach_ssh_key")
+            self.assertEqual(found["stage"], "ssh_probe")
             self.assertIn("already attached", found["detail"])
 
     def test_one_instance_runs_one_remote_task_at_a_time(self):
@@ -193,6 +195,7 @@ class DeploymentTests(unittest.TestCase):
             job = manager.start(99, "deploy")
             try:
                 self.assertTrue(started.wait(2))
+                self.assertEqual(manager.job(job["id"])["stage"], "remote_execution")
                 with self.assertRaisesRegex(VastError, "running task"):
                     manager.start(99, "update")
             finally:

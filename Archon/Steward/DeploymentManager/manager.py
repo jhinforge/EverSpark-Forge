@@ -78,31 +78,41 @@ class DeploymentManager:
             if any(job["instance_id"] == instance_id and job["status"] == "running"
                    for job in self.jobs.values()):
                 raise VastError("This Pod already has a running task", 409)
+            key_ready = self.states.get(instance_id, {}).get("status") in {"ready", "source_updated"}
             job_id = uuid.uuid4().hex
             self.jobs[job_id] = {"id": job_id, "instance_id": instance_id,
-                                 "action": action, "status": "running"}
+                                 "action": action, "status": "running", "stage": "queued"}
             if action != "discuss":
                 self.states[instance_id] = {"status": "deploying" if action == "deploy" else "updating"}
                 self._save()
-        threading.Thread(target=self._execute, args=(job_id, machine, message), daemon=True).start()
+        threading.Thread(target=self._execute, args=(job_id, machine, message, key_ready), daemon=True).start()
         return self.job(job_id)
 
-    def _execute(self, job_id: str, machine: dict, message: str) -> None:
+    def _stage(self, job_id: str, value: str) -> None:
+        with self.lock:
+            self.jobs[job_id]["stage"] = value
+
+    def _execute(self, job_id: str, machine: dict, message: str, key_ready: bool) -> None:
         action = self.jobs[job_id]["action"]
         instance_id = machine["id"]
         stage = "ssh_identity"
         try:
-            public_key = self.identity.public_key()
-            stage = "attach_ssh_key"
-            try:
-                self.machines.attach_ssh(instance_id, public_key)
-            except VastError as attachment_error:
-                # A key previously attached to this instance may be rejected as
-                # a duplicate. Continue only if this exact local identity works.
+            if not key_ready:
+                self._stage(job_id, stage)
+                public_key = self.identity.public_key()
+                stage = "attach_ssh_key"
+                self._stage(job_id, stage)
                 try:
-                    self._ssh(machine, "true")
-                except (VastError, OSError, subprocess.SubprocessError):
-                    raise attachment_error from None
+                    self.machines.attach_ssh(instance_id, public_key)
+                except VastError as attachment_error:
+                    # An already attached key can be rejected as a duplicate.
+                    # Continue only if this exact local identity works.
+                    stage = "ssh_probe"
+                    self._stage(job_id, stage)
+                    try:
+                        self._ssh(machine, "true", timeout=30)
+                    except (VastError, OSError, subprocess.SubprocessError):
+                        raise attachment_error from None
             if action == "deploy":
                 command = (f"test -d {REPO}/.git || {{ echo 'Pod repository is missing' >&2; exit 1; }}; "
                            f"bash {REPO}/Legate/Forge/ConceptForge/Scripts/deploy.sh")
@@ -112,12 +122,14 @@ class DeploymentManager:
                 command = (f"python3 {REPO}/Legate/Forge/ConceptForge/verify.py "
                            f"{shlex.quote(message.strip())}")
             stage = "remote_execution"
-            output = self._ssh(machine, command)
+            self._stage(job_id, stage)
+            output = self._ssh(machine, command, timeout=240 if action == "discuss" else 1800)
             update = {"status": "completed"}
             if action == "discuss":
                 update["reply"] = output[-4000:]
             else:
                 stage = "read_revision"
+                self._stage(job_id, stage)
                 update["revision"] = self._ssh(machine, f"git -C {REPO} rev-parse --short HEAD",
                                                stage="read_revision").strip()
         except (VastError, OSError, subprocess.SubprocessError, RuntimeError, ValueError) as exc:
@@ -135,7 +147,8 @@ class DeploymentManager:
                     **({"revision": update["revision"]} if "revision" in update else {})}
                 self._save()
 
-    def _ssh(self, machine: dict, command: str, *, stage: str = "pod_command") -> str:
+    def _ssh(self, machine: dict, command: str, *, stage: str = "pod_command",
+             timeout: int = 1800) -> str:
         host, port = machine["ssh_host"], machine["ssh_port"]
         if not isinstance(host, str) or not _HOST.fullmatch(host) or not isinstance(port, int) or not 1 <= port <= 65535:
             raise VastError("Invalid SSH address from Vast")
@@ -143,7 +156,7 @@ class DeploymentManager:
                            "-o", "StrictHostKeyChecking=accept-new",
                            "-o", f"UserKnownHostsFile={self.identity.known_hosts}",
                            "-i", str(self.identity.private_key), "-p", str(port),
-                           f"root@{host}", command], capture_output=True, text=True, timeout=1800)
+                           f"root@{host}", command], capture_output=True, text=True, timeout=timeout)
         if result.returncode:
             detail = "\n".join(part for part in (result.stderr.strip(), result.stdout.strip()) if part)
             raise RemoteCommandError("ssh_connection" if result.returncode == 255 else stage,
