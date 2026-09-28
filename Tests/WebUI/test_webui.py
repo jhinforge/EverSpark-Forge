@@ -6,6 +6,7 @@ import json
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -591,7 +592,11 @@ class WebUIIntegrationTests(unittest.TestCase):
                 with urlopen(self.base_url + "/api/data/archive", timeout=5) as response:
                     self.assertEqual(response.headers["Content-Type"], "application/zip")
                     self.assertEqual(response.read(), b"test archive")
-                self.assertFalse((root / "Data/Runtime/Archives" / ("everspark-data-" + "a" * 32 + ".zip")).exists())
+                archived = root / "Data/Runtime/Archives" / ("everspark-data-" + "a" * 32 + ".zip")
+                deadline = time.monotonic() + 2
+                while archived.exists() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertFalse(archived.exists())
                 request = Request(self.base_url + "/api/data/import", data=b"test archive",
                                   headers={"Content-Type": "application/zip"}, method="POST")
                 with urlopen(request, timeout=5) as response:

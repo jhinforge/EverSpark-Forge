@@ -45,7 +45,8 @@ def write_manifest(path: Path) -> None:
 class ManifestTests(unittest.TestCase):
     def test_bundled_manifest_is_valid(self) -> None:
         manifest = load_manifest(LOGGING_DIR / "log_manifest.json")
-        self.assertEqual(len(manifest["logs"]), 23)
+        self.assertEqual(len(manifest["logs"]), 24)
+        self.assertIn("archon/gate.log", {entry["filename"] for entry in manifest["logs"]})
         self.assertIn("concept/conceptforge.log", [item["filename"] for item in manifest["logs"]])
 
     def test_rejects_path_traversal(self) -> None:

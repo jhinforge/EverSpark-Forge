@@ -29,23 +29,27 @@ def _load_local_settings() -> None:
     os.environ["EVERSPARK_ORCHESTRATOR_HOST"] = "127.0.0.1"
     backend_port = int(os.environ.get("EVERSPARK_ORCHESTRATOR_PORT", "8765"))
     os.environ["EVERSPARK_ORCHESTRATOR_URL"] = f"http://127.0.0.1:{backend_port}"
+    os.environ["EVERSPARK_ARCHON_CONTROL_URL"] = f"http://127.0.0.1:{backend_port}"
     os.environ["EVERSPARK_ARCHON_ONLY"] = "1"
 
 
 def start() -> int:
     _load_local_settings()
     sys.path.insert(0, str(REPO_ROOT))
-    from Archon.Orchestrator.orchestrator.core.control_server import ControlServer
+    from Archon.Gate.control_server import ControlServer
+    from Archon.Steward.vast_instances import VastInstances
+    from Archon.Vault.windows_credentials import WindowsCredentialStore
     from Archon.Portal.app import LOG_DIR, LOG_FILE, WebUIServer, get_logger, load_settings
 
     logger = get_logger("webui", LOG_FILE)
-    backend_logger = get_logger("orchestrator", LOG_DIR / "orchestrator/orchestrator.log")
+    backend_logger = get_logger("gate", LOG_DIR / "archon/gate.log")
     backend = None
     portal = None
     worker = None
     try:
         backend_port = int(os.environ.get("EVERSPARK_ORCHESTRATOR_PORT", "8765"))
-        backend = ControlServer(("127.0.0.1", backend_port))
+        machines = VastInstances(WindowsCredentialStore()) if sys.platform == "win32" else None
+        backend = ControlServer(("127.0.0.1", backend_port), machines)
         portal = WebUIServer(load_settings(), logger)
         worker = threading.Thread(target=backend.serve_forever, name="archon-backend", daemon=True)
         worker.start()

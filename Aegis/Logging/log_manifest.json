@@ -7,6 +7,12 @@
   },
   "logs": [
     {
+      "id": "archon-gate",
+      "label": "Archon Gate",
+      "filename": "archon/gate.log",
+      "kind": "structured"
+    },
+    {
       "id": "recovery",
       "label": "Recovery",
       "filename": "runtime/recovery.log",

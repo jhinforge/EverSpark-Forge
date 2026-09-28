@@ -334,6 +334,17 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .model-service-card-actions, .model-service-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .model-service-card-actions button { padding: 8px 11px; font-size: 11px; }
 .model-service-form { display: grid; gap: 15px; }
+.machine-credential { display: grid; gap: 13px; margin-top: 18px; }
+.machine-credential h3 { margin: 7px 0; font-size: 19px; }
+.machine-credential label { color: var(--muted); font-size: 12px; }
+.machine-credential input { min-width: 0; width: 100%; padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--text); background: var(--panel-solid); }
+.machine-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.machine-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin: 18px 0; }
+.machine-card { padding: 18px; border: 1px solid var(--line); border-radius: 13px; background: var(--panel); }
+.machine-card h3 { font-size: 16px; overflow-wrap: anywhere; }
+.machine-card p { margin-top: 9px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.machine-card .machine-state { color: var(--cyan); }
+.machine-empty { grid-column: 1 / -1; padding: 20px; border: 1px solid var(--line); border-radius: 13px; color: var(--muted); background: var(--panel); }
 .model-service-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .model-service-fields label { display: grid; gap: 7px; color: var(--muted); font-size: 11px; }
 .model-service-fields input { min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--text); background: var(--panel-solid); }
@@ -407,7 +418,7 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
   .app-shell { display: block; }
   .sidebar { position: fixed; z-index: 20; top: auto; bottom: 0; width: 100%; height: 64px; padding: 8px 12px; border-top: 1px solid var(--line); border-right: 0; }
   .brand, .sidebar-bottom { display: none; }
-  .nav { grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 0; }
+  .nav { grid-auto-flow: column; grid-auto-columns: minmax(64px, 1fr); gap: 4px; margin: 0; overflow-x: auto; }
   .nav-item, .nav-item:not(.active) { min-height: 46px; font-size: 9px; grid-template-columns: 1fr; gap: 1px; text-align: center; }
   .nav-item.active { box-shadow: inset 0 -2px 0 var(--ember); }
   .nav-icon { font-size: 15px; }

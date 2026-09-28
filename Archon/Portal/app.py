@@ -44,6 +44,7 @@ class Settings:
     host: str = "127.0.0.1"
     port: int = 8780
     orchestrator_url: str = "http://127.0.0.1:8765"
+    control_url: str = "http://127.0.0.1:8765"
     request_timeout: int = 600
     output_directory: Path = REPO_ROOT / "Data" / "Outputs"
 
@@ -59,6 +60,9 @@ def load_settings() -> Settings:
         port=int(os.environ.get("EVERSPARK_WEBUI_PORT", "8780")),
         orchestrator_url=os.environ.get(
             "EVERSPARK_ORCHESTRATOR_URL", "http://127.0.0.1:8765"
+        ).rstrip("/"),
+        control_url=os.environ.get(
+            "EVERSPARK_ARCHON_CONTROL_URL", "http://127.0.0.1:8765"
         ).rstrip("/"),
         request_timeout=int(
             os.environ.get("EVERSPARK_WEBUI_REQUEST_TIMEOUT", "600")
@@ -119,6 +123,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         routes = {
             "/api/health": self._health,
             "/api/runtime/status": self._runtime_status,
+            "/api/machines/vast/credential": lambda: self._proxy_control_get(
+                "/machines/vast/credential"),
+            "/api/machines/vast/instances": lambda: self._proxy_control_get(
+                "/machines/vast/instances", parsed.query),
             "/api/resources": lambda: self._proxy_orchestrator_get(
                 "/resources", parsed.query
             ),
@@ -188,6 +196,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/subjects/compile": "/subjects/compile",
         }
         try:
+            if path in {"/api/machines/vast/credential", "/api/machines/vast/credential/remove"}:
+                if not self._local_control_request():
+                    return
+                if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
+                    self._json(415, {"ok": False, "error": "JSON request required"})
+                    return
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 8192:
+                    raise ValueError("Request body size is invalid")
+                self._proxy_control_post(path.removeprefix("/api"), self._read_json())
+                return
             if path == "/api/data/import":
                 self._data_import()
                 return
@@ -222,6 +241,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._json(404, {"ok": False, "error": "Not found"})
         except json.JSONDecodeError:
             self._json(400, {"ok": False, "error": "Request body must be JSON"})
+        except UnicodeError:
+            self._json(400, {"ok": False, "error": "Request body must be UTF-8 JSON"})
         except ValueError as exc:
             self._json(400, {"ok": False, "error": str(exc)})
         except (URLError, TimeoutError) as exc:
@@ -284,6 +305,35 @@ class RequestHandler(BaseHTTPRequestHandler):
         except (URLError, TimeoutError) as exc:
             self._upstream_unavailable(exc)
 
+    def _local_control_request(self) -> bool:
+        host = self.headers.get("Host", "")
+        allowed = {f"127.0.0.1:{self.server.server_port}",
+                   f"localhost:{self.server.server_port}"}
+        origin = self.headers.get("Origin")
+        if host not in allowed or (origin and origin != f"http://{host}"):
+            self._json(403, {"ok": False, "error": "Local origin required"})
+            return False
+        return True
+
+    def _proxy_control_get(self, path: str, query: str = "") -> None:
+        if not self._local_control_request():
+            return
+        url = f"{self.server.settings.control_url}{path}"
+        if query:
+            url += f"?{query}"
+        try:
+            status, body = request_json(url, 15)
+            self._json(status, body)
+        except (URLError, TimeoutError) as exc:
+            self._upstream_unavailable(exc, "Archon Gate")
+
+    def _proxy_control_post(self, path: str, payload: dict[str, Any]) -> None:
+        try:
+            status, body = request_json(f"{self.server.settings.control_url}{path}", 15, payload)
+            self._json(status, body)
+        except (URLError, TimeoutError) as exc:
+            self._upstream_unavailable(exc, "Archon Gate")
+
     def _proxy_orchestrator_post(
         self, path: str, payload: dict[str, Any]
     ) -> None:
@@ -315,10 +365,13 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._json(200, {"ok": True, "services": self._collect_service_health()})
 
     def _collect_service_health(self) -> dict[str, dict[str, Any]]:
-        checks = {
-            "orchestrator": f"{self.server.settings.orchestrator_url}/health",
-            "image_forge": f"{self.server.settings.orchestrator_url}/image/health",
-        }
+        if self._control_mode():
+            checks = {"archon_backend": f"{self.server.settings.control_url}/health"}
+        else:
+            checks = {
+                "orchestrator": f"{self.server.settings.orchestrator_url}/health",
+                "image_forge": f"{self.server.settings.orchestrator_url}/image/health",
+            }
         services: dict[str, dict[str, Any]] = {}
         for name, url in checks.items():
             try:
@@ -329,6 +382,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "online": False,
                     "error": type(exc).__name__,
                 }
+        if self._control_mode():
+            services["image_forge"] = {"online": False}
         return services
 
     def _control_mode(self) -> bool:
@@ -353,7 +408,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "services": services,
                 "logging": logging_status,
                 "mode": "archon-only" if self._control_mode() else "full",
-                "ready": (services["orchestrator"]["online"] if self._control_mode()
+                "ready": (services["archon_backend"]["online"] if self._control_mode()
                           else all(item["online"] for item in services.values())),
             },
         )

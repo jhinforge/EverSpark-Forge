@@ -59,7 +59,7 @@ class ArchonOnlyTests(unittest.TestCase):
                         time.sleep(0.05)
                 self.assertEqual(status["mode"], "archon-only")
                 self.assertTrue(status["ready"])
-                self.assertTrue(status["services"]["orchestrator"]["online"])
+                self.assertTrue(status["services"]["archon_backend"]["online"])
                 self.assertFalse(status["services"]["image_forge"]["online"])
                 with urlopen(f"http://127.0.0.1:{portal_port}/") as response:
                     self.assertIn(b"EverSpark Forge", response.read())
@@ -72,7 +72,7 @@ class ArchonOnlyTests(unittest.TestCase):
                 self.assertEqual(caught.exception.code, 503)
                 self.assertIn("No Legate", caught.exception.read().decode())
                 self.assertTrue((Path(temporary) / "webui.log").exists())
-                self.assertTrue((Path(temporary) / "orchestrator/orchestrator.log").exists())
+                self.assertTrue((Path(temporary) / "archon/gate.log").exists())
             finally:
                 process.terminate()
                 try:

@@ -25,6 +25,7 @@ const state = {
   directDownloadJob: null,
   storageJob: null,
   backupJob: null,
+  vastNextToken: null,
 };
 localStorage.setItem("everspark.session", state.sessionId);
 
@@ -130,6 +131,11 @@ const elements = {
   directDownloadProgressBar: $("#directDownloadProgressBar"),
   directDownloadStatus: $("#directDownloadStatus"),
   directDownloadDetail: $("#directDownloadDetail"),
+  vastCredentialStatus: $("#vastCredentialStatus"),
+  vastApiKey: $("#vastApiKey"),
+  vastInstanceList: $("#vastInstanceList"),
+  moreVastInstances: $("#moreVastInstances"),
+  removeVastKey: $("#removeVastKey"),
   cancelDirectDownload: $("#cancelDirectDownload"),
   retryDirectDownload: $("#retryDirectDownload"),
 };
@@ -141,6 +147,7 @@ const viewCopy = {
   storage: ["WORKSPACE / STORAGE", "Manage models and backups."],
   runtime: ["WORKSPACE / RUNTIME", "Know what is ready."],
   models: ["WORKSPACE / MODEL SERVICES", "Connect language models."],
+  machines: ["WORKSPACE / MACHINES", "Manage your machines."],
 };
 
 async function api(path, options = {}) {
@@ -1074,8 +1081,102 @@ function setView(name) {
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
+  if (name === "machines") loadMachines();
   if (name === "models") loadModelConnections();
   if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadRestorePoints()]);
+}
+
+function machineMessage(message) {
+  const empty = document.createElement("p");
+  empty.className = "machine-empty";
+  uiText(empty, message);
+  elements.vastInstanceList.replaceChildren(empty);
+}
+
+function renderMachine(machine) {
+  const card = document.createElement("article");
+  card.className = "machine-card";
+  const title = document.createElement("h3");
+  title.textContent = machine.label || `Vast #${machine.id}`;
+  const status = document.createElement("p");
+  status.className = "machine-state";
+  status.textContent = `Vast #${machine.id} · ${machine.actual_status || "unknown"}`;
+  const gpu = document.createElement("p");
+  gpu.textContent = `${machine.num_gpus || 0} × ${machine.gpu_name || "GPU unknown"}`;
+  const place = document.createElement("p");
+  place.textContent = machine.geolocation || "Location unknown";
+  card.append(title, status, gpu, place);
+  if (machine.dph_total != null && Number.isFinite(Number(machine.dph_total))) {
+    const price = document.createElement("p");
+    price.textContent = `$${Number(machine.dph_total).toFixed(3)} / hour`;
+    card.appendChild(price);
+  }
+  if (machine.ssh_host) {
+    const address = document.createElement("p");
+    address.textContent = `SSH: ${machine.ssh_host}:${machine.ssh_port || "?"}`;
+    card.appendChild(address);
+  }
+  elements.vastInstanceList.appendChild(card);
+}
+
+async function loadMachines(cursor = "") {
+  if (!cursor) {
+    state.vastNextToken = null;
+    elements.moreVastInstances.hidden = true;
+    machineMessage("Loading machines…");
+  }
+  try {
+    const credential = await api("/api/machines/vast/credential");
+    uiText(elements.vastCredentialStatus, credential.configured
+      ? "Vast API Key saved on this machine." : "No Vast API Key saved yet.");
+    elements.removeVastKey.hidden = !credential.configured;
+    if (!credential.configured) {
+      machineMessage("Save a Vast API Key to see your instances.");
+      return;
+    }
+    const url = `/api/machines/vast/instances${cursor ? `?after_token=${encodeURIComponent(cursor)}` : ""}`;
+    renderMachinesPage(await api(url), cursor);
+  } catch (error) {
+    if (!cursor) machineMessage(error.message);
+    else showNotice(error.message);
+  }
+}
+
+function renderMachinesPage(data, cursor = "") {
+  if (!cursor) elements.vastInstanceList.replaceChildren();
+  for (const machine of data.instances || []) renderMachine(machine);
+  if (!elements.vastInstanceList.childElementCount) machineMessage("No Vast instances found.");
+  state.vastNextToken = data.next_token;
+  elements.moreVastInstances.hidden = !data.next_token;
+}
+
+async function saveVastKey(event) {
+  event.preventDefault();
+  const button = $("#saveVastKey");
+  button.disabled = true;
+  try {
+    const result = await api("/api/machines/vast/credential", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: elements.vastApiKey.value }),
+    });
+    elements.vastApiKey.value = "";
+    uiText(elements.vastCredentialStatus, "Vast API Key saved on this machine.");
+    elements.removeVastKey.hidden = false;
+    renderMachinesPage(result);
+    showNotice(t("Vast connection verified and saved."), "success");
+  } catch (error) { showNotice(error.message); }
+  finally { button.disabled = false; }
+}
+
+async function removeVastKey() {
+  if (!window.confirm(t("Remove the saved Vast API Key from this machine?"))) return;
+  try {
+    await api("/api/machines/vast/credential/remove", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    elements.vastApiKey.value = "";
+    await loadMachines();
+  } catch (error) { showNotice(error.message); }
 }
 
 function traitValues(document) {
@@ -1777,11 +1878,14 @@ async function loadRuntime() {
   try {
     const data = await api("/api/runtime/status");
     const orchestrator = Boolean(data.services?.orchestrator?.online);
+    const archonBackend = Boolean(data.services?.archon_backend?.online);
     const imageForge = Boolean(data.services?.image_forge?.online);
     const logging = Boolean(data.logging?.ready);
     const controlOnly = data.mode === "archon-only";
     elements.runtimeGrid.replaceChildren(
-      runtimeCard("Orchestrator", orchestrator, controlOnly ? "Archon control backend is online." : orchestrator ? "Task routing and subject APIs are online." : "Start with ./everspark orchestrator start"),
+      controlOnly
+        ? runtimeCard("Archon Backend", archonBackend, archonBackend ? "Archon control backend is online." : "Archon control backend is unavailable.")
+        : runtimeCard("Orchestrator", orchestrator, orchestrator ? "Task routing and subject APIs are online." : "Start with ./everspark orchestrator start"),
       runtimeCard("Image Forge", imageForge, controlOnly ? "No Legate is connected; Forge execution is unavailable." : imageForge ? "The configured image adapter is responding." : "Start or configure the image execution adapter."),
       runtimeCard("Runtime logs", logging, logging ? "{present}/{configured} managed logs are present." : "The runtime log manifest is unavailable.",
         { present: data.logging?.present, configured: data.logging?.configured }),
@@ -1841,6 +1945,13 @@ function bindEvents() {
     hideNotice();
     await Promise.all([loadSubjects(), loadRuntime(), loadImagePlugins(), loadRemoteStorage()]);
     await loadResources();
+    if ($("#machinesView").classList.contains("active")) await loadMachines();
+  });
+  $("#vastCredentialForm").addEventListener("submit", saveVastKey);
+  elements.removeVastKey.addEventListener("click", removeVastKey);
+  $("#refreshMachines").addEventListener("click", () => { void loadMachines(); });
+  elements.moreVastInstances.addEventListener("click", () => {
+    if (state.vastNextToken) void loadMachines(state.vastNextToken);
   });
   $("#refreshHistoryButton").addEventListener("click", loadHistory);
   elements.downloadOutputsButton.addEventListener("click", downloadOutputsArchive);

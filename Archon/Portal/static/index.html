@@ -37,6 +37,10 @@
             <span class="nav-icon">↺</span>
             Gallery
           </button>
+          <button class="nav-item" data-view="machines" type="button">
+            <span class="nav-icon">▦</span>
+            Machines
+          </button>
           <button class="nav-item" data-view="storage" type="button">
             <span class="nav-icon">▣</span>
             Storage
@@ -240,6 +244,33 @@
             </div>
           </div>
           <div class="gallery-grid" id="galleryGrid"></div>
+        </section>
+
+        <section class="view" id="machinesView" data-view-panel="machines">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">ARCHON / STEWARD</p>
+              <h2>Machines</h2>
+              <p class="section-copy">View your Vast instances. Legate connectivity and Forge readiness are separate.</p>
+            </div>
+            <button class="ghost-button" id="refreshMachines" type="button">Refresh instances</button>
+          </div>
+          <form class="storage-panel machine-credential" id="vastCredentialForm">
+            <div>
+              <p class="section-kicker">VAST ACCOUNT</p>
+              <h3>Vast API connection</h3>
+              <p class="section-copy" id="vastCredentialStatus">Checking local credential…</p>
+              <p class="section-copy">The key is saved in this Windows user's Credential Manager. EverSpark never displays it again.</p>
+            </div>
+            <label for="vastApiKey">Vast API Key</label>
+            <input id="vastApiKey" type="password" autocomplete="new-password" spellcheck="false" required placeholder="Enter or replace API Key">
+            <div class="machine-actions">
+              <button class="primary-button" id="saveVastKey" type="submit">Verify and save</button>
+              <button class="ghost-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
+            </div>
+          </form>
+          <div class="machine-list" id="vastInstanceList" aria-live="polite"></div>
+          <button class="secondary-button" id="moreVastInstances" type="button" hidden>Load more</button>
         </section>
 
         <section class="view" id="runtimeView" data-view-panel="runtime">
