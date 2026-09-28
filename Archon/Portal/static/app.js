@@ -1084,7 +1084,7 @@ function setView(name) {
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
-  if (name === "machines") { loadMachines(); loadVastOffers(); }
+  if (name === "machines") { loadMachines(); loadVastOffers(); loadVastGpuNames(); }
   if (name === "models") loadModelConnections();
   if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadRestorePoints()]);
 }
@@ -1103,6 +1103,33 @@ function offerMessage(message) {
   elements.vastOfferList.replaceChildren(empty);
 }
 
+async function loadVastGpuNames() {
+  try {
+    const result = await api("/api/machines/vast/gpu-names");
+    const options = (result.gpu_names || []).map((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      return option;
+    });
+    $("#vastGpuNames").replaceChildren(...options);
+  } catch (_) {
+    // The text field still accepts a model if the catalog is unavailable.
+  }
+}
+
+function activeOfferFilters(filters) {
+  const labels = [t("On-demand"), t("Verified"), t("Rentable"), t("NVIDIA")];
+  const names = {
+    gpu_name: "GPU model", num_gpus: "GPU count", min_gpu_ram_gb: "Minimum VRAM (GB)",
+    country: "Country code", max_hourly_usd: "Maximum $/hour",
+    min_reliability: "Minimum reliability", disk_gb: "Disk size (GB)",
+  };
+  for (const [key, label] of Object.entries(names)) {
+    if (filters[key] != null && filters[key] !== "") labels.push(`${t(label)}: ${filters[key]}`);
+  }
+  return labels.join(" · ");
+}
+
 function renderOffer(offer) {
   const card = document.createElement("article");
   card.className = "machine-card";
@@ -1116,7 +1143,7 @@ function renderOffer(offer) {
   location.textContent = offer.geolocation || t("Location unknown");
   const memory = document.createElement("p");
   memory.textContent = offer.gpu_ram != null && Number.isFinite(Number(offer.gpu_ram))
-    ? `${(Number(offer.gpu_ram) / 1024).toFixed(1)} GB VRAM / GPU` : t("VRAM unknown");
+    ? `${(Number(offer.gpu_ram) / 1000).toFixed(1)} GB VRAM / GPU` : t("VRAM unknown");
   const reliability = document.createElement("p");
   reliability.textContent = offer.reliability != null && Number.isFinite(Number(offer.reliability))
     ? `${t("Reliability")}: ${(Number(offer.reliability) * 100).toFixed(1)}%` : t("Reliability unknown");
@@ -1157,7 +1184,13 @@ async function loadVastOffers(event) {
     if (requestId !== state.vastOfferRequest) return;
     elements.vastOfferList.replaceChildren();
     for (const offer of result.offers || []) renderOffer(offer);
-    if (!elements.vastOfferList.childElementCount) offerMessage("No offers matched these filters.");
+    if (!elements.vastOfferList.childElementCount) {
+      offerMessage("No offers matched these filters.");
+      const details = document.createElement("p");
+      details.className = "machine-empty";
+      details.textContent = `${t("Active filters")}: ${activeOfferFilters(filters)}`;
+      elements.vastOfferList.appendChild(details);
+    }
     const fetched = new Date(result.fetched_at * 1000).toLocaleTimeString();
     uiText(elements.vastOfferSummary, "Offer summary", {
       count: (result.offers || []).length, disk: result.disk_gb, time: fetched,
@@ -1240,6 +1273,7 @@ async function saveVastKey(event) {
     elements.removeVastKey.hidden = false;
     renderMachinesPage(result);
     void loadVastOffers();
+    void loadVastGpuNames();
     showNotice(t("Vast connection verified and saved."), "success");
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
@@ -1255,6 +1289,7 @@ async function removeVastKey() {
     ++state.vastOfferRequest;
     $("#searchVastOffers").disabled = false;
     offerMessage("Save a Vast API Key to search offers.");
+    $("#vastGpuNames").replaceChildren();
     await loadMachines();
   } catch (error) { showNotice(error.message); }
 }

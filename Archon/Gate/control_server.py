@@ -36,6 +36,11 @@ class ControlHandler(BaseHTTPRequestHandler):
                     from urllib.parse import parse_qs
                     cursor = parse_qs(parsed.query).get("after_token", [""])[0]
                     self._send(200, {"ok": True, **self.server.machines.list(cursor)})
+                elif path == "/machines/vast/gpu-names":
+                    if self.server.offers is None:
+                        self._send(503, {"ok": False, "error": "Offer search is unavailable"})
+                    else:
+                        self._send(200, {"ok": True, **self.server.offers.gpu_names()})
                 else:
                     self._send(404, {"ok": False, "error": "Not found"})
             except VastError as exc:

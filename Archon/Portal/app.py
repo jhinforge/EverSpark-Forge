@@ -127,6 +127,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "/machines/vast/credential"),
             "/api/machines/vast/instances": lambda: self._proxy_control_get(
                 "/machines/vast/instances", parsed.query),
+            "/api/machines/vast/gpu-names": lambda: self._proxy_control_get(
+                "/machines/vast/gpu-names"),
             "/api/resources": lambda: self._proxy_orchestrator_get(
                 "/resources", parsed.query
             ),

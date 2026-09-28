@@ -13,6 +13,7 @@ from .vast_instances import VastError
 
 
 OFFERS_URL = "https://console.vast.ai/api/v0/bundles/"
+GPU_NAMES_URL = "https://console.vast.ai/api/v0/gpu_names/unique/"
 _COUNTRY = re.compile(r"[A-Za-z]{2}\Z")
 _GPU = re.compile(r"[A-Za-z0-9 _.-]{1,64}\Z")
 
@@ -33,6 +34,46 @@ class VastOffers:
     def __init__(self, store, *, opener=urlopen):
         self.store = store
         self.opener = opener
+        self._gpu_names = ()
+        self._gpu_names_at = 0
+
+    def gpu_names(self) -> dict:
+        key = self.store.get()
+        if not key:
+            raise VastError("Configure the Vast API Key first", 409)
+        if self._gpu_names_at and time.time() - self._gpu_names_at < 86400:
+            return {"gpu_names": list(self._gpu_names)}
+        request = Request(GPU_NAMES_URL, headers={"Authorization": f"Bearer {key}",
+                                                 "Accept": "application/json"})
+        try:
+            with self.opener(request, timeout=15) as response:
+                payload = json.load(response)
+        except HTTPError as exc:
+            if exc.code in (401, 403):
+                raise VastError("Vast rejected the API Key", 401) from None
+            if exc.code == 429:
+                raise VastError("Vast rate limit reached; try again shortly", 429) from None
+            raise VastError(f"Vast GPU names request failed (HTTP {exc.code})") from None
+        except (URLError, TimeoutError, OSError, ValueError):
+            raise VastError("Cannot reach Vast or read its GPU names") from None
+        if not isinstance(payload, dict) or not isinstance(payload.get("gpu_names"), list):
+            raise VastError("Vast returned an invalid GPU name list")
+        self._gpu_names = tuple(sorted({name for name in payload["gpu_names"]
+                                        if isinstance(name, str) and _GPU.fullmatch(name)}))
+        self._gpu_names_at = time.time()
+        return {"gpu_names": list(self._gpu_names)}
+
+    def _resolve_gpu(self, gpu: str) -> str:
+        normalized = " ".join(gpu.strip().replace("_", " ").split())
+        # Vast CLI accepts underscores as spaces, but the REST API expects real names.
+        if normalized.isdigit():
+            normalized = f"RTX {normalized}"
+        try:
+            names = self.gpu_names()["gpu_names"]
+        except VastError:
+            names = self._gpu_names
+        return next((name for name in names if name.casefold() == normalized.casefold()),
+                    normalized.upper() if normalized.lower().startswith("rtx ") else normalized)
 
     def search(self, filters: dict) -> dict:
         key = self.store.get()
@@ -40,7 +81,7 @@ class VastOffers:
             raise VastError("Configure the Vast API Key first", 409)
         if not isinstance(filters, dict) or set(filters) - {
             "gpu_name", "min_gpu_ram_gb", "country", "max_hourly_usd",
-            "min_reliability", "disk_gb", "sort",
+            "min_reliability", "disk_gb", "sort", "num_gpus",
         }:
             raise VastError("Invalid offer filters", 400)
 
@@ -62,7 +103,12 @@ class VastOffers:
         if not isinstance(gpu, str) or (gpu and not _GPU.fullmatch(gpu)):
             raise VastError("Invalid GPU name", 400)
         if gpu.strip():
-            query["gpu_name"] = {"eq": gpu.strip().replace(" ", "_")}
+            query["gpu_name"] = {"eq": self._resolve_gpu(gpu)}
+        if filters.get("num_gpus") not in (None, ""):
+            count = _number(filters["num_gpus"], "GPU count", 1, 32)
+            if not count.is_integer():
+                raise VastError("Invalid GPU count", 400)
+            query["num_gpus"] = {"eq": int(count)}
         country = filters.get("country", "")
         if not isinstance(country, str) or (country and not _COUNTRY.fullmatch(country)):
             raise VastError("Use a two-letter country code", 400)
@@ -70,7 +116,7 @@ class VastOffers:
             query["geolocation"] = {"eq": country.upper()}
         if filters.get("min_gpu_ram_gb") not in (None, ""):
             query["gpu_ram"] = {"gte": int(_number(
-                filters["min_gpu_ram_gb"], "GPU memory", 1, 192) * 1024)}
+                filters["min_gpu_ram_gb"], "GPU memory", 1, 192) * 1000)}
         if filters.get("max_hourly_usd") not in (None, ""):
             query["dph_total"] = {"lte": _number(
                 filters["max_hourly_usd"], "hourly price", 0.01, 1000)}

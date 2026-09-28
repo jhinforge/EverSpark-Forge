@@ -57,8 +57,10 @@ class FakeOffers:
         self.calls = []
 
     def __call__(self, request, timeout):
-        query = json.loads(request.data)
+        query = json.loads(request.data) if request.data else None
         self.calls.append((request.full_url, request.get_header("Authorization"), query))
+        if request.full_url.endswith("/gpu_names/unique/"):
+            return io.BytesIO(json.dumps({"gpu_names": ["RTX 3090", "RTX 4090"]}).encode())
         payload = {"offers": [{"id": 71, "gpu_name": "RTX 3090", "num_gpus": 1,
                                "gpu_ram": 24576, "geolocation": "Tokyo, JP",
                                "dph_total": 0.42, "reliability": 0.99,
@@ -135,29 +137,39 @@ class VastMachineTests(unittest.TestCase):
             page = get("/api/machines/vast/instances")
             self.assertEqual(page["instances"][0]["gpu_name"], "RTX 3090")
             self.assertNotIn("leak-me", json.dumps(page))
+            self.assertIn("RTX 3090", get("/api/machines/vast/gpu-names")["gpu_names"])
             offers = post("/api/machines/vast/offers", {
-                "gpu_name": "RTX 3090", "country": "jp", "min_gpu_ram_gb": 24,
+                "gpu_name": "rtx 3090", "num_gpus": 2, "country": "jp", "min_gpu_ram_gb": 24,
                 "max_hourly_usd": 0.5, "min_reliability": 0.98, "disk_gb": 50,
                 "sort": "price",
             })
             self.assertEqual(offers["offers"][0]["id"], 71)
             self.assertEqual(offers["disk_gb"], 50)
             self.assertNotIn("must-not-leak", json.dumps(offers))
-            self.assertEqual(market.calls[0][1], "Bearer test-key")
-            query = market.calls[0][2]
+            self.assertEqual(market.calls[-1][1], "Bearer test-key")
+            query = market.calls[-1][2]
+            self.assertEqual(query["gpu_name"], {"eq": "RTX 3090"})
+            self.assertEqual(query["num_gpus"], {"eq": 2})
             self.assertEqual(query["geolocation"], {"eq": "JP"})
-            self.assertEqual(query["gpu_ram"], {"gte": 24576})
+            self.assertEqual(query["gpu_ram"], {"gte": 24000})
             self.assertEqual(query["allocated_storage"], 50)
             self.assertEqual(query["dph_total"], {"lte": 0.5})
             self.assertEqual(query["order"], [["dph_total", "asc"]])
             self.assertEqual(query["rentable"], {"eq": True})
+            post("/api/machines/vast/offers", {"gpu_name": "3090"})
+            self.assertEqual(market.calls[-1][2]["gpu_name"], {"eq": "RTX 3090"})
+            post("/api/machines/vast/offers", {"gpu_name": "RTX_3090"})
+            self.assertEqual(market.calls[-1][2]["gpu_name"], {"eq": "RTX 3090"})
             with self.assertRaises(HTTPError) as bad_filter:
                 post("/api/machines/vast/offers", {"country": "../../"})
             self.assertEqual(bad_filter.exception.code, 400)
+            with self.assertRaises(HTTPError) as bad_count:
+                post("/api/machines/vast/offers", {"num_gpus": 1.5})
+            self.assertEqual(bad_count.exception.code, 400)
             with self.assertRaises(HTTPError) as forbidden_offer:
                 post("/api/machines/vast/offers", {}, {"Origin": "https://example.invalid"})
             self.assertEqual(forbidden_offer.exception.code, 403)
-            self.assertEqual(len(market.calls), 1)
+            self.assertEqual(len([call for call in market.calls if call[2] is not None]), 3)
             with urlopen(url + "/") as response:
                 self.assertIn(b'id="machinesView"', response.read())
             post("/api/machines/vast/credential/remove", {})
