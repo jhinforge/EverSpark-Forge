@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import tempfile
 import threading
 import time
@@ -137,6 +138,16 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(failed["exit_code"], 1)
             self.assertIn("zstd", failed["detail"])
 
+            def unexpected(argv, **kwargs):
+                self.assertEqual(kwargs["encoding"], "utf-8")
+                self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
+                raise AttributeError("Unexpected SSH process failure")
+            manager.run = unexpected
+            failed = complete(manager)
+            self.assertEqual(failed["status"], "failed")
+            self.assertEqual(failed["stage"], "remote_execution")
+            self.assertIn("Unexpected SSH", failed["detail"])
+
     def test_rejected_duplicate_key_is_accepted_only_after_ssh_proof(self):
         class DuplicateKeyProvider(Provider):
             def __call__(self, request, timeout):
@@ -195,7 +206,11 @@ class DeploymentTests(unittest.TestCase):
             job = manager.start(99, "deploy")
             try:
                 self.assertTrue(started.wait(2))
-                self.assertEqual(manager.job(job["id"])["stage"], "remote_execution")
+                active = manager.job(job["id"])
+                self.assertEqual(active["stage"], "remote_execution")
+                self.assertTrue(active["stage_at"])
+                self.assertTrue(any("test_vast_deployment.py" in frame
+                                    for frame in active["worker_stack"]))
                 with self.assertRaisesRegex(VastError, "running task"):
                     manager.start(99, "update")
             finally:

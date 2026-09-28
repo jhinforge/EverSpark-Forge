@@ -9,7 +9,10 @@ import threading
 import uuid
 import json
 import os
+import sys
+import traceback
 from pathlib import Path
+from datetime import datetime, timezone
 
 from Archon.Steward.vast_instances import VastError
 
@@ -32,6 +35,7 @@ class DeploymentManager:
         self.identity = identity
         self.run = run
         self.jobs = {}
+        self.threads = {}
         self.state_path = state_path or (Path(os.environ.get("LOCALAPPDATA", str(Path.home())))
                                    / "EverSpark" / "deployment_states.json")
         try:
@@ -60,7 +64,21 @@ class DeploymentManager:
         with self.lock:
             if job_id not in self.jobs:
                 raise VastError("Deployment job was not found", 404)
-            return dict(self.jobs[job_id])
+            result = dict(self.jobs[job_id])
+            worker = self.threads.get(job_id)
+            if result["status"] == "running" and worker is not None and worker.ident is not None:
+                if not worker.is_alive():
+                    result.update({"status": "failed", "stage": "worker_exit",
+                                   "detail": "Background deployment worker exited unexpectedly"})
+                    self.jobs[job_id].update(result)
+                else:
+                    frame = sys._current_frames().get(worker.ident)
+                    if frame is not None:
+                        result["worker_stack"] = [
+                            f"{Path(entry.filename).name}:{entry.lineno}:{entry.name}"
+                            for entry in traceback.extract_stack(frame)[-8:]
+                        ]
+            return result
 
     def start(self, instance_id: int, action: str, message: str = "") -> dict:
         if action not in {"deploy", "update", "discuss"}:
@@ -85,12 +103,17 @@ class DeploymentManager:
             if action != "discuss":
                 self.states[instance_id] = {"status": "deploying" if action == "deploy" else "updating"}
                 self._save()
-        threading.Thread(target=self._execute, args=(job_id, machine, message, key_ready), daemon=True).start()
+        worker = threading.Thread(target=self._execute,
+                                  args=(job_id, machine, message, key_ready), daemon=True)
+        with self.lock:
+            self.threads[job_id] = worker
+        worker.start()
         return self.job(job_id)
 
     def _stage(self, job_id: str, value: str) -> None:
         with self.lock:
             self.jobs[job_id]["stage"] = value
+            self.jobs[job_id]["stage_at"] = datetime.now(timezone.utc).isoformat()
 
     def _execute(self, job_id: str, machine: dict, message: str, key_ready: bool) -> None:
         action = self.jobs[job_id]["action"]
@@ -132,13 +155,16 @@ class DeploymentManager:
                 self._stage(job_id, stage)
                 update["revision"] = self._ssh(machine, f"git -C {REPO} rev-parse --short HEAD",
                                                stage="read_revision").strip()
-        except (VastError, OSError, subprocess.SubprocessError, RuntimeError, ValueError) as exc:
+        except Exception as exc:
+            # A background thread must always finish its job, including when
+            # Windows subprocess decoding or provider response handling fails.
             update = {"status": "failed", "stage": getattr(exc, "stage", stage),
-                      "detail": getattr(exc, "detail", str(exc))[-1600:]}
+                      "detail": getattr(exc, "detail", str(exc))[-1600:] or type(exc).__name__}
             if isinstance(exc, RemoteCommandError):
                 update["exit_code"] = exc.exit_code
         with self.lock:
             self.jobs[job_id].update(update)
+            self.jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
             if action != "discuss":
                 self.states[instance_id] = {"status": (
                     "ready" if action == "deploy" and update["status"] == "completed" else
@@ -152,11 +178,17 @@ class DeploymentManager:
         host, port = machine["ssh_host"], machine["ssh_port"]
         if not isinstance(host, str) or not _HOST.fullmatch(host) or not isinstance(port, int) or not 1 <= port <= 65535:
             raise VastError("Invalid SSH address from Vast")
-        result = self.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=12",
+        ssh = "ssh"
+        if os.name == "nt":
+            windows_ssh = Path(os.environ.get("WINDIR", "C:\\Windows")) / "System32" / "OpenSSH" / "ssh.exe"
+            if windows_ssh.is_file():
+                ssh = str(windows_ssh)
+        result = self.run([ssh, "-o", "BatchMode=yes", "-o", "ConnectTimeout=12",
                            "-o", "StrictHostKeyChecking=accept-new",
                            "-o", f"UserKnownHostsFile={self.identity.known_hosts}",
                            "-i", str(self.identity.private_key), "-p", str(port),
-                           f"root@{host}", command], capture_output=True, text=True, timeout=timeout)
+                           f"root@{host}", command], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL, timeout=timeout)
         if result.returncode:
             detail = "\n".join(part for part in (result.stderr.strip(), result.stdout.strip()) if part)
             raise RemoteCommandError("ssh_connection" if result.returncode == 255 else stage,
