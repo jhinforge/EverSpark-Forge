@@ -14,6 +14,7 @@ Archon/Vault/Import/*
 Data/*
 !Data/.gitkeep
 Logs/
+Archon/Steward/DeploymentManager/deployment.log*
 Outputs/
 MemoryData/
 

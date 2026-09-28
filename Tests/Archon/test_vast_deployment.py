@@ -82,7 +82,9 @@ class DeploymentTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "states.json"
-            manager = DeploymentManager(machines, Identity(), run=run, state_path=state)
+            log_path = Path(directory) / "deployment.log"
+            manager = DeploymentManager(machines, Identity(), run=run, state_path=state,
+                                        log_path=log_path)
             with self.assertRaisesRegex(VastError, "Deploy Concept"):
                 manager.start(99, "discuss", "你好")
             def complete(action, message=""):
@@ -98,6 +100,17 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(complete("discuss", "你好")["reply"], "远端讨论成功")
             self.assertEqual(complete("update")["status"], "completed")
             self.assertEqual(manager.status(99)["status"], "source_updated")
+            entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(any(item["event"] == "vast_attach" and item["status"] == "completed"
+                                for item in entries))
+            self.assertTrue(any(item["event"] == "ssh_start" and item["action"] == "discuss"
+                                for item in entries))
+            self.assertTrue(any(item["event"] == "ssh_exit" and item["exit_code"] == 0
+                                for item in entries))
+            self.assertTrue(any(item["event"] == "finished" and item["action"] == "discuss"
+                                for item in entries))
+            self.assertNotIn("你好", log_path.read_text(encoding="utf-8"))
+            self.assertNotIn("ssh-ed25519 TEST", log_path.read_text(encoding="utf-8"))
             self.assertEqual(DeploymentManager(machines, Identity(), run=run,
                                                 state_path=state).status(99)["status"], "source_updated")
         self.assertTrue(any("deploy.sh" in call[-1] for call in commands))
@@ -125,7 +138,9 @@ class DeploymentTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             machines = VastInstances(store, opener=provider)
+            log_path = Path(directory) / "deployment.log"
             manager = DeploymentManager(machines, Identity(), state_path=Path(directory) / "states.json",
+                log_path=log_path,
                 run=lambda args, **kw: CompletedProcess(args, 255, "", "Permission denied (publickey)."))
             failed = complete(manager)
             self.assertEqual(failed["stage"], "ssh_connection")
@@ -134,7 +149,7 @@ class DeploymentTests(unittest.TestCase):
 
             manager.run = lambda args, **kw: CompletedProcess(args, 1, "", "zstd: command not found")
             failed = complete(manager)
-            self.assertEqual(failed["stage"], "pod_command")
+            self.assertEqual(failed["stage"], "remote_execution")
             self.assertEqual(failed["exit_code"], 1)
             self.assertIn("zstd", failed["detail"])
 
@@ -147,6 +162,12 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(failed["status"], "failed")
             self.assertEqual(failed["stage"], "remote_execution")
             self.assertIn("Unexpected SSH", failed["detail"])
+            entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(any(item["event"] == "ssh_error" and
+                                item["error_type"] == "AttributeError" for item in entries))
+            self.assertTrue(any(item["event"] == "finished" and
+                                item["status"] == "failed" for item in entries))
+            self.assertNotIn("Permission denied", log_path.read_text(encoding="utf-8"))
 
     def test_rejected_duplicate_key_is_accepted_only_after_ssh_proof(self):
         class DuplicateKeyProvider(Provider):
