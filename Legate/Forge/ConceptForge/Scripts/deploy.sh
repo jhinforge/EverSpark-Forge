@@ -5,7 +5,7 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$repo"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y curl ca-certificates python3 python3-venv python3-dev
+apt-get install -y curl ca-certificates python3 python3-venv python3-dev zstd
 
 if ! command -v ollama >/dev/null 2>&1; then
   curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.34.2 sh
