@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+if command -v realpath >/dev/null 2>&1; then
+  SOURCE="$(realpath "$SOURCE")"
+else
+  SOURCE="$(readlink -f "$SOURCE")"
+fi
+
+LAUNCHER_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+REPO_ROOT="$(cd "${LAUNCHER_DIR}/../../.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+EverSpark Forge CLI
+
+Usage:
+  ./everspark help
+  ./everspark init
+  ./everspark configure [--from <directory>] [--env <file>]
+  ./everspark setup [--plan] [--models all|concept|image]
+  ./everspark start [all|concept|image|orchestrator|webui]
+  ./everspark stop [all|concept|image|orchestrator|webui]
+  ./everspark restart [all|concept|image|orchestrator|webui]
+  ./everspark status [all|concept|image|orchestrator|webui]
+  ./everspark access [--json]
+  ./everspark share [start|status|stop]
+  ./everspark models <plan|status|download|import-concept>
+  ./everspark doctor
+  ./everspark image <command>
+  ./everspark concept <command>
+  ./everspark orchestrator <command>
+  ./everspark webui <command>
+  ./everspark logs <command>
+
+Modules:
+  image         Image Forge execution through adapters such as ComfyUI
+  concept       Concept Forge intent and prompt services such as Ollama
+  orchestrator  Session coordination and task execution
+  webui         User-facing local interface
+  logs          Managed log status, rotation, and retention
+
+Run directly from a clone, or use Archon/Gate/CLI/install.sh to add `everspark` to
+your user PATH.
+EOF
+}
+
+die() {
+  printf '[ERROR] %s\n\n' "$*" >&2
+  usage >&2
+  exit 1
+}
+
+run_handler() {
+  local module_name="$1"
+  local handler="$2"
+  shift 2
+
+  if [ ! -f "$handler" ]; then
+    printf '[ERROR] %s is not available in the current migration build.\n' "$module_name" >&2
+    printf '        Expected handler: %s\n' "$handler" >&2
+    return 2
+  fi
+
+  exec bash "$handler" "$@"
+}
+
+module="${1:-help}"
+if [ "$#" -gt 0 ]; then
+  shift
+fi
+
+case "${module,,}" in
+  help|-h|--help)
+    usage
+    ;;
+  init)
+    exec bash "${REPO_ROOT}/Legate/Crucible/init.sh" "$@"
+    ;;
+  configure)
+    exec python3 "${REPO_ROOT}/Archon/Vault/import_config.py" "$@"
+    ;;
+  doctor)
+    exec bash "${REPO_ROOT}/Legate/Crucible/doctor.sh" "$@"
+    ;;
+  setup)
+    exec bash "${REPO_ROOT}/Legate/Crucible/setup.sh" "$@"
+    ;;
+  models)
+    exec python3 "${REPO_ROOT}/Legate/Crucible/Models/model_manager.py" "$@"
+    ;;
+  start|restart)
+    target="${1:-all}"
+    python3 "${REPO_ROOT}/Legate/Warden/runtime_manager.py" "${module,,}" "$target"
+    if [ "$target" = "all" ] || [ "$target" = "webui" ]; then
+      bash "${REPO_ROOT}/Aegis/Network/Tunnel/start_tunnel.sh"
+      python3 "${REPO_ROOT}/Legate/Envoy/access_info.py"
+    fi
+    ;;
+  stop)
+    target="${1:-all}"
+    if [ "$target" = "all" ] || [ "$target" = "webui" ]; then
+      python3 "${REPO_ROOT}/Aegis/Network/Connectivity/quick_tunnel.py" stop
+      bash "${REPO_ROOT}/Aegis/Network/Tunnel/stop_tunnel.sh"
+    fi
+    exec python3 "${REPO_ROOT}/Legate/Warden/runtime_manager.py" stop "$target"
+    ;;
+  status)
+    target="${1:-all}"
+    python3 "${REPO_ROOT}/Legate/Warden/runtime_manager.py" status "$target"
+    if [ "$target" = "all" ] || [ "$target" = "webui" ]; then
+      bash "${REPO_ROOT}/Aegis/Network/Tunnel/check_tunnel.sh"
+      python3 "${REPO_ROOT}/Aegis/Network/Connectivity/quick_tunnel.py" status
+    fi
+    ;;
+  access)
+    exec python3 "${REPO_ROOT}/Legate/Envoy/access_info.py" "$@"
+    ;;
+  share)
+    exec python3 "${REPO_ROOT}/Aegis/Network/Connectivity/quick_tunnel.py" "$@"
+    ;;
+  image)
+    run_handler "Image Forge" "${REPO_ROOT}/Legate/Forge/ImageForge/cli.sh" "$@"
+    ;;
+  concept)
+    run_handler "Concept Forge" "${REPO_ROOT}/Legate/Forge/ConceptForge/cli.sh" "$@"
+    ;;
+  orchestrator)
+    run_handler "Orchestrator" "${REPO_ROOT}/Archon/Orchestrator/cli.sh" "$@"
+    ;;
+  webui)
+    run_handler "WebUI" "${REPO_ROOT}/Archon/Portal/cli.sh" "$@"
+    ;;
+  logs)
+    run_handler "Runtime Logging" "${REPO_ROOT}/Aegis/Logging/cli.sh" "$@"
+    ;;
+  *)
+    die "unknown module: $module"
+    ;;
+esac

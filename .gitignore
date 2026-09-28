@@ -2,13 +2,13 @@
 .env
 .env.*
 !.env.example
-Infrastructure/Configuration/user.yaml
-Infrastructure/Configuration/user.yml
-Infrastructure/Configuration/user.json
-Infrastructure/Configuration/user.toml
-Infrastructure/Configuration/Import/*
-!Infrastructure/Configuration/Import/README.md
-!Infrastructure/Configuration/Import/.gitkeep
+Archon/Vault/user.yaml
+Archon/Vault/user.yml
+Archon/Vault/user.json
+Archon/Vault/user.toml
+Archon/Vault/Import/*
+!Archon/Vault/Import/README.md
+!Archon/Vault/Import/.gitkeep
 
 # Runtime state
 Data/*

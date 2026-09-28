@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "Infrastructure/Storage"))
+sys.path.insert(0, str(ROOT / "Aegis/Storage"))
 from local_data_archive import DataArchiveError, LocalDataArchive  # noqa: E402
 
 

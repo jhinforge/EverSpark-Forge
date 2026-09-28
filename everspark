@@ -9,4 +9,4 @@ else
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
-exec bash "${SCRIPT_DIR}/NodeCore/Launcher/everspark" "$@"
+exec bash "${SCRIPT_DIR}/Archon/Gate/CLI/everspark" "$@"

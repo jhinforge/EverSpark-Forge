@@ -18,12 +18,12 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 for module_directory in (
-    "Orchestrator",
-    "ForgeLayer",
-    "ForgeLayer/ConceptForge",
-    "ForgeLayer/ImageForge",
-    "ForgeLayer/ConceptForge/Memory",
-    "Infrastructure/Logging",
+    "Archon/Orchestrator",
+    "Legate/Forge",
+    "Legate/Forge/ConceptForge",
+    "Legate/Forge/ImageForge",
+    "Legate/Forge/ConceptForge/Memory",
+    "Aegis/Logging",
 ):
     sys.path.insert(0, str(REPO_ROOT / module_directory))
 
@@ -81,7 +81,7 @@ class UnicodeTests(unittest.TestCase):
 
 class ConfigurationTests(unittest.TestCase):
     def test_existing_config_can_select_diffusers_without_new_adapter_section(self) -> None:
-        config_path = REPO_ROOT / "Orchestrator/orchestrator/config/default_config.json"
+        config_path = REPO_ROOT / "Archon/Orchestrator/orchestrator/config/default_config.json"
         data = json.loads(config_path.read_text(encoding="utf-8"))
         data["image_forge"]["adapters"].pop("diffusers")
         with tempfile.TemporaryDirectory() as directory:

@@ -4,7 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 
-const source = fs.readFileSync(path.join(__dirname, "../../WebUI/static/i18n.js"), "utf8");
+const source = fs.readFileSync(path.join(__dirname, "../../Archon/Portal/static/i18n.js"), "utf8");
 
 function setup(savedLanguage = null, browserLanguage = "zh-CN") {
   const settings = new Map(savedLanguage ? [["everspark.language", savedLanguage]] : []);

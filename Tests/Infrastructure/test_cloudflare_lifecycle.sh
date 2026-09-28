@@ -12,7 +12,7 @@ LOG_DIR="${TEST_ROOT}/logs"
 cleanup() {
   EVERSPARK_CONFIG_FILE="$CONFIG_FILE" \
     PATH="${TEST_ROOT}/bin:${PATH}" \
-    bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/stop_tunnel.sh" \
+    bash "${REPO_ROOT}/Aegis/Network/Tunnel/stop_tunnel.sh" \
     >/dev/null 2>&1 || true
   rm -rf "$TEST_ROOT"
 }
@@ -46,13 +46,13 @@ EOF
 export EVERSPARK_CONFIG_FILE="$CONFIG_FILE"
 export PATH="${TEST_ROOT}/bin:${PATH}"
 
-bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/start_tunnel.sh"
+bash "${REPO_ROOT}/Aegis/Network/Tunnel/start_tunnel.sh"
 test -f "${CF_DIR}/config.yml"
 test -f "${CF_DIR}/${TUNNEL_ID}.json"
 grep -q 'service: http://127.0.0.1:8780' "${CF_DIR}/config.yml"
 
-bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/check_tunnel.sh"
-bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/stop_tunnel.sh"
+bash "${REPO_ROOT}/Aegis/Network/Tunnel/check_tunnel.sh"
+bash "${REPO_ROOT}/Aegis/Network/Tunnel/stop_tunnel.sh"
 
 if pgrep -af "cloudflared.*--config ${CF_DIR}/config.yml.*run" >/dev/null 2>&1; then
   printf 'fake cloudflared process was not stopped\n' >&2

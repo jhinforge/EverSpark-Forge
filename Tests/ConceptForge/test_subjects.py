@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "ForgeLayer" / "ConceptForge"))
+sys.path.insert(0, str(REPO_ROOT / "Legate" / "Forge" / "ConceptForge"))
 
 from concept_forge.providers.ollama import OllamaProvider  # noqa: E402
 from concept_forge.subjects import (  # noqa: E402
@@ -21,7 +21,7 @@ from concept_forge.subjects import (  # noqa: E402
 
 
 EXAMPLE_PATH = (
-    REPO_ROOT / "ForgeLayer" / "ConceptForge" / "Examples" / "character_subject.example.json"
+    REPO_ROOT / "Legate" / "Forge" / "ConceptForge" / "Examples" / "character_subject.example.json"
 )
 
 

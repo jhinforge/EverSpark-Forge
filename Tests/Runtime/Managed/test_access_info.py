@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "NodeCore" / "Runtime" / "Managed"))
+sys.path.insert(0, str(REPO_ROOT / "Legate" / "Envoy"))
 
 import access_info  # noqa: E402
 
@@ -72,7 +72,7 @@ class AccessInfoTests(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / "NodeCore" / "Runtime" / "Managed" / "access_info.py"),
+                str(REPO_ROOT / "Legate" / "Envoy" / "access_info.py"),
                 "--json",
             ],
             env={

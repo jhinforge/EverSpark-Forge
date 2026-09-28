@@ -7,7 +7,7 @@ TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/Infrastructure/Configuration/load_config.sh"
+source "${REPO_ROOT}/Archon/Vault/load_config.sh"
 
 unset EVERSPARK_TEST_VALUE || true
 core_config_default EVERSPARK_TEST_VALUE local
@@ -17,9 +17,9 @@ core_config_require EVERSPARK_TEST_VALUE
 export EVERSPARK_NETWORK_BACKEND=local
 export EVERSPARK_LOG_DIR="${TEST_ROOT}/logs"
 
-bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/start_tunnel.sh"
-bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/check_tunnel.sh"
-bash "${REPO_ROOT}/Infrastructure/Network/Tunnel/stop_tunnel.sh"
+bash "${REPO_ROOT}/Aegis/Network/Tunnel/start_tunnel.sh"
+bash "${REPO_ROOT}/Aegis/Network/Tunnel/check_tunnel.sh"
+bash "${REPO_ROOT}/Aegis/Network/Tunnel/stop_tunnel.sh"
 
 grep -q "Cloudflare Tunnel is disabled" "${TEST_ROOT}/logs/tunnel/tunnel.log"
 
@@ -27,7 +27,7 @@ grep -q "Cloudflare Tunnel is disabled" "${TEST_ROOT}/logs/tunnel/tunnel.log"
 # test isolated from the host package manager by replacing only the command
 # probe and apt boundary after the production module has been sourced.
 # shellcheck disable=SC1091
-source "${REPO_ROOT}/Infrastructure/Storage/rclone.sh"
+source "${REPO_ROOT}/Aegis/Storage/rclone.sh"
 rclone_available=0
 rclone_install_calls=0
 core_command_exists() {

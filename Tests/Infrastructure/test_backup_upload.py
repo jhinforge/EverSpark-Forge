@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "Infrastructure/Storage"))
+sys.path.insert(0, str(ROOT / "Aegis/Storage"))
 from backup_manager import BackupManager, StorageError  # noqa: E402
 
 

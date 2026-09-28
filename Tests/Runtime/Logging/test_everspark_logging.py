@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Logging"))
+sys.path.insert(0, str(REPO_ROOT / "Aegis" / "Logging"))
 
 from everspark_logging import LogConfig, get_logger  # noqa: E402
 

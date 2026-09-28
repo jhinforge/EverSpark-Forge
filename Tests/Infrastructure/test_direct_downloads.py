@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "Infrastructure" / "Storage"))
+sys.path.insert(0, str(REPO_ROOT / "Aegis" / "Storage"))
 
 from download_manager import (  # noqa: E402
     DirectDownloadManager,

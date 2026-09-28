@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "NodeCore/Runtime/Managed"))
-sys.path.insert(0, str(REPO_ROOT / "Infrastructure/Network/Connectivity"))
+sys.path.insert(0, str(REPO_ROOT / "Legate/Envoy"))
+sys.path.insert(0, str(REPO_ROOT / "Aegis/Network/Connectivity"))
 
 import access_info  # noqa: E402
 import quick_tunnel  # noqa: E402

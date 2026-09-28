@@ -1,0 +1,60 @@
+{
+  "orchestrator": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "request_timeout": 600,
+    "max_batch_size": 20
+  },
+  "concept_forge": {
+    "provider": "ollama",
+    "supported_models": ["illustrious"],
+    "max_model_retries": 3,
+    "providers": {
+      "ollama": {
+        "base_url": "http://127.0.0.1:11434",
+        "model": "everspark-concept",
+        "prompt_mode": "no_think",
+        "timeout": 180
+      }
+    }
+  },
+  "image_forge": {
+    "adapter": "comfyui",
+    "adapters": {
+      "comfyui": {
+        "base_url": "http://127.0.0.1:8188",
+        "timeout": 60
+      },
+      "diffusers": {
+        "base_url": "http://127.0.0.1:8190",
+        "timeout": 60,
+        "default_checkpoint": "Illustrious-XL-v1.0.safetensors"
+      }
+    }
+  },
+  "storage": {
+    "backend": "local",
+    "rclone": {
+      "enabled": false,
+      "config_file": "",
+      "image_remote": "",
+      "concept_remote": "",
+      "backup_remote": "",
+      "timeout": 60
+    }
+  },
+  "memory": {
+    "database": "Data/Memory/everspark.db",
+    "default_session_id": "main",
+    "max_history_messages": 20
+  },
+  "workflow": {
+    "directory": "Legate/Forge/ImageForge/Workflows",
+    "default_workflow": "base-illustrious",
+    "template": "Legate/Forge/ImageForge/Workflows/base_workflow_api.json",
+    "positive_prompt_node": "34",
+    "negative_prompt_node": "7",
+    "seed_node": "31",
+    "managed_default_checkpoint": "Illustrious-XL-v1.0.safetensors"
+  }
+}

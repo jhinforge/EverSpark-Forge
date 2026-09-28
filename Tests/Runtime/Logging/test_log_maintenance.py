@@ -9,7 +9,7 @@ from pathlib import Path
 
 TEST_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TEST_DIR.parents[2]
-LOGGING_DIR = REPO_ROOT / "Infrastructure" / "Logging"
+LOGGING_DIR = REPO_ROOT / "Aegis" / "Logging"
 import sys
 
 sys.path.insert(0, str(LOGGING_DIR))
