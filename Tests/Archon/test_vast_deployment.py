@@ -54,6 +54,31 @@ class Identity:
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_deploy_is_not_ready_when_real_discussion_probe_is_empty(self):
+        provider, store = Provider(), FakeCredentialStore()
+        store.set("key")
+        machines = VastInstances(store, opener=provider)
+        calls = []
+
+        def run(argv, **_kwargs):
+            calls.append(argv[-1])
+            return CompletedProcess(argv, 0, "" if "verify.py" in argv[-1] else "abc123", "")
+
+        with tempfile.TemporaryDirectory() as directory:
+            manager = DeploymentManager(machines, Identity(), run=run,
+                state_path=Path(directory) / "states.json",
+                log_path=Path(directory) / "deployment.log")
+            job = manager.start(99, "deploy")
+            for _ in range(100):
+                result = manager.job(job["id"])
+                if result["status"] != "running":
+                    break
+                time.sleep(.01)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["stage"], "concept_health")
+            self.assertEqual(manager.status(99)["status"], "deployment_failed")
+            self.assertFalse(any("rev-parse" in command for command in calls))
+
     def test_rent_and_deploy_discussion_then_update(self):
         provider = Provider()
         store = FakeCredentialStore()

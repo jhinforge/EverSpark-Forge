@@ -430,7 +430,7 @@ class NodeBridgeTests(unittest.TestCase):
                 seen = []
 
                 def agent():
-                    for _ in range(2):
+                    for _ in range(3):
                         task = post(bridge.url, "/node/next", {"instance_id": 99,
                                                                  "session": session})
                         seen.append(task["action"])
@@ -450,7 +450,7 @@ class NodeBridgeTests(unittest.TestCase):
                     time.sleep(.01)
                 self.assertEqual(result["status"], "completed")
                 self.assertEqual(result["revision"], "abc123")
-                self.assertEqual(seen, ["deploy", "revision"])
+                self.assertEqual(seen, ["deploy", "health", "revision"])
                 self.assertEqual(manager.status(99)["status"], "ready")
                 self.assertEqual(bridge.status(99), {"status": "online"})
                 self.assertIn('"event": "agent_exit"',

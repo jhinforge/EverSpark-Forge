@@ -282,6 +282,20 @@ class DeploymentManager:
             if action == "discuss":
                 update["reply"] = output[-4000:]
             else:
+                if action == "deploy":
+                    stage = "concept_health"
+                    self._stage(job_id, stage)
+                    try:
+                        health = (self.bridge.execute(instance_id, "health", timeout=240)
+                                  if use_agent else self._ssh(
+                                      machine, f"python3 {REPO}/Legate/Forge/ConceptForge/verify.py "
+                                               f"{shlex.quote('请回复：就绪。')}",
+                                      stage=stage, timeout=240, job_id=job_id, action=action))
+                        if not health.strip():
+                            raise VastError("Concept Forge returned an empty health response")
+                    except VastError as exc:
+                        exc.stage = stage
+                        raise
                 stage = "read_revision"
                 self._stage(job_id, stage)
                 update["revision"] = (self.bridge.execute(instance_id, "revision", timeout=45)

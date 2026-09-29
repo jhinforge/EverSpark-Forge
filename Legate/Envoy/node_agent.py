@@ -39,6 +39,9 @@ def execute(action: str, message: str) -> dict:
         args, timeout = ["bash", str(REPO / "Legate/Envoy/update_source.sh")], 1800
     elif action == "revision":
         args, timeout = ["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], 30
+    elif action == "health":
+        args, timeout = ["python3", str(REPO / "Legate/Forge/ConceptForge/verify.py"),
+                         "请回复：就绪。"], 240
     elif action == "discuss" and isinstance(message, str) and 1 <= len(message.strip()) <= 500:
         args, timeout = ["python3", str(REPO / "Legate/Forge/ConceptForge/verify.py"),
                          message.strip()], 240
