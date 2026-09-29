@@ -6,9 +6,11 @@ set -euo pipefail
 if ! command -v tailscaled >/dev/null 2>&1; then
   curl -fsSL https://tailscale.com/install.sh | sh
 fi
-tailscaled --tun=userspace-networking \
-  --outbound-http-proxy-listen=127.0.0.1:1055 \
-  --state=/workspace/everspark-tailscale.state >/workspace/everspark-tailscale.log 2>&1 &
+if ! tailscale status >/dev/null 2>&1; then
+  tailscaled --tun=userspace-networking \
+    --outbound-http-proxy-listen=127.0.0.1:1055 \
+    --state=/workspace/everspark-tailscale.state >/workspace/everspark-tailscale.log 2>&1 &
+fi
 for attempt in $(seq 1 30); do
   if tailscale status >/dev/null 2>&1; then break; fi
   sleep 1
@@ -16,7 +18,12 @@ done
 if ! tailscale ip -4 >/dev/null 2>&1; then
   # The auth key supplies the node identity; a hardcoded tag requires a
   # corresponding tagOwners rule in the user's tailnet and blocks registration.
-  tailscale up --auth-key="${EVERSPARK_TAILSCALE_AUTH_KEY:?}"
+  # A previous failed attempt may have left the old tag preference in state.
+  # Tailscale requires --reset when changing that preference.
+  if ! output=$(tailscale up --reset --auth-key="${EVERSPARK_TAILSCALE_AUTH_KEY:?}" 2>&1); then
+    printf '%s\n' "$output" | sed -E 's/tskey-[[:alnum:]_-]+/[REDACTED]/g' >&2
+    exit 1
+  fi
 fi
 unset EVERSPARK_TAILSCALE_AUTH_KEY
 cd /workspace/EverSpark-Forge
