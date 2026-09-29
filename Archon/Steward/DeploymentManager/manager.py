@@ -113,7 +113,9 @@ class DeploymentManager:
         machine = self.machines.one(instance_id)
         if machine["actual_status"] != "running":
             raise VastError("Wait for the Pod to finish starting", 409)
-        if not machine.get("ssh_host") or not machine.get("ssh_port"):
+        if not (self.bridge and self.bridge.configured(instance_id)) and (
+            not machine.get("ssh_host") or not machine.get("ssh_port")
+        ):
             raise VastError("The Pod does not have an SSH address yet", 409)
         if action == "discuss" and self.status(instance_id).get("status") != "ready":
             raise VastError("Deploy Concept Forge before testing discussion", 409)

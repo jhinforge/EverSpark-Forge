@@ -1294,7 +1294,8 @@ function renderMachine(machine) {
     progress.textContent = `${t("Task stage")}: ${state.podJobs[machine.id]}`;
     card.appendChild(progress);
   }
-  if (machine.actual_status === "running" && machine.ssh_host) {
+  if (machine.actual_status === "running" &&
+      (machine.ssh_host || (machine.node && machine.node.status !== "unconfigured"))) {
     const actions = document.createElement("div");
     actions.className = "machine-actions";
     for (const [action, label] of [["deploy", "Deploy Concept Forge"],

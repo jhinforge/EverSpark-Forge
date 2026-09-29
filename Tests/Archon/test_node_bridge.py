@@ -17,8 +17,8 @@ from Legate.Envoy.node_agent import execute
 
 class Machine:
     def one(self, instance_id):
-        return {"id": instance_id, "actual_status": "running", "ssh_host": "example.com",
-                "ssh_port": 22}
+        return {"id": instance_id, "actual_status": "running", "ssh_host": None,
+                "ssh_port": None}
 
 
 class Identity:
