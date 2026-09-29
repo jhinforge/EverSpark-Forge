@@ -56,6 +56,7 @@ class DeploymentManager:
         except (OSError, ValueError, TypeError):
             self.states = {}
         self.lock = threading.Lock()
+        self.retired_instances = set()
 
     def _event(self, job_id: str, instance_id: int, action: str, event: str, **fields) -> None:
         # Only pass controlled metadata here. Commands, prompts, keys and SSH output
@@ -82,6 +83,52 @@ class DeploymentManager:
     def status(self, instance_id: int) -> dict:
         with self.lock:
             return dict(self.states.get(instance_id, {"status": "not_deployed"}))
+
+    def reconcile_instances(self, first_page: dict) -> bool:
+        """Forget destroyed instances only after a complete, valid Vast inventory."""
+        known = set()
+        seen_cursors = set()
+        page = first_page
+        while True:
+            for machine in page["instances"]:
+                instance_id = machine.get("id")
+                if not isinstance(instance_id, int) or isinstance(instance_id, bool) or instance_id < 1:
+                    return False
+                known.add(instance_id)
+            cursor = page.get("next_token")
+            if not cursor:
+                break
+            if cursor in seen_cursors or not isinstance(cursor, str):
+                return False
+            seen_cursors.add(cursor)
+            try:
+                page = self.machines.list(cursor)
+            except VastError:
+                return False
+        total = first_page.get("total")
+        if isinstance(total, int) and total > len(known):
+            return False
+        with self.lock:
+            candidates = set(self.states) - known
+        if self.bridge:
+            candidates.update(self.bridge.instance_ids() - known)
+        for instance_id in candidates:
+            try:
+                self.machines.one(instance_id)
+            except VastError as exc:
+                if exc.status == 404:
+                    continue
+            # A transient inventory gap or failed inspection must not revoke a node.
+            known.add(instance_id)
+        removed_nodes = self.bridge.prune(known) if self.bridge else set()
+        with self.lock:
+            removed = set(self.states) - known
+            self.retired_instances.update(removed | removed_nodes)
+            if removed:
+                for instance_id in removed:
+                    self.states.pop(instance_id)
+                self._save()
+        return True
 
     def job(self, job_id: str) -> dict:
         with self.lock:
@@ -212,7 +259,7 @@ class DeploymentManager:
         with self.lock:
             self.jobs[job_id].update(update)
             self.jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
-            if action != "discuss":
+            if action != "discuss" and instance_id not in self.retired_instances:
                 self.states[instance_id] = {"status": (
                     "ready" if action == "deploy" and update["status"] == "completed" else
                     "source_updated" if action == "update" and update["status"] == "completed" else

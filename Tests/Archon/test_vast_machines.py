@@ -70,6 +70,17 @@ class FakeOffers:
 
 
 class VastMachineTests(unittest.TestCase):
+    def test_missing_instance_is_distinct_from_provider_failure(self):
+        store = FakeCredentialStore()
+        store.set("key")
+
+        def missing(request, timeout):
+            raise HTTPError(request.full_url, 404, "Not Found", {}, None)
+
+        with self.assertRaises(VastError) as gone:
+            VastInstances(store, opener=missing).one(99)
+        self.assertEqual(gone.exception.status, 404)
+
     def test_validation_persistence_pagination_and_response_allowlist(self):
         store, provider = FakeCredentialStore(), FakeVast()
         machines = VastInstances(store, opener=provider)

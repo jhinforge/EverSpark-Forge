@@ -39,6 +39,8 @@ class ControlHandler(BaseHTTPRequestHandler):
                     cursor = parse_qs(parsed.query).get("after_token", [""])[0]
                     result = self.server.machines.list(cursor)
                     if self.server.deployments:
+                        if not cursor:
+                            self.server.deployments.reconcile_instances(result)
                         for machine in result["instances"]:
                             machine["forge"] = self.server.deployments.status(machine["id"])
                             if self.server.deployments.bridge:
@@ -141,6 +143,8 @@ class ControlHandler(BaseHTTPRequestHandler):
                     bridge = self.server.deployments.bridge
                     node_env = None
                     token = None
+                    if bridge and bridge.agent_requested and not bridge.auth_key:
+                        raise VastError("Tailscale auth key already used; set a new key and restart Archon", 409)
                     if bridge and bridge.auth_key:
                         token = bridge.reserve()
                         node_env = {"EVERSPARK_TAILSCALE_AUTH_KEY": bridge.auth_key,

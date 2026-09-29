@@ -138,7 +138,11 @@ class VastInstances:
         try:
             with self.opener(request, timeout=10) as response:
                 payload = json.load(response)
-        except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+        except HTTPError as exc:
+            if exc.code == 404:
+                raise VastError("Vast instance was not found", 404) from None
+            raise VastError("Could not inspect Vast instance") from None
+        except (URLError, TimeoutError, OSError, ValueError):
             raise VastError("Could not inspect Vast instance") from None
         item = payload.get("instances") if isinstance(payload, dict) else None
         if not isinstance(item, dict) or item.get("id") != instance_id:

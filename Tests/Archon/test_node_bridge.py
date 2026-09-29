@@ -13,8 +13,10 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from Archon.Steward.DeploymentManager.manager import DeploymentManager
+from Archon.Gate.control_server import ControlServer
 from Archon.Steward.NodeManager.bridge import NodeBridge, tailscale_ip
 from Archon.Steward.vast_instances import VastError
+from Archon.Vault.windows_credentials import CredentialError
 from Legate.Envoy.node_agent import BridgeError, execute, run as run_agent
 
 
@@ -31,6 +33,7 @@ class Identity:
 
 class Credentials:
     values = {}
+    fail_targets = set()
 
     def __init__(self, target):
         self.target = target
@@ -42,6 +45,8 @@ class Credentials:
         self.values[self.target] = secret
 
     def delete(self):
+        if self.target in self.fail_targets:
+            raise CredentialError("Cannot delete the Windows credential")
         self.values.pop(self.target, None)
 
 
@@ -53,6 +58,148 @@ def post(url, path, body):
 
 
 class NodeBridgeTests(unittest.TestCase):
+    def test_machine_list_reconciles_destroyed_node(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Credentials.values = {}
+            Credentials.fail_targets = set()
+            bridge = NodeBridge("127.0.0.1", 0, state_path=Path(directory) / "nodes.json",
+                                credential_factory=Credentials)
+            bridge.configure_auth_key("test-key")
+            token = bridge.reserve()
+            bridge.bind(token, 99)
+
+            class EmptyInventory(Machine):
+                def list(self, _cursor):
+                    return {"instances": [], "next_token": None, "total": 0}
+
+                def one(self, _instance_id):
+                    raise VastError("Vast instance was not found", 404)
+
+            machines = EmptyInventory()
+            manager = DeploymentManager(machines, Identity(), bridge=bridge,
+                state_path=Path(directory) / "deployments.json",
+                log_path=Path(directory) / "deploy.log")
+            backend = ControlServer(("127.0.0.1", 0), machines, deployments=manager)
+            worker = threading.Thread(target=backend.serve_forever)
+            worker.start()
+            try:
+                with urlopen(f"http://127.0.0.1:{backend.server_port}/machines/vast/instances") as reply:
+                    self.assertEqual(json.load(reply)["instances"], [])
+                self.assertFalse(bridge.configured(99))
+                self.assertNotIn("EverSpark Forge/Node 99/joining", Credentials.values)
+            finally:
+                backend.shutdown()
+                backend.server_close()
+                worker.join(3)
+                bridge.close()
+
+    def test_used_agent_key_does_not_silently_rent_in_ssh_mode(self):
+        bridge = NodeBridge("127.0.0.1", 0)
+        bridge.configure_auth_key("one-off-key")
+        token = bridge.reserve()
+        bridge.bind(token, 99)
+
+        class Offers:
+            def quote(self, _offer_id):
+                return {"cuda_max_good": 12.8}
+
+        class Machines:
+            def create(self, *_args, **_kwargs):
+                raise AssertionError("Should not rent an SSH Pod with an exhausted Agent key")
+
+        backend = ControlServer(("127.0.0.1", 0), Machines(), Offers(),
+                                type("Deployments", (), {"bridge": bridge})())
+        worker = threading.Thread(target=backend.serve_forever)
+        worker.start()
+        try:
+            url = f"http://127.0.0.1:{backend.server_port}/machines/vast/rent"
+            request = Request(url, data=b'{"offer_id":71}',
+                              headers={"Content-Type": "application/json"})
+            with self.assertRaises(HTTPError) as exhausted:
+                urlopen(request, timeout=3)
+            self.assertEqual(exhausted.exception.code, 409)
+            self.assertIn("new key", exhausted.exception.read().decode())
+        finally:
+            backend.shutdown()
+            backend.server_close()
+            worker.join(3)
+            bridge.close()
+
+    def test_complete_inventory_prunes_destroyed_node_and_retains_stopped_node(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Credentials.values = {}
+            Credentials.fail_targets = set()
+            state = Path(directory) / "nodes.json"
+            deployment_state = Path(directory) / "deployments.json"
+            deployment_state.write_text(json.dumps({"99": {"status": "ready"}}))
+            registry = {"state_path": state, "credential_factory": Credentials}
+            bridge = NodeBridge("127.0.0.1", 0, **registry)
+            try:
+                bridge.configure_auth_key("used-key")
+                token = bridge.reserve()
+                bridge.bind(token, 99)
+                session = bridge.register(token, 99)["session"]
+                self.assertNotIn(token, state.read_text())
+                self.assertNotIn(session, state.read_text())
+            finally:
+                bridge.close()
+
+            restored = NodeBridge("127.0.0.1", 0, **registry)
+            try:
+                class Inventory(Machine):
+                    fail = False
+                    destroyed = False
+
+                    def list(self, cursor):
+                        if self.fail:
+                            raise VastError("Temporary Vast outage")
+                        return {"instances": [{"id": 99, "actual_status": "stopped"}],
+                                "next_token": None}
+
+                    def one(self, instance_id):
+                        if self.destroyed:
+                            raise VastError("Vast instance was not found", 404)
+                        return super().one(instance_id)
+
+                machines = Inventory()
+                manager = DeploymentManager(machines, Identity(), bridge=restored,
+                    state_path=deployment_state, log_path=Path(directory) / "deploy.log")
+                first_page = {"instances": [{"id": 12}], "next_token": "next", "total": 2}
+                self.assertTrue(manager.reconcile_instances(first_page))
+                self.assertTrue(restored.configured(99))
+                machines.fail = True
+                self.assertFalse(manager.reconcile_instances(first_page))
+                self.assertTrue(restored.configured(99))
+                self.assertFalse(manager.reconcile_instances({"instances": [],
+                                                               "next_token": None, "total": 2}))
+                self.assertTrue(restored.configured(99))
+                self.assertTrue(manager.reconcile_instances({"instances": [],
+                                                              "next_token": None, "total": 0}))
+                self.assertTrue(restored.configured(99))  # Single-instance check still finds it.
+
+                machines.destroyed = True
+                Credentials.fail_targets = {"EverSpark Forge/Node 99/online"}
+                self.assertTrue(manager.reconcile_instances({"instances": [],
+                                                              "next_token": None, "total": 0}))
+                self.assertFalse(restored.configured(99))
+                self.assertEqual(manager.status(99)["status"], "not_deployed")
+                self.assertNotIn("99", json.loads(state.read_text())["nodes"])
+                self.assertEqual(json.loads(state.read_text())["retired"], [99])
+                self.assertNotIn("EverSpark Forge/Node 99/joining", Credentials.values)
+            finally:
+                Credentials.fail_targets = set()
+                restored.close()
+            empty = NodeBridge("127.0.0.1", 0, **registry)
+            try:
+                self.assertEqual(json.loads(state.read_text())["retired"], [])
+                self.assertNotIn("EverSpark Forge/Node 99/online", Credentials.values)
+                empty.configure_auth_key("used-key")
+                self.assertIsNone(empty.auth_key)
+                empty.configure_auth_key("fresh-key")
+                self.assertTrue(empty.reserve())
+            finally:
+                empty.close()
+
     def test_agent_registers_again_when_archon_rejects_old_session(self):
         seen = []
 

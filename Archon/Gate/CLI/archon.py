@@ -61,9 +61,7 @@ def start() -> int:
         if machines and (auth_key or node_state.is_file()):
             bridge = NodeBridge(tailscale_ip(), int(os.environ.get("EVERSPARK_NODE_PORT", "8766")),
                                 state_path=node_state, credential_factory=WindowsCredentialStore)
-            # A node already enrolled with this process's one-off key remains
-            # usable after restart; never reuse that key to rent another node.
-            bridge.auth_key = auth_key if not bridge.nodes else None
+            bridge.configure_auth_key(auth_key)
             bridge.start()
         deployments = DeploymentManager(machines, SSHIdentity(), bridge=bridge) if machines else None
         backend = ControlServer(("127.0.0.1", backend_port), machines, offers, deployments)

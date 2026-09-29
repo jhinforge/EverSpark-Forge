@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import hashlib
 import ipaddress
 import json
 import os
@@ -33,6 +34,7 @@ class NodeBridge:
         self.lock = threading.Condition()
         self.url = f"http://{host}:{self.server.server_port}"
         self.auth_key = None
+        self.agent_requested = False
         self.claimed = False
         self.pending = {}  # bootstrap token -> instance id, assigned after rental
         self.nodes = {}  # instance id -> session and task queue
@@ -46,7 +48,13 @@ class NodeBridge:
             # A restarted Archon can also complete a registration whose first
             # response was lost as the previous process exited.
             self.pending[bootstrap] = instance_id
-        self.claimed = bool(self.nodes)
+        # Existing nodes do not consume a new, distinct auth key supplied on restart.
+
+    def configure_auth_key(self, auth_key: str) -> None:
+        self.agent_requested = bool(auth_key)
+        used_hash = self.registry.used_key_hash if self.registry else ""
+        self.auth_key = (auth_key if auth_key and hashlib.sha256(
+            auth_key.encode("utf-8")).hexdigest() != used_hash else None)
 
     def start(self):
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True,
@@ -73,7 +81,8 @@ class NodeBridge:
             if token not in self.pending:
                 raise VastError("Unknown node reservation", 400)
             if self.registry:
-                self.registry.save(instance_id, "joining", token)
+                self.registry.save(instance_id, "joining", token,
+                                   used_key_hash=hashlib.sha256(self.auth_key.encode()).hexdigest())
             self.pending[token] = instance_id
             self.nodes[instance_id] = {"status": "joining", "seen": 0.0,
                                        "session": None, "tasks": deque(), "results": {}}
@@ -151,6 +160,26 @@ class NodeBridge:
         with self.lock:
             return instance_id in self.nodes
 
+    def instance_ids(self) -> set[int]:
+        with self.lock:
+            return set(self.nodes)
+
+    def prune(self, live_ids: set[int]) -> set[int]:
+        """Revoke nodes confirmed absent from a complete provider inventory."""
+        with self.lock:
+            removed = set(self.nodes) - live_ids
+            if not removed:
+                return set()
+            if self.registry:
+                self.registry.remove(removed)
+            for instance_id in removed:
+                node = self.nodes.pop(instance_id)
+                node["status"] = "removed"
+            self.pending = {token: instance_id for token, instance_id in self.pending.items()
+                            if instance_id not in removed}
+            self.lock.notify_all()
+            return removed
+
     def execute(self, instance_id: int, action: str, message: str = "", timeout: int = 240) -> str:
         deadline = time.monotonic() + timeout
         join_deadline = min(deadline, time.monotonic() + 120)
@@ -159,6 +188,8 @@ class NodeBridge:
             if not node:
                 raise VastError("Node was not provisioned for agent execution", 409)
             while node["status"] != "online":
+                if node["status"] == "removed":
+                    raise VastError("Node instance was destroyed", 404)
                 remaining = join_deadline - time.monotonic()
                 if remaining <= 0:
                     raise NodeRegistrationError()
@@ -168,6 +199,8 @@ class NodeBridge:
             node["tasks"].append({"id": task_id, "action": action, "message": message})
             self.lock.notify_all()
             while node["results"][task_id] is None:
+                if node["status"] == "removed":
+                    raise VastError("Node instance was destroyed", 404)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     node["results"].pop(task_id, None)
