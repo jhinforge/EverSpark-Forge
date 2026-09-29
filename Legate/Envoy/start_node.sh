@@ -14,7 +14,9 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 if ! tailscale ip -4 >/dev/null 2>&1; then
-  tailscale up --auth-key="${EVERSPARK_TAILSCALE_AUTH_KEY:?}" --advertise-tags=tag:everspark-node
+  # The auth key supplies the node identity; a hardcoded tag requires a
+  # corresponding tagOwners rule in the user's tailnet and blocks registration.
+  tailscale up --auth-key="${EVERSPARK_TAILSCALE_AUTH_KEY:?}"
 fi
 unset EVERSPARK_TAILSCALE_AUTH_KEY
 cd /workspace/EverSpark-Forge
