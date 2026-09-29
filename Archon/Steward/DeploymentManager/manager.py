@@ -123,8 +123,15 @@ class DeploymentManager:
         temporary.replace(self.jobs_path)
 
     def status(self, instance_id: int) -> dict:
+        runtime_id = self.bridge.runtime_id(instance_id) if self.bridge else None
         with self.lock:
-            return dict(self.states.get(instance_id, {"status": "not_deployed"}))
+            state = self.states.get(instance_id, {"status": "not_deployed"})
+            if (state.get("status") == "ready" and state.get("runtime_id") and runtime_id
+                and state["runtime_id"] != runtime_id):
+                self.states[instance_id] = {"status": "verification_required"}
+                self._save()
+                state = self.states[instance_id]
+            return dict(state)
 
     def reconcile_instances(self, first_page: dict) -> bool:
         """Forget destroyed instances only after a complete, valid Vast inventory."""
@@ -258,6 +265,7 @@ class DeploymentManager:
         instance_id = machine["id"]
         stage = "ssh_identity"
         error_type = None
+        use_agent = False
         try:
             use_agent = bool(self.bridge and self.bridge.configured(instance_id))
             if not key_ready and not use_agent:
@@ -332,6 +340,9 @@ class DeploymentManager:
                       "detail": getattr(exc, "detail", str(exc))[-1600:] or type(exc).__name__}
             if isinstance(getattr(exc, "exit_code", None), int):
                 update["exit_code"] = exc.exit_code
+        runtime_id = (self.bridge.runtime_id(instance_id) if use_agent and self.bridge
+                      and update["status"] == "completed" and action in {"deploy", "verify"}
+                      else None)
         with self.lock:
             self.jobs[job_id].update(update)
             self.jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
@@ -341,7 +352,8 @@ class DeploymentManager:
                     "source_updated" if action == "update" and update["status"] == "completed" else
                     "verification_required" if action == "verify" else
                     "deployment_failed" if action == "deploy" else "update_failed"),
-                    **({"revision": update["revision"]} if "revision" in update else {})}
+                    **({"revision": update["revision"]} if "revision" in update else {}),
+                    **({"runtime_id": runtime_id} if runtime_id else {})}
                 self._save()
             if action != "discuss":
                 self._save_jobs()

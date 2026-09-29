@@ -44,6 +44,7 @@ class NodeBridge:
                 "status": "joining" if phase == "joining" else "offline",
                 "seen": 0.0, "session": secret if phase == "online" else None,
                 "tasks": deque(), "results": {}, "joined_at": time.monotonic(),
+                "bootstrap": bootstrap, "runtime_id": None,
             }
             # A restarted Archon can also complete a registration whose first
             # response was lost as the previous process exited.
@@ -86,7 +87,8 @@ class NodeBridge:
             self.pending[token] = instance_id
             self.nodes[instance_id] = {"status": "joining", "seen": 0.0,
                                        "session": None, "tasks": deque(), "results": {},
-                                       "joined_at": time.monotonic()}
+                                       "joined_at": time.monotonic(), "bootstrap": token,
+                                       "runtime_id": None}
             self.lock.notify_all()
             self.auth_key = None
 
@@ -96,21 +98,28 @@ class NodeBridge:
                 self.pending.pop(token)
                 self.claimed = False
 
-    def register(self, token: str, instance_id: int) -> dict:
+    def register(self, token: str, instance_id: int, runtime_id: str | None = None) -> dict:
         with self.lock:
             if not isinstance(instance_id, int) or isinstance(instance_id, bool):
                 raise VastError("Invalid node identity", 400)
+            if runtime_id is not None and (not isinstance(runtime_id, str) or
+                len(runtime_id) != 32 or any(char not in "0123456789abcdef" for char in runtime_id)):
+                raise VastError("Invalid Agent runtime identity", 400)
             expected = self.pending.get(token)
-            if expected is None or expected != instance_id:
+            node = self.nodes.get(instance_id)
+            restarted = (node is not None and runtime_id is not None and
+                         runtime_id != node["runtime_id"] and node["session"] is not None and
+                         isinstance(token, str) and hmac.compare_digest(token, node["bootstrap"]))
+            if expected != instance_id and not restarted:
                 raise VastError("Node registration is not ready or authorized", 403)
-            node = self.nodes[instance_id]
             # A bootstrap credential can register only once. The session is
             # kept by the agent for subsequent polls and result submissions.
             session = secrets.token_urlsafe(32)
             if self.registry:
                 self.registry.save(instance_id, "online", session)
-            self.pending.pop(token)
+            self.pending.pop(token, None)
             node["session"] = session
+            node["runtime_id"] = runtime_id
             node["seen"] = time.monotonic()
             node["status"] = "online"
             self.lock.notify_all()
@@ -163,6 +172,11 @@ class NodeBridge:
     def configured(self, instance_id: int) -> bool:
         with self.lock:
             return instance_id in self.nodes
+
+    def runtime_id(self, instance_id: int) -> str | None:
+        with self.lock:
+            node = self.nodes.get(instance_id)
+            return node["runtime_id"] if node else None
 
     def instance_ids(self) -> set[int]:
         with self.lock:
@@ -245,7 +259,8 @@ class _NodeHandler(BaseHTTPRequestHandler):
             bridge = self.server.bridge
             instance_id = body.get("instance_id")
             if self.path == "/node/register":
-                result = bridge.register(body.get("bootstrap", ""), instance_id)
+                result = bridge.register(body.get("bootstrap", ""), instance_id,
+                                         body.get("runtime_id"))
             elif self.path == "/node/next":
                 result = bridge.next_task(instance_id, body.get("session", ""))
             elif self.path == "/node/result":

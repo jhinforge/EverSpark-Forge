@@ -58,6 +58,42 @@ def post(url, path, body):
 
 
 class NodeBridgeTests(unittest.TestCase):
+    def test_agent_runtime_change_invalidates_readiness_across_archon_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Credentials.values = {}
+            registry = {"state_path": Path(directory) / "nodes.json",
+                        "credential_factory": Credentials}
+            state = Path(directory) / "deployments.json"
+            state.write_text(json.dumps({"99": {"status": "ready", "runtime_id": "a" * 32}}))
+            first = NodeBridge("127.0.0.1", 0, **registry)
+            try:
+                first.configure_auth_key("one-off-key")
+                token = first.reserve()
+                first.bind(token, 99)
+                session = first.register(token, 99, "a" * 32)["session"]
+                self.assertEqual(first.runtime_id(99), "a" * 32)
+                with self.assertRaises(VastError):
+                    first.register(token, 99, "a" * 32)
+            finally:
+                first.close()
+            restored = NodeBridge("127.0.0.1", 0, **registry)
+            try:
+                manager = DeploymentManager(Machine(), Identity(), bridge=restored,
+                    state_path=state, log_path=Path(directory) / "deploy.log")
+                old_session = restored.register(token, 99, "a" * 32)["session"]
+                # Archon restart already conservatively requires verification.
+                self.assertEqual(manager.status(99)["status"], "verification_required")
+                manager.states[99] = {"status": "ready", "runtime_id": "a" * 32}
+                restarted_session = restored.register(token, 99, "b" * 32)["session"]
+                self.assertNotEqual(session, restarted_session)
+                with self.assertRaises(VastError):
+                    restored.next_task(99, old_session)
+                self.assertEqual(manager.status(99)["status"], "verification_required")
+                self.assertEqual(json.loads(state.read_text())["99"]["status"],
+                                 "verification_required")
+            finally:
+                restored.close()
+
     def test_agent_journal_replays_result_without_running_command_twice(self):
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory) / "agent.json"
@@ -284,6 +320,7 @@ class NodeBridgeTests(unittest.TestCase):
         self.assertEqual([path for path, _ in seen],
                          ["/node/register", "/node/next", "/node/register", "/node/next"])
         self.assertEqual(seen[2][1]["bootstrap"], "bootstrap")
+        self.assertEqual(seen[0][1]["runtime_id"], seen[2][1]["runtime_id"])
         self.assertEqual(seen[-1][1]["session"], "second")
 
     def test_registration_can_finish_after_response_is_lost_during_restart(self):
@@ -429,7 +466,8 @@ class NodeBridgeTests(unittest.TestCase):
                                                      "bootstrap": bootstrap})
             self.assertEqual(wrong_id.exception.code, 403)
             session = post(bridge.url, "/node/register", {"instance_id": 99,
-                                                           "bootstrap": bootstrap})["session"]
+                                                           "bootstrap": bootstrap,
+                                                           "runtime_id": "a" * 32})["session"]
             with self.assertRaises(HTTPError) as replay:
                 post(bridge.url, "/node/register", {"instance_id": 99,
                                                      "bootstrap": bootstrap})
@@ -469,6 +507,7 @@ class NodeBridgeTests(unittest.TestCase):
                 self.assertEqual(result["revision"], "abc123")
                 self.assertEqual(seen, ["deploy", "health", "revision"])
                 self.assertEqual(manager.status(99)["status"], "ready")
+                self.assertEqual(manager.status(99)["runtime_id"], "a" * 32)
                 self.assertEqual(bridge.status(99), {"status": "online"})
                 self.assertIn('"event": "agent_exit"',
                               (Path(directory) / "deployment.log").read_text())

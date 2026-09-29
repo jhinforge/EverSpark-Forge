@@ -6,6 +6,7 @@ import http.client
 import hashlib
 import json
 import os
+import secrets
 import subprocess
 import time
 from pathlib import Path
@@ -110,13 +111,15 @@ def run():
     url = os.environ["EVERSPARK_NODE_BRIDGE_URL"].rstrip("/")
     instance_id = int(os.environ["CONTAINER_ID"])
     bootstrap = os.environ.pop("EVERSPARK_NODE_BOOTSTRAP")
+    runtime_id = secrets.token_hex(16)
     session = None
     registration_attempts = 0
     while True:
         if session is None:
             try:
                 session = request(url, "/node/register", {"instance_id": instance_id,
-                                                            "bootstrap": bootstrap})["session"]
+                                                            "bootstrap": bootstrap,
+                                                            "runtime_id": runtime_id})["session"]
                 registration_attempts = 0
                 print("[EverSpark] agent registered", flush=True)
             except (OSError, ValueError, KeyError, RuntimeError) as exc:
