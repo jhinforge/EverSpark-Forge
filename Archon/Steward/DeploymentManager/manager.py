@@ -54,6 +54,10 @@ class DeploymentManager:
                 if value.get("status") in {"deploying", "updating", "verifying"}:
                     value["status"] = ("update_unknown" if value["status"] == "updating"
                                        else "deployment_unknown")
+                elif value.get("status") == "ready":
+                    # Archon may have been offline for the entire Pod restart.
+                    # A restored Agent session proves connectivity, not Forge health.
+                    value["status"] = "verification_required"
         except (OSError, ValueError, TypeError):
             self.states = {}
         try:

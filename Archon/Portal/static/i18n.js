@@ -50,7 +50,7 @@
     "Deploy Concept Forge": "部署 Concept Forge",
     "Verify Concept Forge": "验证 Concept Forge",
     "Verifying Concept Forge": "正在验证 Concept Forge",
-    "Concept Forge needs verification after Pod stop": "Pod 停止后需重新验证 Concept Forge",
+    "Concept Forge needs verification": "Concept Forge 需重新验证",
     "Update source": "更新源码",
     "Test discussion": "测试讨论",
     "Deployment failed": "部署失败",

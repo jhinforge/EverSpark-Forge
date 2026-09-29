@@ -225,6 +225,7 @@ class NodeBridgeTests(unittest.TestCase):
                 machines = Inventory()
                 manager = DeploymentManager(machines, Identity(), bridge=restored,
                     state_path=deployment_state, log_path=Path(directory) / "deploy.log")
+                manager.states[99] = {"status": "ready"}  # Verified during this Archon session.
                 first_page = {"instances": [{"id": 12}], "next_token": "next", "total": 2}
                 self.assertTrue(manager.reconcile_instances(first_page))
                 self.assertEqual(manager.status(99)["status"], "verification_required")
@@ -350,12 +351,27 @@ class NodeBridgeTests(unittest.TestCase):
                 manager = DeploymentManager(Machine(), Identity(), bridge=restored,
                     run=lambda *_args, **_kw: self.fail("SSH must not be called"),
                     state_path=deployment_state, log_path=Path(directory) / "deploy.log")
-                self.assertEqual(manager.status(99)["status"], "ready")
+                self.assertEqual(manager.status(99)["status"], "verification_required")
                 self.assertEqual(restored.status(99), {"status": "offline"})
                 with self.assertRaises(HTTPError) as invalid:
                     post(restored.url, "/node/next", {"instance_id": 99,
                                                       "session": "invalid"})
                 self.assertEqual(invalid.exception.code, 403)
+                with self.assertRaisesRegex(VastError, "Deploy Concept"):
+                    manager.start(99, "discuss", "你好")
+                verification = manager.start(99, "verify")
+                for expected, output in (("health", "就绪"), ("revision", "abc123")):
+                    task = post(restored.url, "/node/next", {"instance_id": 99,
+                                                              "session": session})
+                    self.assertEqual(task["action"], expected)
+                    post(restored.url, "/node/result", {"instance_id": 99,
+                        "session": session, "task_id": task["id"], "result": {
+                            "status": "completed", "output": output, "exit_code": 0}})
+                for _ in range(100):
+                    if manager.job(verification["id"])["status"] != "running":
+                        break
+                    time.sleep(.01)
+                self.assertEqual(manager.status(99)["status"], "ready")
                 job = manager.start(99, "discuss", "你好")
                 task = post(restored.url, "/node/next", {"instance_id": 99,
                                                           "session": session})

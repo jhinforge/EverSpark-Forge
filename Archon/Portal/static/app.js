@@ -1278,7 +1278,7 @@ function renderMachine(machine) {
   const labels = {not_deployed: "Not deployed", deploying: "Deployment in progress",
     ready: "Concept Forge ready", deployment_failed: "Deployment failed",
     deployment_unknown: "Deployment outcome unknown; check Pod",
-    verification_required: "Concept Forge needs verification after Pod stop",
+    verification_required: "Concept Forge needs verification",
     verifying: "Verifying Concept Forge",
     source_updated: "Source updated; deploy again",
     updating: "Source updating", update_failed: "Source update failed",
