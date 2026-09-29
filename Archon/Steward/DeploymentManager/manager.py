@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 import shlex
 import subprocess
 import threading
@@ -68,6 +69,7 @@ class DeploymentManager:
             raise RuntimeError("Cannot read saved deployment jobs") from exc
         if not isinstance(saved_jobs, dict):
             raise RuntimeError("Saved deployment jobs have an invalid format")
+        recover = []
         for job_id, job in saved_jobs.items():
             if (not isinstance(job_id, str) or not isinstance(job, dict) or
                 job.get("id") != job_id or job.get("action") not in {"deploy", "update", "verify"} or
@@ -75,14 +77,21 @@ class DeploymentManager:
                 job.get("status") not in {"running", "completed", "failed"}):
                 raise RuntimeError("Saved deployment jobs have an invalid format")
             if job["status"] == "running":
-                job.update(status="failed", stage="archon_restart",
-                           detail="Archon restarted during the task; remote outcome is unknown. "
-                                  "Check the Forge on the Pod before starting another deployment.")
+                if self.bridge and job.get("agent_mode") and job.get("task_id") and job.get("task_action"):
+                    recover.append(job_id)
+                else:
+                    job.update(status="failed", stage="archon_restart",
+                               detail="Archon restarted during the task; remote outcome is unknown. "
+                                      "Check the Forge on the Pod before starting another deployment.")
             self.jobs[job_id] = job
         self.lock = threading.Lock()
         self.retired_instances = set()
         if any(job.get("stage") == "archon_restart" for job in self.jobs.values()):
             self._save_jobs()
+        for job_id in recover:
+            worker = threading.Thread(target=self._recover, args=(job_id,), daemon=True)
+            self.threads[job_id] = worker
+            worker.start()
 
     def _event(self, job_id: str, instance_id: int, action: str, event: str, **fields) -> None:
         # Only pass controlled metadata here. Commands, prompts, keys and SSH output
@@ -109,9 +118,11 @@ class DeploymentManager:
     def _save_jobs(self) -> None:
         # Keep diagnostic metadata only; remote command output may contain secrets.
         fields = {"id", "instance_id", "action", "status", "stage", "stage_at",
-                  "finished_at", "revision", "exit_code"}
+                  "finished_at", "revision", "exit_code", "agent_mode", "task_id", "task_action"}
+        selected = [item for item in self.jobs.items() if item[1]["status"] == "running"]
+        selected += [item for item in list(self.jobs.items())[-100:] if item[1]["status"] != "running"]
         jobs = {key: {field: value[field] for field in fields if field in value}
-                for key, value in list(self.jobs.items())[-100:]
+                for key, value in selected
                 if value["action"] in {"deploy", "update", "verify"}}
         for value in jobs.values():
             if value["stage"] == "archon_restart":
@@ -260,6 +271,63 @@ class DeploymentManager:
             instance_id, action = self.jobs[job_id]["instance_id"], self.jobs[job_id]["action"]
         self._event(job_id, instance_id, action, "stage", stage=value)
 
+    def _agent_task(self, job_id: str, instance_id: int, action: str,
+                    message: str = "", timeout: int = 1800) -> str:
+        task_id = secrets.token_hex(16)
+        with self.lock:
+            self.jobs[job_id].update(agent_mode=True, task_id=task_id, task_action=action)
+            self._save_jobs()
+        return self.bridge.execute(instance_id, action, message, timeout=timeout, task_id=task_id)
+
+    def _recover(self, job_id: str) -> None:
+        job = self.jobs[job_id]
+        instance_id, action = job["instance_id"], job["action"]
+        original_action, original_id = job["task_action"], job["task_id"]
+        self._stage(job_id, "recovering")
+        confirmed_failure = False
+        try:
+            response = self.bridge.execute(instance_id, "recover", original_id, timeout=1900)
+            found = json.loads(response)
+            if found.get("state") != "completed" or found.get("status") not in {"completed", "failed"}:
+                raise VastError("Agent cannot confirm the previous task outcome")
+            if found["status"] == "failed":
+                confirmed_failure = True
+                raise VastError("Previous Agent task failed: " + str(found.get("output", ""))[-1000:])
+            if original_action not in ({"deploy", "health", "revision"} if action == "deploy" else
+                                       {"health", "revision"} if action == "verify" else
+                                       {"update", "revision"}):
+                raise VastError("Saved Agent task does not match deployment action")
+            if action in {"deploy", "verify"}:
+                self._stage(job_id, "concept_health")
+                health = self._agent_task(job_id, instance_id, "health", timeout=240)
+                if not health.strip():
+                    raise VastError("Concept Forge returned an empty health response")
+            self._stage(job_id, "read_revision")
+            revision = self._agent_task(job_id, instance_id, "revision", timeout=45).strip()
+            if not revision:
+                raise VastError("Could not confirm the deployed source revision")
+            update = {"status": "completed", "revision": revision}
+        except Exception as exc:
+            update = {"status": "failed", "stage": "recovered_failure" if confirmed_failure else "recovery_unknown",
+                      "detail": str(exc)[-1000:] + "; check the Pod before retrying"}
+        runtime_id = self.bridge.runtime_id(instance_id)
+        with self.lock:
+            self.jobs[job_id].update(update)
+            self.jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+            if instance_id not in self.retired_instances:
+                self.states[instance_id] = ({"status": "ready" if action != "update" else "source_updated",
+                    "revision": update["revision"],
+                    **({"runtime_id": runtime_id} if runtime_id and action != "update" else {})}
+                    if update["status"] == "completed" else
+                    {"status": ("deployment_failed" if action == "deploy" else
+                                "update_failed" if action == "update" else "verification_required")
+                     if confirmed_failure else
+                     ("deployment_unknown" if action != "update" else "update_unknown")})
+                self._save()
+            self._save_jobs()
+        self._event(job_id, instance_id, action, "finished", status=update["status"],
+                    stage=update.get("stage", "recovered"))
+
     def _execute(self, job_id: str, machine: dict, message: str, key_ready: bool) -> None:
         action = self.jobs[job_id]["action"]
         instance_id = machine["id"]
@@ -301,8 +369,9 @@ class DeploymentManager:
                 self._stage(job_id, stage)
                 if use_agent:
                     self._event(job_id, instance_id, action, "agent_start", stage=stage)
-                    output = self.bridge.execute(instance_id, action, message,
-                                                  timeout=240 if action == "discuss" else 1800)
+                    output = (self.bridge.execute(instance_id, action, message, timeout=240)
+                              if action == "discuss" else self._agent_task(
+                                  job_id, instance_id, action, message))
                     self._event(job_id, instance_id, action, "agent_exit", stage=stage)
                 else:
                     output = self._ssh(machine, command, timeout=240 if action == "discuss" else 1800,
@@ -315,7 +384,7 @@ class DeploymentManager:
                     stage = "concept_health"
                     self._stage(job_id, stage)
                     try:
-                        health = (self.bridge.execute(instance_id, "health", timeout=240)
+                        health = (self._agent_task(job_id, instance_id, "health", timeout=240)
                                   if use_agent else self._ssh(
                                       machine, f"python3 {REPO}/Legate/Forge/ConceptForge/verify.py "
                                                f"{shlex.quote('请回复：就绪。')}",
@@ -327,7 +396,7 @@ class DeploymentManager:
                         raise
                 stage = "read_revision"
                 self._stage(job_id, stage)
-                update["revision"] = (self.bridge.execute(instance_id, "revision", timeout=45)
+                update["revision"] = (self._agent_task(job_id, instance_id, "revision", timeout=45)
                                       if use_agent else self._ssh(
                                           machine, f"git -C {REPO} rev-parse --short HEAD",
                                           stage="read_revision", job_id=job_id,

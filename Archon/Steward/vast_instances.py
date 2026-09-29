@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 
 API_URL = "https://console.vast.ai/api/v1/instances"
 CREATE_URL = "https://console.vast.ai/api/v0/asks/"
 _CURSOR = re.compile(r"[A-Za-z0-9_+/=-]{0,1024}\Z")
+_STARTUP_STATUS = re.compile(r"(?:failed:)?(?:package_install|source_checkout|source_ready|agent_launch|install_tailscale|start_tailscaled|authenticate_tailscale|register_agent|registered|registration_failed:(?:http_[0-9]{3}|[A-Za-z]+))\Z")
 
 
 class VastError(RuntimeError):
@@ -62,14 +64,21 @@ class VastInstances:
             raise VastError("Invalid base image", 400)
         # SSH mode supplies the first connection. Git is installed inside the
         # container, then the source is cloned; Forge installation is separate.
+        status = "/workspace/everspark-startup.status"
         onstart = (
-            "apt-get update && apt-get install -y git ca-certificates curl && "
-            "if [ ! -d /workspace/EverSpark-Forge/.git ]; then "
+            f"printf 'package_install\\n' > {status}; "
+            "(apt-get update && apt-get install -y git ca-certificates curl) || "
+            f"{{ printf 'failed:package_install\\n' > {status}; exit 1; }}; "
+            f"printf 'source_checkout\\n' > {status}; "
+            "(if [ ! -d /workspace/EverSpark-Forge/.git ]; then "
             "git clone --branch refactor/distributed-architecture --single-branch "
-            "https://github.com/jhinforge/EverSpark-Forge.git /workspace/EverSpark-Forge; fi"
+            "https://github.com/jhinforge/EverSpark-Forge.git /workspace/EverSpark-Forge; fi) || "
+            f"{{ printf 'failed:source_checkout\\n' > {status}; exit 1; }}; "
+            f"printf 'source_ready\\n' > {status}"
         )
         if node_env:
-            onstart += (" && (nohup bash /workspace/EverSpark-Forge/Legate/Envoy/start_node.sh "
+            onstart += (f"; printf 'agent_launch\\n' > {status}; "
+                        "(nohup bash /workspace/EverSpark-Forge/Legate/Envoy/start_node.sh "
                         ">/workspace/everspark-node.log 2>&1 </dev/null &)")
         body = {"image": image, "disk": disk, "runtype": "ssh_direct",
                 "onstart": onstart, "cancel_unavail": True, "label": "EverSpark Forge"}
@@ -91,6 +100,47 @@ class VastInstances:
         if not isinstance(payload, dict) or payload.get("success") is False or not isinstance(payload.get("new_contract"), int):
             raise VastError("Vast did not create an instance; search again")
         return {"instance_id": payload["new_contract"], "image": image, "disk_gb": disk}
+
+    def startup_diagnostics(self, instance_id: int) -> dict:
+        """Read the Pod's fixed, sanitized startup state via Vast's execute endpoint."""
+        key = self.store.get()
+        if not key:
+            raise VastError("Configure the Vast API Key first", 409)
+        if isinstance(instance_id, bool) or not isinstance(instance_id, int) or instance_id < 1:
+            raise VastError("Invalid instance ID", 400)
+        request = Request(f"https://console.vast.ai/api/v0/instances/command/{instance_id}",
+            data=json.dumps({"command": "cat /workspace/everspark-startup.status"}).encode(),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="PUT")
+        try:
+            with self.opener(request, timeout=10) as response:
+                payload = json.load(response)
+        except HTTPError as exc:
+            raise VastError(f"Could not inspect Pod startup (HTTP {exc.code})") from None
+        except (URLError, TimeoutError, OSError, ValueError):
+            raise VastError("Could not inspect Pod startup") from None
+        result_url = payload.get("result_url") if isinstance(payload, dict) else None
+        parsed = urlsplit(result_url) if isinstance(result_url, str) else None
+        if (not parsed or parsed.scheme != "https" or parsed.netloc != "s3.amazonaws.com" or
+            not parsed.path.startswith("/vast.ai/instance_logs/") or parsed.fragment or
+            payload.get("success") is False):
+            raise VastError("Vast returned an invalid startup result URL")
+        for attempt in range(4):
+            try:
+                with self.opener(Request(result_url), timeout=5) as response:
+                    output = response.read(8192).decode("utf-8", "replace").strip()
+            except HTTPError as exc:
+                if exc.code != 404:
+                    raise VastError("Could not read Pod startup result") from None
+                output = ""
+            except (URLError, TimeoutError, OSError):
+                raise VastError("Could not read Pod startup result") from None
+            if output:
+                break
+            if attempt < 3:
+                time.sleep(1)
+        stage = next((line.strip() for line in reversed(output.splitlines())
+                      if _STARTUP_STATUS.fullmatch(line.strip())), None)
+        return {"stage": stage or "pending"}
 
     def attach_ssh(self, instance_id: int, public_key: str) -> None:
         key = self.store.get()

@@ -1297,6 +1297,25 @@ function renderMachine(machine) {
       waiting.textContent = `${t("Waiting for Pod startup and agent registration")} · ${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
       card.appendChild(waiting);
     }
+    if (machine.node.status !== "online") {
+      const diagnose = document.createElement("button");
+      diagnose.type = "button";
+      diagnose.className = "ghost-button";
+      diagnose.textContent = "查看启动诊断";
+      diagnose.addEventListener("click", async () => {
+        diagnose.disabled = true;
+        try {
+          const result = await api("/api/machines/vast/startup-diagnostics", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ instance_id: machine.id }),
+          });
+          showNotice(`Vast #${machine.id} · ${result.stage === "pending" ? "诊断结果尚未生成，请稍后重试" : result.stage}`,
+            result.stage === "registered" ? "success" : undefined);
+        } catch (error) { showNotice(error.message); }
+        finally { diagnose.disabled = false; }
+      });
+      card.appendChild(diagnose);
+    }
   }
   if (state.podJobs[machine.id]) {
     const progress = document.createElement("p");

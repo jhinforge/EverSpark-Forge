@@ -164,6 +164,10 @@ class ControlHandler(BaseHTTPRequestHandler):
                         raise
                     self._send(200, {"ok": True, **rental,
                                      "node_mode": "agent" if token else "ssh"})
+                elif path == "/machines/vast/startup-diagnostics":
+                    if set(payload) != {"instance_id"}:
+                        raise VastError("Invalid startup diagnostics request", 400)
+                    self._send(200, {"ok": True, **self.server.machines.startup_diagnostics(payload["instance_id"])})
                 elif path in {"/machines/vast/deploy", "/machines/vast/verify", "/machines/vast/update-source",
                               "/machines/vast/discuss"}:
                     if not self.server.deployments or set(payload) - {"instance_id", "message"}:

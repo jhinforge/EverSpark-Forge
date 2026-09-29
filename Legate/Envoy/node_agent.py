@@ -16,6 +16,14 @@ REPO = Path("/workspace/EverSpark-Forge")
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT = 1055
 TASK_JOURNAL = Path("/workspace/everspark-agent-tasks.json")
+STARTUP_STATUS = Path("/workspace/everspark-startup.status")
+
+
+def startup_status(stage: str) -> None:
+    try:
+        STARTUP_STATUS.write_text(stage + "\n", encoding="utf-8")
+    except OSError:
+        pass  # Registration must still proceed when startup diagnostics are unavailable.
 
 
 def request(url: str, path: str, body: dict) -> dict:
@@ -34,6 +42,22 @@ def request(url: str, path: str, body: dict) -> dict:
 
 
 def execute(action: str, message: str) -> dict:
+    if action == "recover":
+        if not isinstance(message, str) or len(message) != 32 or any(
+            char not in "0123456789abcdef" for char in message
+        ):
+            return {"status": "failed", "output": "Invalid recovery task ID", "exit_code": 2}
+        try:
+            entry = json.loads(TASK_JOURNAL.read_text(encoding="utf-8")).get(message)
+        except FileNotFoundError:
+            entry = None
+        except (OSError, ValueError, AttributeError):
+            return {"status": "failed", "output": "Agent task journal unavailable", "exit_code": 1}
+        result = entry.get("result", {}) if isinstance(entry, dict) else {}
+        summary = {"state": (entry.get("state") if isinstance(entry, dict) else "not_seen"),
+                   "status": result.get("status"), "output": str(result.get("output", ""))[-3000:],
+                   "exit_code": result.get("exit_code")}
+        return {"status": "completed", "output": json.dumps(summary), "exit_code": 0}
     if action == "deploy":
         args, timeout = ["bash", str(REPO / "Legate/Forge/ConceptForge/Scripts/deploy.sh")], 1800
     elif action == "update":
@@ -121,12 +145,15 @@ def run():
                                                             "bootstrap": bootstrap,
                                                             "runtime_id": runtime_id})["session"]
                 registration_attempts = 0
+                startup_status("registered")
                 print("[EverSpark] agent registered", flush=True)
             except (OSError, ValueError, KeyError, RuntimeError) as exc:
                 registration_attempts += 1
                 if registration_attempts == 1 or registration_attempts % 10 == 0:
                     reason = (f"HTTP {exc.status}" if isinstance(exc, BridgeError)
                               else type(exc).__name__)
+                    startup_status("registration_failed:" + (f"http_{exc.status}" if isinstance(exc, BridgeError)
+                                   else type(exc).__name__))
                     print(f"[EverSpark] registration attempt {registration_attempts} failed: {reason}",
                           flush=True)
                 time.sleep(3)

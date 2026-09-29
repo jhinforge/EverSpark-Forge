@@ -198,7 +198,8 @@ class NodeBridge:
             self.lock.notify_all()
             return removed
 
-    def execute(self, instance_id: int, action: str, message: str = "", timeout: int = 240) -> str:
+    def execute(self, instance_id: int, action: str, message: str = "", timeout: int = 240,
+                task_id: str | None = None) -> str:
         deadline = time.monotonic() + timeout
         join_deadline = min(deadline, time.monotonic() + 120)
         with self.lock:
@@ -212,7 +213,11 @@ class NodeBridge:
                 if remaining <= 0:
                     raise NodeRegistrationError(instance_id)
                 self.lock.wait(min(remaining, 5))
-            task_id = secrets.token_hex(16)
+            task_id = task_id or secrets.token_hex(16)
+            if len(task_id) != 32 or any(char not in "0123456789abcdef" for char in task_id):
+                raise VastError("Invalid task identity", 400)
+            if task_id in node["results"]:
+                raise VastError("Task identity is already active", 409)
             node["results"][task_id] = None
             node["tasks"].append({"id": task_id, "action": action, "message": message})
             self.lock.notify_all()

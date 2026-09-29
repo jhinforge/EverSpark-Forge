@@ -17,7 +17,7 @@ from Archon.Gate.control_server import ControlServer
 from Archon.Steward.NodeManager.bridge import NodeBridge, NodeRegistrationError, tailscale_ip
 from Archon.Steward.vast_instances import VastError
 from Archon.Vault.windows_credentials import CredentialError
-from Legate.Envoy.node_agent import BridgeError, execute, execute_once, run as run_agent
+from Legate.Envoy.node_agent import BridgeError, execute, execute_once, run as run_agent, startup_status
 
 
 class Machine:
@@ -58,6 +58,91 @@ def post(url, path, body):
 
 
 class NodeBridgeTests(unittest.TestCase):
+    def test_agent_startup_status_contains_only_stage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "startup.status"
+            with patch("Legate.Envoy.node_agent.STARTUP_STATUS", path):
+                startup_status("registration_failed:http_403")
+            self.assertEqual(path.read_text(), "registration_failed:http_403\n")
+
+    def test_interrupted_deployment_recovers_result_without_redeploying(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "states.json"
+            state.write_text(json.dumps({"99": {"status": "deploying"}}))
+            job_id, task_id = "c" * 32, "d" * 32
+            state.with_name("states_jobs.json").write_text(json.dumps({job_id: {
+                "id": job_id, "instance_id": 99, "action": "deploy", "status": "running",
+                "stage": "agent_execution", "agent_mode": True, "task_id": task_id,
+                "task_action": "deploy"}}))
+            bridge = NodeBridge("127.0.0.1", 0)
+            bridge.auth_key = "test-key"
+            bridge.start()
+            try:
+                token = bridge.reserve()
+                bridge.bind(token, 99)
+                session = bridge.register(token, 99, "a" * 32)["session"]
+                manager = DeploymentManager(Machine(), Identity(), bridge=bridge,
+                    state_path=state, log_path=Path(directory) / "deploy.log")
+                seen = []
+                def agent():
+                    for expected in ("recover", "health", "revision"):
+                        task = post(bridge.url, "/node/next", {"instance_id": 99,
+                            "session": session})
+                        seen.append(task["action"])
+                        self.assertEqual(task["action"], expected)
+                        output = (json.dumps({"state": "completed", "status": "completed",
+                                  "output": "installed", "exit_code": 0}) if expected == "recover"
+                                  else "abc123" if expected == "revision" else "就绪")
+                        post(bridge.url, "/node/result", {"instance_id": 99,
+                            "session": session, "task_id": task["id"], "result": {
+                                "status": "completed", "output": output, "exit_code": 0}})
+                worker = threading.Thread(target=agent)
+                worker.start()
+                worker.join(3)
+                self.assertFalse(worker.is_alive())
+                for _ in range(100):
+                    if manager.job(job_id)["status"] != "running":
+                        break
+                    time.sleep(.01)
+                self.assertEqual(seen, ["recover", "health", "revision"])
+                self.assertEqual(manager.job(job_id)["status"], "completed")
+                self.assertEqual(manager.status(99)["status"], "ready")
+            finally:
+                bridge.close()
+
+    def test_uncertain_agent_result_is_not_reexecuted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "states.json"
+            state.write_text(json.dumps({"99": {"status": "deploying"}}))
+            job_id = "e" * 32
+            state.with_name("states_jobs.json").write_text(json.dumps({job_id: {
+                "id": job_id, "instance_id": 99, "action": "deploy", "status": "running",
+                "stage": "agent_execution", "agent_mode": True, "task_id": "f" * 32,
+                "task_action": "deploy"}}))
+            bridge = NodeBridge("127.0.0.1", 0)
+            bridge.auth_key = "test-key"
+            bridge.start()
+            try:
+                token = bridge.reserve()
+                bridge.bind(token, 99)
+                session = bridge.register(token, 99)["session"]
+                manager = DeploymentManager(Machine(), Identity(), bridge=bridge,
+                    state_path=state, log_path=Path(directory) / "deploy.log")
+                task = post(bridge.url, "/node/next", {"instance_id": 99, "session": session})
+                self.assertEqual(task["action"], "recover")
+                post(bridge.url, "/node/result", {"instance_id": 99, "session": session,
+                    "task_id": task["id"], "result": {"status": "completed",
+                    "output": json.dumps({"state": "not_seen"}), "exit_code": 0}})
+                for _ in range(100):
+                    if manager.job(job_id)["status"] != "running":
+                        break
+                    time.sleep(.01)
+                self.assertEqual(manager.job(job_id)["stage"], "recovery_unknown")
+                self.assertEqual(manager.status(99)["status"], "deployment_unknown")
+                self.assertFalse(bridge.nodes[99]["tasks"])
+            finally:
+                bridge.close()
+
     def test_agent_runtime_change_invalidates_readiness_across_archon_restart(self):
         with tempfile.TemporaryDirectory() as directory:
             Credentials.values = {}

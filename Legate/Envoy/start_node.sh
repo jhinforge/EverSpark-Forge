@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 stage=install_tailscale
-trap 'printf "[EverSpark] startup failed at %s\n" "$stage" >&2' ERR
+status_file=/workspace/everspark-startup.status
+printf '%s\n' "$stage" > "$status_file"
+trap 'printf "failed:%s\n" "$stage" > "$status_file"; printf "[EverSpark] startup failed at %s\n" "$stage" >&2' ERR
 printf '[EverSpark] stage: %s\n' "$stage"
 
 # Vast's SSH container cannot be assumed to expose /dev/net/tun.
@@ -10,6 +12,7 @@ if ! command -v tailscaled >/dev/null 2>&1; then
   curl -fsSL https://tailscale.com/install.sh | sh
 fi
 stage=start_tailscaled
+printf '%s\n' "$stage" > "$status_file"
 printf '[EverSpark] stage: %s\n' "$stage"
 if ! tailscale status >/dev/null 2>&1; then
   tailscaled --tun=userspace-networking \
@@ -22,6 +25,7 @@ for attempt in $(seq 1 30); do
 done
 if ! tailscale ip -4 >/dev/null 2>&1; then
   stage=authenticate_tailscale
+  printf '%s\n' "$stage" > "$status_file"
   printf '[EverSpark] stage: %s\n' "$stage"
   # The auth key supplies the node identity; a hardcoded tag requires a
   # corresponding tagOwners rule in the user's tailnet and blocks registration.
@@ -29,12 +33,14 @@ if ! tailscale ip -4 >/dev/null 2>&1; then
   # Tailscale requires --reset when changing that preference.
   if ! output=$(tailscale up --reset --auth-key="${EVERSPARK_TAILSCALE_AUTH_KEY:?}" 2>&1); then
     printf '%s\n' "$output" | sed -E 's/tskey-[[:alnum:]_-]+/[REDACTED]/g' >&2
+    printf 'failed:%s\n' "$stage" > "$status_file"
     printf '[EverSpark] startup failed at %s\n' "$stage" >&2
     exit 1
   fi
 fi
 unset EVERSPARK_TAILSCALE_AUTH_KEY
 stage=register_agent
+printf '%s\n' "$stage" > "$status_file"
 printf '[EverSpark] stage: %s\n' "$stage"
 cd /workspace/EverSpark-Forge
 exec python3 -m Legate.Envoy.node_agent

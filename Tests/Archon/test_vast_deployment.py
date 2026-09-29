@@ -40,6 +40,10 @@ class Provider:
         elif url.endswith("/instances/99"):
             result = {"instances": {"id": 99, "actual_status": "running",
                                     "ssh_host": "ssh123.vast.ai", "ssh_port": 12345}}
+        elif url.endswith("/instances/command/99"):
+            result = {"result_url": "https://s3.amazonaws.com/vast.ai/instance_logs/test"}
+        elif url == "https://s3.amazonaws.com/vast.ai/instance_logs/test":
+            return io.BytesIO(b"failed:authenticate_tailscale\n")
         else:
             raise AssertionError(url)
         return io.BytesIO(json.dumps(result).encode())
@@ -54,6 +58,39 @@ class Identity:
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_startup_diagnostics_uses_fixed_command_and_sanitized_stage(self):
+        provider, store = Provider(), FakeCredentialStore()
+        store.set("sensitive-key")
+        machines = VastInstances(store, opener=provider)
+        self.assertEqual(machines.startup_diagnostics(99), {"stage": "failed:authenticate_tailscale"})
+        self.assertEqual(provider.calls[-2][2], {"command": "cat /workspace/everspark-startup.status"})
+        with self.assertRaises(VastError):
+            machines.startup_diagnostics(True)
+
+    def test_startup_diagnostics_rejects_untrusted_result_url(self):
+        provider, store = Provider(), FakeCredentialStore()
+        store.set("key")
+        def hostile(request, timeout):
+            return io.BytesIO(json.dumps({"result_url": "https://evil.example/vast.ai/instance_logs/test"}).encode())
+        with self.assertRaisesRegex(VastError, "invalid startup result URL"):
+            VastInstances(store, opener=hostile).startup_diagnostics(99)
+
+    def test_startup_diagnostics_available_through_local_gate(self):
+        provider, store = Provider(), FakeCredentialStore()
+        store.set("key")
+        server = ControlServer(("127.0.0.1", 0), VastInstances(store, opener=provider))
+        worker = threading.Thread(target=server.serve_forever)
+        worker.start()
+        try:
+            request = Request(f"http://127.0.0.1:{server.server_port}/machines/vast/startup-diagnostics",
+                data=b'{"instance_id":99}', headers={"Content-Type": "application/json"})
+            with urlopen(request, timeout=3) as response:
+                self.assertEqual(json.load(response), {"ok": True, "stage": "failed:authenticate_tailscale"})
+        finally:
+            server.shutdown()
+            server.server_close()
+            worker.join(3)
+
     def test_verify_restores_readiness_without_redeploying(self):
         provider, store = Provider(), FakeCredentialStore()
         store.set("key")
