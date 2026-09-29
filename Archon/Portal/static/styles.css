@@ -334,6 +334,9 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .model-service-card-actions, .model-service-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .model-service-card-actions button { padding: 8px 11px; font-size: 11px; }
 .model-service-form { display: grid; gap: 15px; }
+.vast-credit-card { margin-top: 18px; padding: 23px 26px; border: 1px solid rgba(113, 200, 189, .4); border-radius: 14px; background: linear-gradient(120deg, rgba(113, 200, 189, .16), rgba(17, 21, 27, .9) 65%); }
+.vast-credit-card .section-kicker { color: var(--cyan); }
+.vast-credit-amount { margin-top: 10px; color: var(--text); font-size: clamp(30px, 4vw, 44px); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; overflow-wrap: anywhere; }
 .machine-credential { display: grid; gap: 13px; margin-top: 18px; }
 .machine-credential h3 { margin: 7px 0; font-size: 19px; }
 .machine-credential label { color: var(--muted); font-size: 12px; }

@@ -72,10 +72,10 @@ class VastInstances:
             raise VastError(f"Could not read Vast balance (HTTP {exc.code})") from None
         except (URLError, TimeoutError, OSError, ValueError):
             raise VastError("Could not read Vast balance") from None
-        balance = payload.get("balance") if isinstance(payload, dict) else None
-        if isinstance(balance, bool) or not isinstance(balance, (int, float)) or not math.isfinite(balance):
-            raise VastError("Vast returned an invalid balance")
-        return {"balance_usd": balance}
+        credit = payload.get("credit") if isinstance(payload, dict) else None
+        if isinstance(credit, bool) or not isinstance(credit, (int, float)) or not math.isfinite(credit):
+            raise VastError("Vast returned an invalid credit balance")
+        return {"balance_usd": credit}
 
     def destroy(self, instance_id: int) -> None:
         key = self.store.get()

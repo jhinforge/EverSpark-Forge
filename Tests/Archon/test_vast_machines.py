@@ -42,7 +42,7 @@ class FakeVast:
         if request.get_header("Authorization") == "Bearer bad-key":
             raise HTTPError(request.full_url, 401, "Unauthorized", {}, None)
         if request.full_url.endswith("/users/current"):
-            return io.BytesIO(json.dumps({"balance": 12.345, "email": "private@example.com",
+            return io.BytesIO(json.dumps({"balance": 0, "credit": 12.345, "email": "private@example.com",
                                           "ssh_key": "private-key"}).encode())
         if request.get_method() == "DELETE":
             return io.BytesIO(b'{"success": true, "msg": "Instance destroyed successfully"}')

@@ -1382,10 +1382,10 @@ function renderMachine(machine) {
 async function loadVastBalance() {
   try {
     const data = await api("/api/machines/vast/balance");
-    uiText(elements.vastBalance, "Vast balance: {amount}",
-      { amount: new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(data.balance_usd) });
+    uiText(elements.vastBalance, "{amount}",
+      { amount: new Intl.NumberFormat(i18n.language, { style: "currency", currency: "USD" }).format(data.balance_usd) });
   } catch (_error) {
-    uiText(elements.vastBalance, "Vast balance: unavailable");
+    uiText(elements.vastBalance, "Unavailable");
   }
 }
 
@@ -1463,7 +1463,7 @@ async function removeVastKey() {
     $("#searchVastOffers").disabled = false;
     offerMessage("Save a Vast API Key to search offers.");
     $("#vastGpuNames").replaceChildren();
-    uiText(elements.vastBalance, "Vast balance: unavailable");
+    uiText(elements.vastBalance, "Unavailable");
     await loadMachines();
   } catch (error) { showNotice(error.message); }
 }

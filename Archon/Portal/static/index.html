@@ -255,12 +255,15 @@
             </div>
             <button class="ghost-button" id="refreshMachines" type="button">Refresh instances</button>
           </div>
+          <aside class="vast-credit-card" aria-label="Vast available credit">
+            <p class="section-kicker">Vast available credit</p>
+            <p class="vast-credit-amount" id="vastBalance" aria-live="polite">Unavailable</p>
+          </aside>
           <form class="storage-panel machine-credential" id="vastCredentialForm">
             <div>
               <p class="section-kicker">VAST ACCOUNT</p>
               <h3>Vast API connection</h3>
               <p class="section-copy" id="vastCredentialStatus">Checking local credential…</p>
-              <p class="section-copy" id="vastBalance" aria-live="polite">Vast balance: unavailable</p>
               <p class="section-copy">The key is saved in this Windows user's Credential Manager. EverSpark never displays it again.</p>
             </div>
             <label for="vastApiKey">Vast API Key</label>
