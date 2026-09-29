@@ -1,23 +1,40 @@
 from __future__ import annotations
 
 import json
+import base64
 import os
 import subprocess
 import tempfile
 import threading
 import time
 import unittest
+import sys
 from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from Archon.Steward.DeploymentManager.manager import DeploymentManager
+from Archon.Steward.DeploymentManager.image import ImageDeploymentManager
 from Archon.Gate.control_server import ControlServer
 from Archon.Steward.NodeManager.bridge import NodeBridge, NodeRegistrationError, tailscale_ip
 from Archon.Steward.vast_instances import VastError
 from Archon.Vault.windows_credentials import CredentialError
 from Legate.Envoy.node_agent import BridgeError, execute, execute_once, run as run_agent, startup_status
+from Legate.Envoy.forge_tasks import command as forge_command
+
+ROOT = Path(__file__).resolve().parents[2]
+for module_path in ("Archon/Orchestrator", "Legate/Forge", "Legate/Forge/ConceptForge",
+                    "Legate/Forge/ImageForge", "Legate/Forge/ConceptForge/Memory",
+                    "Aegis/Logging"):
+    sys.path.insert(0, str(ROOT / module_path))
+
+from orchestrator.config.config import load_config
+from orchestrator.core.orchestrator import Orchestrator
+from orchestrator.core.remote_image import RemoteImageGateway
+from image_forge.port import ImageRequest
+from concept_forge.subjects import new_subject
+from Legate.Forge.ImageForge import remote_task
 
 
 class Machine:
@@ -537,6 +554,264 @@ class NodeBridgeTests(unittest.TestCase):
         self.assertEqual(execute("shell", "rm -rf /"),
                          {"status": "failed", "output": "Unknown Node Agent task",
                           "exit_code": 2})
+
+    def test_forge_identity_routes_to_independent_deployment_and_health(self):
+        self.assertIn("ConceptForge/Scripts/deploy.sh", forge_command("concept", "deploy", "")[0][-1])
+        self.assertIn("ImageForge/Scripts/deploy.sh", forge_command("image", "deploy", "")[0][-1])
+        self.assertIn("ImageForge/verify.py", forge_command("image", "health", "")[0][-1])
+        self.assertIsNone(forge_command("image", "discuss", "hello"))
+        self.assertIsNone(forge_command("unknown", "deploy", ""))
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory) / "agent.json"
+            task = {"id": "f" * 32, "forge": "image", "action": "deploy", "message": ""}
+            with patch("Legate.Envoy.node_agent.execute", return_value={
+                "status": "completed", "output": "ready", "exit_code": 0}) as worker:
+                execute_once(task, journal)
+                worker.assert_called_once_with("deploy", "", "image")
+            with self.assertRaisesRegex(ValueError, "collision"):
+                execute_once({**task, "forge": "concept"}, journal)
+
+    def test_bridge_delivers_forge_identity_to_node(self):
+        bridge = NodeBridge("127.0.0.1", 0)
+        bridge.auth_key = "test-key"
+        bridge.start()
+        try:
+            token = bridge.reserve()
+            bridge.bind(token, 99)
+            session = bridge.register(token, 99)["session"]
+            def agent():
+                task = post(bridge.url, "/node/next", {"instance_id": 99, "session": session})
+                self.assertEqual(task["forge"], "image")
+                self.assertEqual(task["action"], "health")
+                post(bridge.url, "/node/result", {"instance_id": 99, "session": session,
+                    "task_id": task["id"], "result": {"status": "completed",
+                    "output": "Image Forge ready", "exit_code": 0}})
+            worker = threading.Thread(target=agent)
+            worker.start()
+            self.assertEqual(bridge.execute(99, "health", forge="image"), "Image Forge ready")
+            worker.join(2)
+            self.assertFalse(worker.is_alive())
+        finally:
+            bridge.close()
+
+    def test_orchestrator_discussion_traverses_remote_concept_node(self):
+        bridge = NodeBridge("127.0.0.1", 0)
+        bridge.auth_key = "test-key"
+        bridge.start()
+        control = None
+        worker = None
+        try:
+            token = bridge.reserve()
+            bridge.bind(token, 99)
+            session = bridge.register(token, 99)["session"]
+            control = ControlServer(("127.0.0.1", 0), machines=object(),
+                                    deployments=type("Deployments", (), {"bridge": bridge})())
+            worker = threading.Thread(target=control.serve_forever, daemon=True)
+            worker.start()
+            with tempfile.TemporaryDirectory() as directory:
+                config = load_config()
+                config["memory"]["database"] = str(Path(directory) / "memory.db")
+                config["remote_nodes"] = {"concept_instance_id": 99,
+                                          "control_url": f"http://127.0.0.1:{control.server_port}"}
+                orchestrator = Orchestrator(config)
+                orchestrator._refresh_session_subject = lambda *args, **kwargs: {"subject_id": "test"}
+                tasks = []
+                def agent():
+                    task = post(bridge.url, "/node/next", {"instance_id": 99, "session": session})
+                    tasks.append(task)
+                    post(bridge.url, "/node/result", {"instance_id": 99, "session": session,
+                        "task_id": task["id"], "result": {"status": "completed",
+                        "output": "来自远端 Concept Forge 的回复", "exit_code": 0}})
+                agent_worker = threading.Thread(target=agent)
+                agent_worker.start()
+                result = orchestrator.discuss("你好", "remote-session")
+                agent_worker.join(2)
+                self.assertEqual(result["reply"], "来自远端 Concept Forge 的回复")
+                self.assertEqual(tasks[0]["forge"], "concept")
+                self.assertEqual(tasks[0]["action"], "chat")
+                self.assertIn("你好", tasks[0]["message"])
+        finally:
+            if control:
+                control.shutdown()
+                if worker:
+                    worker.join(2)
+                control.server_close()
+            bridge.close()
+
+    def test_remote_image_submit_poll_and_output_transfer(self):
+        bridge = NodeBridge("127.0.0.1", 0)
+        bridge.auth_key = "test-key"
+        bridge.start()
+        control = None
+        worker = None
+        try:
+            token = bridge.reserve()
+            bridge.bind(token, 101)
+            session = bridge.register(token, 101)["session"]
+            control = ControlServer(("127.0.0.1", 0), machines=object(),
+                                    deployments=type("Deployments", (), {"bridge": bridge})())
+            worker = threading.Thread(target=control.serve_forever, daemon=True)
+            worker.start()
+            actions = []
+            image_data = b"\x89PNG\r\n\x1a\nremote-node-image"
+            def agent():
+                for expected in ("submit", "poll", "fetch"):
+                    task = post(bridge.url, "/node/next", {"instance_id": 101, "session": session})
+                    actions.append((task["forge"], task["action"]))
+                    self.assertEqual(task["action"], expected)
+                    payload = json.loads(task["message"])
+                    if expected == "submit":
+                        self.assertEqual(payload["request"]["positive_prompt"], "portrait")
+                        output = {"prompt_id": "remote-job", "selection": {"workflow": "base",
+                            "checkpoint": "model", "vae": "", "loras": []}}
+                    elif expected == "poll":
+                        output = {"prompt_id": "remote-job", "status": "completed",
+                                  "images": [{"filename": "render.png", "subfolder": "", "type": "output"}]}
+                    else:
+                        output = {"size": len(image_data), "data": base64.b64encode(image_data).decode()}
+                    post(bridge.url, "/node/result", {"instance_id": 101, "session": session,
+                        "task_id": task["id"], "result": {"status": "completed",
+                        "output": json.dumps(output), "exit_code": 0}})
+            agent_worker = threading.Thread(target=agent)
+            agent_worker.start()
+            with tempfile.TemporaryDirectory() as directory:
+                gateway = RemoteImageGateway(101, f"http://127.0.0.1:{control.server_port}",
+                                             directory, "comfyui")
+                job_id, _ = gateway.submit(ImageRequest("portrait", "bad", 42), engine="comfyui")
+                self.assertEqual(job_id, "remote-job")
+                self.assertEqual(gateway.result(job_id)["status"], "completed")
+                self.assertEqual(gateway.image_path("render.png").read_bytes(), image_data)
+            agent_worker.join(2)
+            self.assertEqual(actions, [("image", action) for action in ("submit", "poll", "fetch")])
+        finally:
+            if control:
+                control.shutdown()
+                if worker:
+                    worker.join(2)
+                control.server_close()
+            bridge.close()
+
+    def test_image_deployment_isolated_from_concept_deployment(self):
+        class ReadyBridge:
+            def __init__(self):
+                self.calls = []
+
+            def configured(self, instance_id):
+                return instance_id == 99
+
+            def execute(self, instance_id, action, **kwargs):
+                self.calls.append((instance_id, action, kwargs["forge"]))
+                return "abc123" if action == "revision" else "ready"
+
+        bridge = ReadyBridge()
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = Path(directory) / "image.json"
+            manager = ImageDeploymentManager(Machine(), bridge, state_path=state_path)
+            job = manager.start(99)
+            for _ in range(100):
+                if manager.job(job["id"])["status"] != "running":
+                    break
+                time.sleep(0.01)
+            self.assertEqual(manager.job(job["id"])["status"], "completed")
+            self.assertEqual(manager.status(99), {"status": "ready", "revision": "abc123"})
+            self.assertEqual(ImageDeploymentManager(Machine(), bridge, state_path=state_path).status(99),
+                             {"status": "ready", "revision": "abc123"})
+            self.assertEqual(bridge.calls, [(99, action, "image")
+                                            for action in ("deploy", "health", "revision")])
+
+    def test_orchestrator_task_uses_separate_concept_and_image_pods(self):
+        bridge = NodeBridge("127.0.0.1", 0)
+        bridge.auth_key = "test-key"
+        bridge.start()
+        control = None
+        worker = None
+        try:
+            sessions = {}
+            for instance_id in (99, 101):
+                bridge.auth_key = "test-key"
+                bridge.claimed = False
+                token = bridge.reserve()
+                bridge.bind(token, instance_id)
+                sessions[instance_id] = bridge.register(token, instance_id)["session"]
+            control = ControlServer(("127.0.0.1", 0), machines=object(),
+                                    deployments=type("Deployments", (), {"bridge": bridge})())
+            worker = threading.Thread(target=control.serve_forever, daemon=True)
+            worker.start()
+            seen = []
+            def agent(instance_id, count):
+                while sum(item[0] == instance_id for item in seen) < count:
+                    task = post(bridge.url, "/node/next", {"instance_id": instance_id,
+                                                           "session": sessions[instance_id]})
+                    if not task:
+                        continue
+                    seen.append((instance_id, task["forge"], task["action"]))
+                    if task["action"] == "chat":
+                        output = """{"model":"illustrious","positive_prompt":"portrait","negative_prompt":"bad","count":1,"status":"over"}"""
+                    elif task["action"] == "resources":
+                        output = json.dumps({"engine": "comfyui"})
+                    elif task["action"] == "default_negative":
+                        output = json.dumps({"negative_prompt": "bad"})
+                    else:
+                        output = json.dumps({"prompt_id": "remote-image-task", "selection": {
+                            "workflow": "base", "checkpoint": "model", "vae": "", "loras": []}})
+                    post(bridge.url, "/node/result", {"instance_id": instance_id,
+                        "session": sessions[instance_id], "task_id": task["id"],
+                        "result": {"status": "completed", "output": output, "exit_code": 0}})
+            with tempfile.TemporaryDirectory() as directory:
+                config = load_config()
+                config["memory"]["database"] = str(Path(directory) / "memory.db")
+                config["image_forge"]["output_directory"] = str(Path(directory) / "outputs")
+                config["remote_nodes"] = {"concept_instance_id": 99, "image_instance_id": 101,
+                    "control_url": f"http://127.0.0.1:{control.server_port}"}
+                orchestrator = Orchestrator(config)
+                document = new_subject("remote-character", "Remote character")
+                orchestrator._refresh_session_subject = lambda *args, **kwargs: document
+                concept_worker = threading.Thread(target=agent, args=(99, 1), daemon=True)
+                image_worker = threading.Thread(target=agent, args=(101, 3), daemon=True)
+                concept_worker.start()
+                image_worker.start()
+                result = orchestrator.submit("画一张肖像", "remote-session")
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["result"]["items"][0]["prompt_id"], "remote-image-task")
+            concept_worker.join(2)
+            image_worker.join(2)
+            self.assertEqual(set(seen), {(99, "concept", "chat"),
+                (101, "image", "resources"), (101, "image", "default_negative"),
+                (101, "image", "submit")})
+        finally:
+            if control:
+                control.shutdown()
+                if worker:
+                    worker.join(2)
+                control.server_close()
+            bridge.close()
+
+    def test_image_node_entry_uses_local_gateway_and_reads_output(self):
+        class Engine:
+            name = "comfyui"
+
+            def submit(self, _request, _notify):
+                return "engine-job", {"workflow": "base", "checkpoint": "model", "vae": "", "loras": []}
+
+            def poll(self, _job_id):
+                return {"status": "completed", "images": [{"filename": "render.png"}]}
+
+        with tempfile.TemporaryDirectory() as directory:
+            outputs = Path(directory) / "outputs"
+            outputs.mkdir()
+            (outputs / "render.png").write_bytes(b"remote-image")
+            config = load_config()
+            config["memory"]["database"] = str(Path(directory) / "jobs.db")
+            config["image_forge"]["output_directory"] = str(outputs)
+            with patch.object(remote_task, "load_config", return_value=config), \
+                 patch.object(remote_task, "discover_plugins", return_value={}), \
+                 patch.object(remote_task, "create_engines", return_value={"comfyui": Engine()}):
+                submitted = remote_task.run("submit", {"engine": "comfyui", "request": {
+                    "positive_prompt": "portrait", "negative_prompt": "bad", "seed": 42}})
+                result = remote_task.run("poll", {"prompt_id": submitted["prompt_id"]})
+                transferred = remote_task.run("fetch", {"filename": "render.png", "offset": 0})
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(base64.b64decode(transferred["data"]), b"remote-image")
 
     def test_agent_registers_and_executes_deployment_without_ssh(self):
         bridge = NodeBridge("127.0.0.1", 0)

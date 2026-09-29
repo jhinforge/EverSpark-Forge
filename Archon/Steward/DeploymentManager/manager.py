@@ -286,7 +286,8 @@ class DeploymentManager:
         with self.lock:
             self.jobs[job_id].update(agent_mode=True, task_id=task_id, task_action=action)
             self._save_jobs()
-        return self.bridge.execute(instance_id, action, message, timeout=timeout, task_id=task_id)
+        return self.bridge.execute(instance_id, action, message, timeout=timeout,
+                                   task_id=task_id, forge="concept")
 
     def _recover(self, job_id: str) -> None:
         job = self.jobs[job_id]
@@ -295,7 +296,8 @@ class DeploymentManager:
         self._stage(job_id, "recovering")
         confirmed_failure = False
         try:
-            response = self.bridge.execute(instance_id, "recover", original_id, timeout=1900)
+            response = self.bridge.execute(instance_id, "recover", original_id,
+                                           timeout=1900, forge="concept")
             found = json.loads(response)
             if found.get("state") != "completed" or found.get("status") not in {"completed", "failed"}:
                 raise VastError("Agent cannot confirm the previous task outcome")

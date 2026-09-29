@@ -133,6 +133,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "/machines/vast/gpu-names"),
             "/api/machines/vast/deployment-job": lambda: self._proxy_control_get(
                 "/machines/vast/deployment-job", parsed.query),
+            "/api/machines/vast/image-deployment-job": lambda: self._proxy_control_get(
+                "/machines/vast/image-deployment-job", parsed.query),
             "/api/resources": lambda: self._proxy_orchestrator_get(
                 "/resources", parsed.query
             ),
@@ -203,7 +205,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         }
         try:
             if path in {"/api/machines/vast/credential", "/api/machines/vast/credential/remove",
-                        "/api/machines/vast/destroy",
+                        "/api/machines/vast/destroy", "/api/machines/vast/deploy-image",
                         "/api/machines/vast/offers", "/api/machines/vast/rent", "/api/machines/vast/startup-diagnostics",
                         "/api/machines/vast/deploy", "/api/machines/vast/verify", "/api/machines/vast/update-source",
                         "/api/machines/vast/discuss"}:

@@ -11,13 +11,21 @@ from Archon.Vault.windows_credentials import CredentialError
 from Legate.Envoy.base_image import select_base_image
 
 
+_REMOTE_FORGE_ACTIONS = {
+    "concept": frozenset({"chat"}),
+    "image": frozenset({"resources", "default_negative", "submit", "poll", "history", "fetch"}),
+}
+
+
 class ControlServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], machines=None, offers=None, deployments=None):
+    def __init__(self, address: tuple[str, int], machines=None, offers=None, deployments=None,
+                 image_deployments=None):
         self.machines = machines
         self.offers = offers
         self.deployments = deployments
+        self.image_deployments = image_deployments
         super().__init__(address, ControlHandler)
 
 
@@ -51,6 +59,11 @@ class ControlHandler(BaseHTTPRequestHandler):
                                 machine["node"] = self.server.deployments.bridge.status(machine["id"])
                                 if machine.get("actual_status") == "stopped" and machine["node"]["status"] != "unconfigured":
                                     machine["node"] = {"status": "offline", "stage": "pod_stopped"}
+                    if self.server.image_deployments:
+                        for machine in result["instances"]:
+                            machine["image_forge"] = self.server.image_deployments.status(machine["id"])
+                            if machine.get("actual_status") == "stopped" and machine["image_forge"]["status"] == "ready":
+                                machine["image_forge"] = {"status": "verification_required"}
                     self._send(200, {"ok": True, **result})
                 elif path == "/machines/vast/deployment-job":
                     from urllib.parse import parse_qs
@@ -59,6 +72,12 @@ class ControlHandler(BaseHTTPRequestHandler):
                         self._send(503, {"ok": False, "error": "Deployment is unavailable"})
                     else:
                         self._send(200, {"ok": True, "job": self.server.deployments.job(job_id)})
+                elif path == "/machines/vast/image-deployment-job":
+                    from urllib.parse import parse_qs
+                    if not self.server.image_deployments:
+                        raise VastError("Image deployment is unavailable", 503)
+                    job_id = parse_qs(parsed.query).get("id", [""])[0]
+                    self._send(200, {"ok": True, "job": self.server.image_deployments.job(job_id)})
                 elif path == "/machines/vast/gpu-names":
                     if self.server.offers is None:
                         self._send(503, {"ok": False, "error": "Offer search is unavailable"})
@@ -122,7 +141,7 @@ class ControlHandler(BaseHTTPRequestHandler):
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 8192:
+                if not 0 < length <= 131072:
                     raise ValueError
                 payload = json.loads(self.rfile.read(length))
                 if not isinstance(payload, dict):
@@ -140,6 +159,8 @@ class ControlHandler(BaseHTTPRequestHandler):
                     self.server.machines.destroy(instance_id)
                     if self.server.deployments:
                         self.server.deployments.retire_instance(instance_id)
+                    if self.server.image_deployments:
+                        self.server.image_deployments.retire_instance(instance_id)
                     self._send(200, {"ok": True, "instance_id": instance_id})
                 elif path == "/machines/vast/offers":
                     if self.server.offers is None:
@@ -178,6 +199,25 @@ class ControlHandler(BaseHTTPRequestHandler):
                     if set(payload) != {"instance_id"}:
                         raise VastError("Invalid startup diagnostics request", 400)
                     self._send(200, {"ok": True, **self.server.machines.startup_diagnostics(payload["instance_id"])})
+                elif path == "/machines/vast/forge-task":
+                    if set(payload) != {"instance_id", "forge", "action", "message"}:
+                        raise VastError("Invalid Forge task", 400)
+                    if (not isinstance(payload["forge"], str) or
+                        not isinstance(payload["action"], str) or
+                        not isinstance(payload["message"], str)):
+                        raise VastError("Invalid Forge task", 400)
+                    if payload["action"] not in _REMOTE_FORGE_ACTIONS.get(payload["forge"], ()):
+                        raise VastError("Unsupported Forge task", 400)
+                    bridge = self.server.deployments.bridge if self.server.deployments else None
+                    if not bridge:
+                        raise VastError("Node bridge is unavailable", 503)
+                    self._send(200, {"ok": True, "output": bridge.execute(
+                        payload["instance_id"], payload["action"], payload["message"],
+                        timeout=240, forge=payload["forge"])})
+                elif path == "/machines/vast/deploy-image":
+                    if set(payload) != {"instance_id"} or not self.server.image_deployments:
+                        raise VastError("Invalid Image Forge deployment request", 400)
+                    self._send(202, {"ok": True, "job": self.server.image_deployments.start(payload["instance_id"])})
                 elif path in {"/machines/vast/deploy", "/machines/vast/verify", "/machines/vast/update-source",
                               "/machines/vast/discuss"}:
                     if not self.server.deployments or set(payload) - {"instance_id", "message"}:

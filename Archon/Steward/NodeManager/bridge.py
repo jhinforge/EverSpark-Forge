@@ -152,8 +152,10 @@ class NodeBridge:
                 raise VastError("Unknown or completed node task", 409)
             if result.get("status") not in {"completed", "failed"}:
                 raise VastError("Invalid node task result", 400)
+            if len(str(result.get("output", ""))) > 60000:
+                raise VastError("Node task result is too large", 400)
             node["results"][task_id] = {"status": result["status"],
-                                         "output": str(result.get("output", ""))[:4000],
+                                         "output": str(result.get("output", "")),
                                          "exit_code": result.get("exit_code")}
             self.lock.notify_all()
 
@@ -199,7 +201,9 @@ class NodeBridge:
             return removed
 
     def execute(self, instance_id: int, action: str, message: str = "", timeout: int = 240,
-                task_id: str | None = None) -> str:
+                task_id: str | None = None, forge: str = "concept") -> str:
+        if forge not in {"concept", "image"}:
+            raise VastError("Unknown Forge identity", 400)
         deadline = time.monotonic() + timeout
         join_deadline = min(deadline, time.monotonic() + 120)
         with self.lock:
@@ -219,7 +223,8 @@ class NodeBridge:
             if task_id in node["results"]:
                 raise VastError("Task identity is already active", 409)
             node["results"][task_id] = None
-            node["tasks"].append({"id": task_id, "action": action, "message": message})
+            node["tasks"].append({"id": task_id, "forge": forge,
+                                  "action": action, "message": message})
             self.lock.notify_all()
             while node["results"][task_id] is None:
                 if node["status"] == "removed":
@@ -256,7 +261,7 @@ class _NodeHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if self.headers.get("Content-Type") != "application/json" or not 0 < length <= 8192:
+            if self.headers.get("Content-Type") != "application/json" or not 0 < length <= 131072:
                 raise VastError("Invalid node request", 400)
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
@@ -281,7 +286,7 @@ class _NodeHandler(BaseHTTPRequestHandler):
             self._send(exc.status, {"error": str(exc)})
 
     def _send(self, status: int, body: dict):
-        data = json.dumps(body).encode("utf-8")
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))

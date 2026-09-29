@@ -1256,6 +1256,32 @@ async function runPodAction(instanceId, action, message = "") {
   showNotice(t("Deployment in progress"));
 }
 
+async function deployImageForge(instanceId) {
+  const result = await api("/api/machines/vast/deploy-image", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instance_id: instanceId }),
+  });
+  state.podJobs[instanceId] = "queued";
+  await loadMachines();
+  for (let attempt = 0; attempt < 1800; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const data = await api(`/api/machines/vast/image-deployment-job?id=${encodeURIComponent(result.job.id)}`);
+    if (data.job.status === "running") {
+      state.podJobs[instanceId] = data.job.stage;
+      const progress = document.querySelector(`[data-pod-progress="${instanceId}"]`);
+      if (progress) progress.textContent = `${t("Task stage")}: ${data.job.stage}`;
+      continue;
+    }
+    delete state.podJobs[instanceId];
+    await loadMachines();
+    showNotice(data.job.status === "completed" ? t("Image Forge ready") :
+      `${t("Deployment failed")}: ${data.job.detail || t("No error output")}`,
+    data.job.status === "completed" ? "success" : undefined);
+    return;
+  }
+  showNotice(t("Deployment in progress"));
+}
+
 function renderMachine(machine) {
   const card = document.createElement("article");
   card.className = "machine-card";
@@ -1291,6 +1317,16 @@ function renderMachine(machine) {
   forge.textContent = t(labels[machine.forge?.status] || "Not deployed") +
     (machine.forge?.revision ? ` · ${machine.forge.revision}` : "");
   card.appendChild(forge);
+  if (machine.image_forge) {
+    const imageForge = document.createElement("p");
+    const imageLabels = {ready: "Image Forge ready", deploying: "Image Forge deploying",
+      deployment_failed: "Image Forge deployment failed", not_deployed: "Image Forge not deployed",
+      verification_required: "Image Forge needs verification",
+      deployment_unknown: "Image Forge deployment outcome unknown"};
+    imageForge.textContent = t(imageLabels[machine.image_forge.status] || "Image Forge not deployed") +
+      (machine.image_forge.revision ? ` · ${machine.image_forge.revision}` : "");
+    card.appendChild(imageForge);
+  }
   if (machine.node && machine.node.status !== "unconfigured") {
     const node = document.createElement("p");
     const nodeLabels = {joining: "Joining", online: "Online", offline: "Offline"};
@@ -1352,6 +1388,19 @@ function renderMachine(machine) {
       actions.appendChild(button);
     }
     card.appendChild(actions);
+    if (machine.node?.status === "online") {
+      const deployImage = document.createElement("button");
+      deployImage.type = "button";
+      deployImage.className = "ghost-button";
+      uiText(deployImage, "Deploy Image Forge");
+      deployImage.disabled = machine.image_forge?.status === "deploying";
+      deployImage.addEventListener("click", () => {
+        deployImage.disabled = true;
+        deployImageForge(machine.id).catch((error) => showNotice(error.message))
+          .finally(() => { deployImage.disabled = false; });
+      });
+      actions.appendChild(deployImage);
+    }
   }
   const destroy = document.createElement("button");
   destroy.type = "button";

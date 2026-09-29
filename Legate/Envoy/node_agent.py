@@ -11,6 +11,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from .forge_tasks import command
+
 
 REPO = Path("/workspace/EverSpark-Forge")
 PROXY_HOST = "127.0.0.1"
@@ -27,13 +29,16 @@ def startup_status(stage: str) -> None:
 
 
 def request(url: str, path: str, body: dict) -> dict:
-    payload = json.dumps(body).encode("utf-8")
+    payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
     connection = http.client.HTTPConnection(PROXY_HOST, PROXY_PORT, timeout=25)
     try:
         connection.request("POST", url + path, body=payload,
                            headers={"Content-Type": "application/json"})
         response = connection.getresponse()
-        data = json.loads(response.read(8192))
+        raw = response.read(131073)
+        if len(raw) > 131072:
+            raise BridgeError(413)
+        data = json.loads(raw)
         if response.status != 200:
             raise BridgeError(response.status)
         return data
@@ -41,7 +46,9 @@ def request(url: str, path: str, body: dict) -> dict:
         connection.close()
 
 
-def execute(action: str, message: str) -> dict:
+def execute(action: str, message: str, forge: str = "concept") -> dict:
+    if forge not in {"concept", "image"}:
+        return {"status": "failed", "output": "Unknown Forge identity", "exit_code": 2}
     if action == "recover":
         if not isinstance(message, str) or len(message) != 32 or any(
             char not in "0123456789abcdef" for char in message
@@ -58,27 +65,21 @@ def execute(action: str, message: str) -> dict:
                    "status": result.get("status"), "output": str(result.get("output", ""))[-3000:],
                    "exit_code": result.get("exit_code")}
         return {"status": "completed", "output": json.dumps(summary), "exit_code": 0}
-    if action == "deploy":
-        args, timeout = ["bash", str(REPO / "Legate/Forge/ConceptForge/Scripts/deploy.sh")], 1800
-    elif action == "update":
-        args, timeout = ["bash", str(REPO / "Legate/Envoy/update_source.sh")], 1800
-    elif action == "revision":
-        args, timeout = ["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], 30
-    elif action == "health":
-        args, timeout = ["python3", str(REPO / "Legate/Forge/ConceptForge/verify.py"),
-                         "请回复：就绪。"], 240
-    elif action == "discuss" and isinstance(message, str) and 1 <= len(message.strip()) <= 500:
-        args, timeout = ["python3", str(REPO / "Legate/Forge/ConceptForge/verify.py"),
-                         message.strip()], 240
-    else:
+    selected = command(forge, action, message)
+    if selected is None:
         return {"status": "failed", "output": "Unknown Node Agent task", "exit_code": 2}
+    args, timeout = selected
     try:
         done = subprocess.run(args, cwd=REPO, capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=timeout,
                               stdin=subprocess.DEVNULL)
         output = done.stdout if done.returncode == 0 else (done.stderr or done.stdout)
+        if len(output.encode("utf-8")) > 60000 and (action == "chat" or forge == "image"):
+            return {"status": "failed", "output": "Forge response exceeds node task limit",
+                    "exit_code": 1}
         return {"status": "completed" if done.returncode == 0 else "failed",
-                "output": output[-4000:], "exit_code": done.returncode}
+                "output": output if action == "chat" or forge == "image" else output[-4000:],
+                "exit_code": done.returncode}
     except subprocess.TimeoutExpired:
         return {"status": "failed", "output": "Forge task timed out", "exit_code": 124}
     except OSError as exc:
@@ -93,7 +94,7 @@ def execute_once(task: dict, journal: Path = TASK_JOURNAL) -> dict:
     ):
         raise ValueError("Invalid task identity")
     fingerprint = hashlib.sha256(json.dumps(
-        [task["action"], task.get("message", "")], ensure_ascii=False
+        [task.get("forge", "concept"), task["action"], task.get("message", "")], ensure_ascii=False
     ).encode("utf-8")).hexdigest()
     try:
         entries = json.loads(journal.read_text(encoding="utf-8"))
@@ -125,7 +126,7 @@ def execute_once(task: dict, journal: Path = TASK_JOURNAL) -> dict:
 
     entries[task_id] = {"fingerprint": fingerprint, "state": "running"}
     save()  # Fail closed: never execute if the intent could not be recorded.
-    result = execute(task["action"], task.get("message", ""))
+    result = execute(task["action"], task.get("message", ""), task.get("forge", "concept"))
     entries[task_id] = {"fingerprint": fingerprint, "state": "completed", "result": result}
     save()
     return result
