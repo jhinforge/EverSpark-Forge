@@ -17,7 +17,7 @@ from Archon.Gate.control_server import ControlServer
 from Archon.Steward.NodeManager.bridge import NodeBridge, NodeRegistrationError, tailscale_ip
 from Archon.Steward.vast_instances import VastError
 from Archon.Vault.windows_credentials import CredentialError
-from Legate.Envoy.node_agent import BridgeError, execute, run as run_agent
+from Legate.Envoy.node_agent import BridgeError, execute, execute_once, run as run_agent
 
 
 class Machine:
@@ -58,6 +58,49 @@ def post(url, path, body):
 
 
 class NodeBridgeTests(unittest.TestCase):
+    def test_agent_journal_replays_result_without_running_command_twice(self):
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory) / "agent.json"
+            task = {"id": "a" * 32, "action": "deploy", "message": ""}
+            with patch("Legate.Envoy.node_agent.execute", return_value={
+                "status": "completed", "output": "ready", "exit_code": 0}) as command:
+                self.assertEqual(execute_once(task, journal)["output"], "ready")
+                self.assertEqual(execute_once(task, journal)["output"], "ready")
+                command.assert_called_once()
+            self.assertNotIn("message", journal.read_text())
+            with self.assertRaisesRegex(ValueError, "collision"):
+                execute_once({**task, "message": "changed"}, journal)
+
+    def test_agent_journal_never_reexecutes_uncertain_task(self):
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory) / "agent.json"
+            task = {"id": "b" * 32, "action": "deploy", "message": ""}
+            with patch("Legate.Envoy.node_agent.execute", side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    execute_once(task, journal)
+            with patch("Legate.Envoy.node_agent.execute") as command:
+                result = execute_once(task, journal)
+                command.assert_not_called()
+            self.assertEqual(result["status"], "failed")
+            self.assertIn("outcome unknown", result["output"])
+
+    def test_archon_restart_keeps_interrupted_job_visible_without_replaying(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "deployment_states.json"
+            state.write_text(json.dumps({"99": {"status": "deploying"}}))
+            jobs = Path(directory) / "deployment_states_jobs.json"
+            jobs.write_text(json.dumps({"job123": {"id": "job123", "instance_id": 99,
+                "action": "deploy", "status": "running", "stage": "agent_execution"}}))
+            manager = DeploymentManager(Machine(), Identity(), state_path=state,
+                log_path=Path(directory) / "deploy.log")
+            self.assertEqual(manager.status(99)["status"], "deployment_unknown")
+            self.assertEqual(manager.job("job123")["stage"], "archon_restart")
+            self.assertIn("outcome is unknown", manager.job("job123")["detail"])
+            self.assertEqual(json.loads(jobs.read_text())["job123"]["status"], "failed")
+            manager.jobs["job123"]["detail"] = "secret from remote output"
+            manager._save_jobs()
+            self.assertNotIn("secret from remote output", jobs.read_text())
+
     def test_waiting_node_exposes_elapsed_time_and_actionable_timeout(self):
         bridge = NodeBridge("127.0.0.1", 0)
         try:

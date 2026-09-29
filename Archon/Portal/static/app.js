@@ -1277,8 +1277,10 @@ function renderMachine(machine) {
   const forge = document.createElement("p");
   const labels = {not_deployed: "Not deployed", deploying: "Deployment in progress",
     ready: "Concept Forge ready", deployment_failed: "Deployment failed",
+    deployment_unknown: "Deployment outcome unknown; check Pod",
     source_updated: "Source updated; deploy again",
-    updating: "Source updating", update_failed: "Source update failed"};
+    updating: "Source updating", update_failed: "Source update failed",
+    update_unknown: "Source update outcome unknown; check Pod"};
   forge.textContent = t(labels[machine.forge?.status] || "Not deployed") +
     (machine.forge?.revision ? ` · ${machine.forge.revision}` : "");
   card.appendChild(forge);

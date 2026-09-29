@@ -51,6 +51,8 @@
     "Update source": "更新源码",
     "Test discussion": "测试讨论",
     "Deployment failed": "部署失败",
+    "Deployment outcome unknown; check Pod": "部署结果待确认；请检查 Pod",
+    "Source update outcome unknown; check Pod": "源码更新结果待确认；请检查 Pod",
     "Deployment in progress": "正在部署",
     "Concept Forge ready": "Concept Forge 已就绪",
     "Source updated; deploy again": "源码已更新；请重新部署",

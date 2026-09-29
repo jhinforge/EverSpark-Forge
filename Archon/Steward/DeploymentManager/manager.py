@@ -45,18 +45,40 @@ class DeploymentManager:
         self.log_lock = threading.Lock()
         self.state_path = state_path or (Path(os.environ.get("LOCALAPPDATA", str(Path.home())))
                                    / "EverSpark" / "deployment_states.json")
+        self.jobs_path = self.state_path.with_name(self.state_path.stem + "_jobs.json")
         try:
             data = json.loads(self.state_path.read_text(encoding="utf-8"))
             self.states = {int(key): value for key, value in data.items()
                            if isinstance(value, dict) and key.isdecimal()}
             for value in self.states.values():
                 if value.get("status") in {"deploying", "updating"}:
-                    value["status"] = ("deployment_failed" if value["status"] == "deploying"
-                                       else "update_failed")
+                    value["status"] = ("deployment_unknown" if value["status"] == "deploying"
+                                       else "update_unknown")
         except (OSError, ValueError, TypeError):
             self.states = {}
+        try:
+            saved_jobs = json.loads(self.jobs_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            saved_jobs = {}
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("Cannot read saved deployment jobs") from exc
+        if not isinstance(saved_jobs, dict):
+            raise RuntimeError("Saved deployment jobs have an invalid format")
+        for job_id, job in saved_jobs.items():
+            if (not isinstance(job_id, str) or not isinstance(job, dict) or
+                job.get("id") != job_id or job.get("action") not in {"deploy", "update"} or
+                not isinstance(job.get("instance_id"), int) or
+                job.get("status") not in {"running", "completed", "failed"}):
+                raise RuntimeError("Saved deployment jobs have an invalid format")
+            if job["status"] == "running":
+                job.update(status="failed", stage="archon_restart",
+                           detail="Archon restarted during the task; remote outcome is unknown. "
+                                  "Check the Forge on the Pod before starting another deployment.")
+            self.jobs[job_id] = job
         self.lock = threading.Lock()
         self.retired_instances = set()
+        if any(job.get("stage") == "archon_restart" for job in self.jobs.values()):
+            self._save_jobs()
 
     def _event(self, job_id: str, instance_id: int, action: str, event: str, **fields) -> None:
         # Only pass controlled metadata here. Commands, prompts, keys and SSH output
@@ -79,6 +101,22 @@ class DeploymentManager:
         temporary = self.state_path.with_suffix(".tmp")
         temporary.write_text(json.dumps(self.states), encoding="utf-8")
         temporary.replace(self.state_path)
+
+    def _save_jobs(self) -> None:
+        # Keep diagnostic metadata only; remote command output may contain secrets.
+        fields = {"id", "instance_id", "action", "status", "stage", "stage_at",
+                  "finished_at", "revision", "exit_code"}
+        jobs = {key: {field: value[field] for field in fields if field in value}
+                for key, value in list(self.jobs.items())[-100:]
+                if value["action"] in {"deploy", "update"}}
+        for value in jobs.values():
+            if value["stage"] == "archon_restart":
+                value["detail"] = "Archon restarted during the task; remote outcome is unknown. " \
+                                  "Check the Forge on the Pod before starting another deployment."
+        self.jobs_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.jobs_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(jobs), encoding="utf-8")
+        temporary.replace(self.jobs_path)
 
     def status(self, instance_id: int) -> dict:
         with self.lock:
@@ -175,6 +213,7 @@ class DeploymentManager:
             self.jobs[job_id] = {"id": job_id, "instance_id": instance_id,
                                  "action": action, "status": "running", "stage": "queued"}
             if action != "discuss":
+                self._save_jobs()
                 self.states[instance_id] = {"status": "deploying" if action == "deploy" else "updating"}
                 self._save()
         worker = threading.Thread(target=self._execute,
@@ -189,6 +228,8 @@ class DeploymentManager:
         with self.lock:
             self.jobs[job_id]["stage"] = value
             self.jobs[job_id]["stage_at"] = datetime.now(timezone.utc).isoformat()
+            if self.jobs[job_id]["action"] != "discuss":
+                self._save_jobs()
             instance_id, action = self.jobs[job_id]["instance_id"], self.jobs[job_id]["action"]
         self._event(job_id, instance_id, action, "stage", stage=value)
 
@@ -266,6 +307,8 @@ class DeploymentManager:
                     "deployment_failed" if action == "deploy" else "update_failed"),
                     **({"revision": update["revision"]} if "revision" in update else {})}
                 self._save()
+            if action != "discuss":
+                self._save_jobs()
         self._event(job_id, instance_id, action, "finished", status=update["status"],
                     stage=update.get("stage", stage),
                     **({"error_type": error_type} if error_type else {}),

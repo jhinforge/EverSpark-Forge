@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import http.client
+import hashlib
 import json
 import os
 import subprocess
@@ -13,6 +14,7 @@ from pathlib import Path
 REPO = Path("/workspace/EverSpark-Forge")
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT = 1055
+TASK_JOURNAL = Path("/workspace/everspark-agent-tasks.json")
 
 
 def request(url: str, path: str, body: dict) -> dict:
@@ -55,6 +57,52 @@ def execute(action: str, message: str) -> dict:
         return {"status": "failed", "output": type(exc).__name__, "exit_code": 1}
 
 
+def execute_once(task: dict, journal: Path = TASK_JOURNAL) -> dict:
+    """Never execute a fetched task twice, even after an Agent restart."""
+    task_id = task["id"]
+    if not isinstance(task_id, str) or len(task_id) != 32 or any(
+        char not in "0123456789abcdef" for char in task_id
+    ):
+        raise ValueError("Invalid task identity")
+    fingerprint = hashlib.sha256(json.dumps(
+        [task["action"], task.get("message", "")], ensure_ascii=False
+    ).encode("utf-8")).hexdigest()
+    try:
+        entries = json.loads(journal.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        entries = {}
+    if not isinstance(entries, dict):
+        raise ValueError("Invalid Agent task journal")
+    previous = entries.get(task_id)
+    if previous:
+        if previous["fingerprint"] != fingerprint:
+            raise ValueError("Task identity collision")
+        if previous["state"] == "completed":
+            return previous["result"]
+        return {"status": "failed", "output": "Agent restarted during execution; outcome unknown",
+                "exit_code": None}
+
+    def save():
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        temporary = journal.with_name(journal.name + ".tmp")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                os.fchmod(handle.fileno(), 0o600)
+                json.dump(entries, handle, ensure_ascii=False)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        temporary.replace(journal)
+
+    entries[task_id] = {"fingerprint": fingerprint, "state": "running"}
+    save()  # Fail closed: never execute if the intent could not be recorded.
+    result = execute(task["action"], task.get("message", ""))
+    entries[task_id] = {"fingerprint": fingerprint, "state": "completed", "result": result}
+    save()
+    return result
+
+
 def run():
     url = os.environ["EVERSPARK_NODE_BRIDGE_URL"].rstrip("/")
     instance_id = int(os.environ["CONTAINER_ID"])
@@ -82,7 +130,11 @@ def run():
                                                 "session": session})
             if not task:
                 continue
-            result = execute(task["action"], task.get("message", ""))
+            try:
+                result = execute_once(task)
+            except (OSError, ValueError, KeyError) as exc:
+                result = {"status": "failed", "output": f"Agent task journal error: {type(exc).__name__}",
+                          "exit_code": None}
             # Retry a result submission without executing the Forge task twice.
             while True:
                 try:
