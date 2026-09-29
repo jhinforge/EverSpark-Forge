@@ -227,6 +227,7 @@ class NodeBridgeTests(unittest.TestCase):
                     state_path=deployment_state, log_path=Path(directory) / "deploy.log")
                 first_page = {"instances": [{"id": 12}], "next_token": "next", "total": 2}
                 self.assertTrue(manager.reconcile_instances(first_page))
+                self.assertEqual(manager.status(99)["status"], "verification_required")
                 self.assertTrue(restored.configured(99))
                 machines.fail = True
                 self.assertFalse(manager.reconcile_instances(first_page))

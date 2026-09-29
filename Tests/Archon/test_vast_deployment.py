@@ -54,6 +54,32 @@ class Identity:
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_verify_restores_readiness_without_redeploying(self):
+        provider, store = Provider(), FakeCredentialStore()
+        store.set("key")
+        calls = []
+
+        def run(argv, **_kwargs):
+            calls.append(argv[-1])
+            output = "abc123" if "rev-parse" in argv[-1] else "就绪"
+            return CompletedProcess(argv, 0, output, "")
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "states.json"
+            state.write_text(json.dumps({"99": {"status": "verification_required"}}))
+            manager = DeploymentManager(VastInstances(store, opener=provider), Identity(),
+                run=run, state_path=state, log_path=Path(directory) / "deploy.log")
+            job = manager.start(99, "verify")
+            for _ in range(100):
+                result = manager.job(job["id"])
+                if result["status"] != "running":
+                    break
+                time.sleep(.01)
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(manager.status(99)["status"], "ready")
+            self.assertTrue(any("verify.py" in call for call in calls))
+            self.assertFalse(any("deploy.sh" in call for call in calls))
+
     def test_deploy_is_not_ready_when_real_discussion_probe_is_empty(self):
         provider, store = Provider(), FakeCredentialStore()
         store.set("key")
@@ -315,6 +341,13 @@ class DeploymentTests(unittest.TestCase):
                     if status != "running": break
                     time.sleep(.01)
                 self.assertEqual(status, "completed")
+                check = post("/api/machines/vast/verify", {"instance_id": 99})["job"]
+                for _ in range(100):
+                    with urlopen(url + f"/api/machines/vast/deployment-job?id={check['id']}") as response:
+                        checked = json.load(response)["job"]["status"]
+                    if checked != "running": break
+                    time.sleep(.01)
+                self.assertEqual(checked, "completed")
                 with self.assertRaises(HTTPError) as arbitrary:
                     post("/api/machines/vast/rent", {"offer_id": 72})
                 self.assertEqual(arbitrary.exception.code, 409)

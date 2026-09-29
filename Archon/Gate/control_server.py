@@ -43,8 +43,12 @@ class ControlHandler(BaseHTTPRequestHandler):
                             self.server.deployments.reconcile_instances(result)
                         for machine in result["instances"]:
                             machine["forge"] = self.server.deployments.status(machine["id"])
+                            if machine.get("actual_status") == "stopped" and machine["forge"]["status"] == "ready":
+                                machine["forge"] = {"status": "verification_required"}
                             if self.server.deployments.bridge:
                                 machine["node"] = self.server.deployments.bridge.status(machine["id"])
+                                if machine.get("actual_status") == "stopped" and machine["node"]["status"] != "unconfigured":
+                                    machine["node"] = {"status": "offline", "stage": "pod_stopped"}
                     self._send(200, {"ok": True, **result})
                 elif path == "/machines/vast/deployment-job":
                     from urllib.parse import parse_qs
@@ -160,11 +164,12 @@ class ControlHandler(BaseHTTPRequestHandler):
                         raise
                     self._send(200, {"ok": True, **rental,
                                      "node_mode": "agent" if token else "ssh"})
-                elif path in {"/machines/vast/deploy", "/machines/vast/update-source",
+                elif path in {"/machines/vast/deploy", "/machines/vast/verify", "/machines/vast/update-source",
                               "/machines/vast/discuss"}:
                     if not self.server.deployments or set(payload) - {"instance_id", "message"}:
                         raise VastError("Invalid deployment request", 400)
                     action = {"/machines/vast/deploy": "deploy",
+                              "/machines/vast/verify": "verify",
                               "/machines/vast/update-source": "update",
                               "/machines/vast/discuss": "discuss"}[path]
                     self._send(202, {"ok": True, "job": self.server.deployments.start(

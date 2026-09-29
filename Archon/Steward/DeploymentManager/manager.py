@@ -51,9 +51,9 @@ class DeploymentManager:
             self.states = {int(key): value for key, value in data.items()
                            if isinstance(value, dict) and key.isdecimal()}
             for value in self.states.values():
-                if value.get("status") in {"deploying", "updating"}:
-                    value["status"] = ("deployment_unknown" if value["status"] == "deploying"
-                                       else "update_unknown")
+                if value.get("status") in {"deploying", "updating", "verifying"}:
+                    value["status"] = ("update_unknown" if value["status"] == "updating"
+                                       else "deployment_unknown")
         except (OSError, ValueError, TypeError):
             self.states = {}
         try:
@@ -66,7 +66,7 @@ class DeploymentManager:
             raise RuntimeError("Saved deployment jobs have an invalid format")
         for job_id, job in saved_jobs.items():
             if (not isinstance(job_id, str) or not isinstance(job, dict) or
-                job.get("id") != job_id or job.get("action") not in {"deploy", "update"} or
+                job.get("id") != job_id or job.get("action") not in {"deploy", "update", "verify"} or
                 not isinstance(job.get("instance_id"), int) or
                 job.get("status") not in {"running", "completed", "failed"}):
                 raise RuntimeError("Saved deployment jobs have an invalid format")
@@ -108,7 +108,7 @@ class DeploymentManager:
                   "finished_at", "revision", "exit_code"}
         jobs = {key: {field: value[field] for field in fields if field in value}
                 for key, value in list(self.jobs.items())[-100:]
-                if value["action"] in {"deploy", "update"}}
+                if value["action"] in {"deploy", "update", "verify"}}
         for value in jobs.values():
             if value["stage"] == "archon_restart":
                 value["detail"] = "Archon restarted during the task; remote outcome is unknown. " \
@@ -125,6 +125,7 @@ class DeploymentManager:
     def reconcile_instances(self, first_page: dict) -> bool:
         """Forget destroyed instances only after a complete, valid Vast inventory."""
         known = set()
+        stopped = set()
         seen_cursors = set()
         page = first_page
         while True:
@@ -133,6 +134,8 @@ class DeploymentManager:
                 if not isinstance(instance_id, int) or isinstance(instance_id, bool) or instance_id < 1:
                     return False
                 known.add(instance_id)
+                if machine.get("actual_status") == "stopped":
+                    stopped.add(instance_id)
             cursor = page.get("next_token")
             if not cursor:
                 break
@@ -160,11 +163,17 @@ class DeploymentManager:
             known.add(instance_id)
         removed_nodes = self.bridge.prune(known) if self.bridge else set()
         with self.lock:
+            changed = False
+            for instance_id in stopped:
+                if self.states.get(instance_id, {}).get("status") == "ready":
+                    self.states[instance_id] = {"status": "verification_required"}
+                    changed = True
             removed = set(self.states) - known
             self.retired_instances.update(removed | removed_nodes)
             if removed:
                 for instance_id in removed:
                     self.states.pop(instance_id)
+            if removed or changed:
                 self._save()
         return True
 
@@ -191,7 +200,7 @@ class DeploymentManager:
             return result
 
     def start(self, instance_id: int, action: str, message: str = "") -> dict:
-        if action not in {"deploy", "update", "discuss"}:
+        if action not in {"deploy", "update", "discuss", "verify"}:
             raise VastError("Unknown deployment action", 400)
         if action == "discuss" and (not isinstance(message, str) or not 1 <= len(message.strip()) <= 500):
             raise VastError("Enter a discussion message (up to 500 characters)", 400)
@@ -204,17 +213,24 @@ class DeploymentManager:
             raise VastError("The Pod does not have an SSH address yet", 409)
         if action == "discuss" and self.status(instance_id).get("status") != "ready":
             raise VastError("Deploy Concept Forge before testing discussion", 409)
+        if action == "verify" and self.status(instance_id).get("status") not in {
+            "ready", "verification_required", "deployment_unknown"
+        }:
+            raise VastError("Deploy Concept Forge before verifying it", 409)
         with self.lock:
             if any(job["instance_id"] == instance_id and job["status"] == "running"
                    for job in self.jobs.values()):
                 raise VastError("This Pod already has a running task", 409)
-            key_ready = self.states.get(instance_id, {}).get("status") in {"ready", "source_updated"}
+            key_ready = self.states.get(instance_id, {}).get("status") in {
+                "ready", "source_updated", "verification_required"}
             job_id = uuid.uuid4().hex
             self.jobs[job_id] = {"id": job_id, "instance_id": instance_id,
                                  "action": action, "status": "running", "stage": "queued"}
             if action != "discuss":
                 self._save_jobs()
-                self.states[instance_id] = {"status": "deploying" if action == "deploy" else "updating"}
+                self.states[instance_id] = {"status": (
+                    "deploying" if action == "deploy" else "verifying" if action == "verify"
+                    else "updating")}
                 self._save()
         worker = threading.Thread(target=self._execute,
                                   args=(job_id, machine, message, key_ready), daemon=True)
@@ -265,24 +281,25 @@ class DeploymentManager:
                            f"bash {REPO}/Legate/Forge/ConceptForge/Scripts/deploy.sh")
             elif action == "update":
                 command = f"bash {REPO}/Legate/Envoy/update_source.sh"
-            else:
+            elif action == "discuss":
                 command = (f"python3 {REPO}/Legate/Forge/ConceptForge/verify.py "
                            f"{shlex.quote(message.strip())}")
-            stage = "agent_execution" if use_agent else "remote_execution"
-            self._stage(job_id, stage)
-            if use_agent:
-                self._event(job_id, instance_id, action, "agent_start", stage=stage)
-                output = self.bridge.execute(instance_id, action, message,
-                                              timeout=240 if action == "discuss" else 1800)
-                self._event(job_id, instance_id, action, "agent_exit", stage=stage)
-            else:
-                output = self._ssh(machine, command, timeout=240 if action == "discuss" else 1800,
-                                   job_id=job_id, action=action, stage=stage)
+            if action != "verify":
+                stage = "agent_execution" if use_agent else "remote_execution"
+                self._stage(job_id, stage)
+                if use_agent:
+                    self._event(job_id, instance_id, action, "agent_start", stage=stage)
+                    output = self.bridge.execute(instance_id, action, message,
+                                                  timeout=240 if action == "discuss" else 1800)
+                    self._event(job_id, instance_id, action, "agent_exit", stage=stage)
+                else:
+                    output = self._ssh(machine, command, timeout=240 if action == "discuss" else 1800,
+                                       job_id=job_id, action=action, stage=stage)
             update = {"status": "completed"}
             if action == "discuss":
                 update["reply"] = output[-4000:]
             else:
-                if action == "deploy":
+                if action in {"deploy", "verify"}:
                     stage = "concept_health"
                     self._stage(job_id, stage)
                     try:
@@ -316,8 +333,9 @@ class DeploymentManager:
             self.jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
             if action != "discuss" and instance_id not in self.retired_instances:
                 self.states[instance_id] = {"status": (
-                    "ready" if action == "deploy" and update["status"] == "completed" else
+                    "ready" if action in {"deploy", "verify"} and update["status"] == "completed" else
                     "source_updated" if action == "update" and update["status"] == "completed" else
+                    "verification_required" if action == "verify" else
                     "deployment_failed" if action == "deploy" else "update_failed"),
                     **({"revision": update["revision"]} if "revision" in update else {})}
                 self._save()

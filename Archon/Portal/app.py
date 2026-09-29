@@ -202,7 +202,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         try:
             if path in {"/api/machines/vast/credential", "/api/machines/vast/credential/remove",
                         "/api/machines/vast/offers", "/api/machines/vast/rent",
-                        "/api/machines/vast/deploy", "/api/machines/vast/update-source",
+                        "/api/machines/vast/deploy", "/api/machines/vast/verify", "/api/machines/vast/update-source",
                         "/api/machines/vast/discuss"}:
                 if not self._local_control_request():
                     return

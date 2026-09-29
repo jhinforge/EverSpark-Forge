@@ -1245,7 +1245,7 @@ async function runPodAction(instanceId, action, message = "") {
       return;
     }
     if (action === "discuss") showNotice(data.job.reply, "success");
-    else showNotice(action === "deploy" ? t("Concept Forge ready") : t("Source updated; deploy again"), "success");
+    else showNotice(action === "deploy" || action === "verify" ? t("Concept Forge ready") : t("Source updated; deploy again"), "success");
     return;
   }
   showNotice(t("Deployment in progress"));
@@ -1278,6 +1278,8 @@ function renderMachine(machine) {
   const labels = {not_deployed: "Not deployed", deploying: "Deployment in progress",
     ready: "Concept Forge ready", deployment_failed: "Deployment failed",
     deployment_unknown: "Deployment outcome unknown; check Pod",
+    verification_required: "Concept Forge needs verification after Pod stop",
+    verifying: "Verifying Concept Forge",
     source_updated: "Source updated; deploy again",
     updating: "Source updating", update_failed: "Source update failed",
     update_unknown: "Source update outcome unknown; check Pod"};
@@ -1307,6 +1309,7 @@ function renderMachine(machine) {
     const actions = document.createElement("div");
     actions.className = "machine-actions";
     for (const [action, label] of [["deploy", "Deploy Concept Forge"],
+                                    ["verify", "Verify Concept Forge"],
                                     ["update-source", "Update source"],
                                     ["discuss", "Test discussion"]]) {
       const button = document.createElement("button");
@@ -1314,6 +1317,7 @@ function renderMachine(machine) {
       button.className = "ghost-button";
       uiText(button, label);
       if (action === "discuss" && machine.forge?.status !== "ready") button.disabled = true;
+      if (action === "verify" && !["ready", "verification_required", "deployment_unknown"].includes(machine.forge?.status)) button.disabled = true;
       button.addEventListener("click", () => {
         const message = action === "discuss" ? window.prompt(t("Enter a message to test the remote Concept Forge")) : "";
         if (action === "discuss" && !message?.trim()) return;
