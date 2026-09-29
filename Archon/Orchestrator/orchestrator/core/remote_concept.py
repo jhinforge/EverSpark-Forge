@@ -53,6 +53,8 @@ class RemoteConceptConnections(ConceptConnections):
         self.remote_instance_id = instance_id
         self.remote_control_url = control_url
         super().__init__(config, logger=logger)
+        self.default = "ollama"
+        self.gateway.default = "ollama"
         self._apply_remote()
 
     def _apply_remote(self) -> None:
