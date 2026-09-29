@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import tempfile
 import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from Archon.Steward.DeploymentManager.manager import DeploymentManager
-from Archon.Steward.NodeManager.bridge import NodeBridge
+from Archon.Steward.NodeManager.bridge import NodeBridge, tailscale_ip
 from Archon.Steward.vast_instances import VastError
 from Legate.Envoy.node_agent import execute
 
@@ -34,6 +37,28 @@ def post(url, path, body):
 
 
 class NodeBridgeTests(unittest.TestCase):
+    def test_tailscale_ip_finds_windows_install_without_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "Tailscale" / "tailscale.exe"
+            executable.parent.mkdir()
+            executable.touch()
+            calls = []
+
+            def run(command, **_kwargs):
+                calls.append(command)
+                return subprocess.CompletedProcess(command, 0, "100.77.3.5\n", "")
+
+            with patch.dict(os.environ, {"ProgramFiles": directory}, clear=True), \
+                 patch("Archon.Steward.NodeManager.bridge.shutil.which", return_value=None):
+                self.assertEqual(tailscale_ip(run=run), "100.77.3.5")
+            self.assertEqual(calls, [[str(executable), "ip", "-4"]])
+
+    def test_tailscale_ip_reports_missing_executable(self):
+        with patch.dict(os.environ, {}, clear=True), \
+             patch("Archon.Steward.NodeManager.bridge.shutil.which", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "Tailscale CLI not found"):
+                tailscale_ip()
+
     def test_agent_rejects_unknown_action_without_shell(self):
         self.assertEqual(execute("shell", "rm -rf /"),
                          {"status": "failed", "output": "Unknown Node Agent task",
