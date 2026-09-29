@@ -511,6 +511,55 @@ class NodeBridgeTests(unittest.TestCase):
                 self.assertEqual(bridge.status(99), {"status": "online"})
                 self.assertIn('"event": "agent_exit"',
                               (Path(directory) / "deployment.log").read_text())
+
+                def discuss(active_session):
+                    job = manager.start(99, "discuss", "你好")
+                    task = post(bridge.url, "/node/next", {"instance_id": 99,
+                        "session": active_session})
+                    self.assertEqual(task["action"], "discuss")
+                    post(bridge.url, "/node/result", {"instance_id": 99,
+                        "session": active_session, "task_id": task["id"], "result": {
+                            "status": "completed", "output": "你好，Jhin", "exit_code": 0}})
+                    for _ in range(100):
+                        result = manager.job(job["id"])
+                        if result["status"] != "running":
+                            break
+                        time.sleep(.01)
+                    self.assertEqual(result["reply"], "你好，Jhin")
+
+                discuss(session)
+
+                new_session = post(bridge.url, "/node/register", {"instance_id": 99,
+                    "bootstrap": bootstrap, "runtime_id": "b" * 32})["session"]
+                with self.assertRaises(HTTPError) as old_session:
+                    post(bridge.url, "/node/next", {"instance_id": 99, "session": session})
+                self.assertEqual(old_session.exception.code, 403)
+                self.assertEqual(manager.status(99)["status"], "verification_required")
+                with self.assertRaisesRegex(VastError, "Deploy Concept Forge"):
+                    manager.start(99, "discuss", "你好")
+
+                verified = manager.start(99, "verify")
+                def verify_agent():
+                    for expected in ("health", "revision"):
+                        task = post(bridge.url, "/node/next", {"instance_id": 99,
+                            "session": new_session})
+                        self.assertEqual(task["action"], expected)
+                        post(bridge.url, "/node/result", {"instance_id": 99,
+                            "session": new_session, "task_id": task["id"], "result": {
+                                "status": "completed", "output": "abc123" if expected == "revision"
+                                else "就绪", "exit_code": 0}})
+                worker = threading.Thread(target=verify_agent)
+                worker.start()
+                worker.join(3)
+                self.assertFalse(worker.is_alive())
+                for _ in range(100):
+                    if manager.job(verified["id"])["status"] != "running":
+                        break
+                    time.sleep(.01)
+                self.assertEqual(manager.job(verified["id"])["status"], "completed")
+                self.assertEqual(manager.status(99)["status"], "ready")
+                self.assertEqual(manager.status(99)["runtime_id"], "b" * 32)
+                discuss(new_session)
         finally:
             bridge.close()
 
