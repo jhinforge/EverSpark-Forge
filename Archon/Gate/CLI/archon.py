@@ -57,9 +57,13 @@ def start() -> int:
         machines = VastInstances(store) if store else None
         offers = VastOffers(store) if store else None
         auth_key = os.environ.pop("EVERSPARK_TAILSCALE_AUTH_KEY", "")
-        if machines and auth_key:
-            bridge = NodeBridge(tailscale_ip(), int(os.environ.get("EVERSPARK_NODE_PORT", "8766")))
-            bridge.auth_key = auth_key
+        node_state = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "EverSpark" / "nodes.json"
+        if machines and (auth_key or node_state.is_file()):
+            bridge = NodeBridge(tailscale_ip(), int(os.environ.get("EVERSPARK_NODE_PORT", "8766")),
+                                state_path=node_state, credential_factory=WindowsCredentialStore)
+            # A node already enrolled with this process's one-off key remains
+            # usable after restart; never reuse that key to rent another node.
+            bridge.auth_key = auth_key if not bridge.nodes else None
             bridge.start()
         deployments = DeploymentManager(machines, SSHIdentity(), bridge=bridge) if machines else None
         backend = ControlServer(("127.0.0.1", backend_port), machines, offers, deployments)

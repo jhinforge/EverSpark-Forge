@@ -15,11 +15,18 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from Archon.Steward.NodeManager.registry import NodeRegistry
 from Archon.Steward.vast_instances import VastError
 
 
 class NodeBridge:
-    def __init__(self, host: str, port: int = 8766):
+    def __init__(self, host: str, port: int = 8766, *, state_path: Path | None = None,
+                 credential_factory=None):
+        if (state_path is None) != (credential_factory is None):
+            raise ValueError("Node registry requires both a path and credential storage")
+        self.registry = (NodeRegistry(state_path, credential_factory)
+                         if state_path is not None else None)
+        restored = self.registry.load() if self.registry else []
         self.server = ThreadingHTTPServer((host, port), _NodeHandler)
         self.server.daemon_threads = True
         self.server.bridge = self
@@ -30,6 +37,16 @@ class NodeBridge:
         self.pending = {}  # bootstrap token -> instance id, assigned after rental
         self.nodes = {}  # instance id -> session and task queue
         self.thread = None
+        for instance_id, phase, secret, bootstrap in restored:
+            self.nodes[instance_id] = {
+                "status": "joining" if phase == "joining" else "offline",
+                "seen": 0.0, "session": secret if phase == "online" else None,
+                "tasks": deque(), "results": {},
+            }
+            # A restarted Archon can also complete a registration whose first
+            # response was lost as the previous process exited.
+            self.pending[bootstrap] = instance_id
+        self.claimed = bool(self.nodes)
 
     def start(self):
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True,
@@ -55,6 +72,8 @@ class NodeBridge:
         with self.lock:
             if token not in self.pending:
                 raise VastError("Unknown node reservation", 400)
+            if self.registry:
+                self.registry.save(instance_id, "joining", token)
             self.pending[token] = instance_id
             self.nodes[instance_id] = {"status": "joining", "seen": 0.0,
                                        "session": None, "tasks": deque(), "results": {}}
@@ -77,12 +96,15 @@ class NodeBridge:
             node = self.nodes[instance_id]
             # A bootstrap credential can register only once. The session is
             # kept by the agent for subsequent polls and result submissions.
+            session = secrets.token_urlsafe(32)
+            if self.registry:
+                self.registry.save(instance_id, "online", session)
             self.pending.pop(token)
-            node["session"] = secrets.token_urlsafe(32)
+            node["session"] = session
             node["seen"] = time.monotonic()
             node["status"] = "online"
             self.lock.notify_all()
-            return {"session": node["session"]}
+            return {"session": session}
 
     def _authenticated(self, instance_id: int, session: str) -> dict:
         node = self.nodes.get(instance_id)

@@ -59,15 +59,15 @@ def run():
     url = os.environ["EVERSPARK_NODE_BRIDGE_URL"].rstrip("/")
     instance_id = int(os.environ["CONTAINER_ID"])
     bootstrap = os.environ.pop("EVERSPARK_NODE_BOOTSTRAP")
+    session = None
     while True:
-        try:
-            session = request(url, "/node/register", {"instance_id": instance_id,
-                                                        "bootstrap": bootstrap})["session"]
-            break
-        except (OSError, ValueError, KeyError, RuntimeError):
-            time.sleep(3)
-    bootstrap = ""
-    while True:
+        if session is None:
+            try:
+                session = request(url, "/node/register", {"instance_id": instance_id,
+                                                            "bootstrap": bootstrap})["session"]
+            except (OSError, ValueError, KeyError, RuntimeError):
+                time.sleep(3)
+                continue
         try:
             task = request(url, "/node/next", {"instance_id": instance_id,
                                                 "session": session})
@@ -83,9 +83,16 @@ def run():
                 except BridgeError as exc:
                     if exc.status == 409:  # The host already timed out this task.
                         break
+                    if exc.status == 403:  # Archon lost or rotated this session.
+                        session = None
+                        break
                     time.sleep(3)
                 except (OSError, ValueError, RuntimeError):
                     time.sleep(3)
+        except BridgeError as exc:
+            if exc.status == 403:
+                session = None
+            time.sleep(3)
         except (OSError, ValueError, KeyError, RuntimeError):
             time.sleep(3)
 
