@@ -42,6 +42,7 @@ def start() -> int:
     from Archon.Vault.windows_credentials import WindowsCredentialStore
     from Archon.Vault.ssh_identity import SSHIdentity
     from Archon.Steward.DeploymentManager.manager import DeploymentManager
+    from Archon.Steward.NodeManager.bridge import NodeBridge, tailscale_ip
     from Archon.Portal.app import LOG_DIR, LOG_FILE, WebUIServer, get_logger, load_settings
 
     logger = get_logger("webui", LOG_FILE)
@@ -49,12 +50,18 @@ def start() -> int:
     backend = None
     portal = None
     worker = None
+    bridge = None
     try:
         backend_port = int(os.environ.get("EVERSPARK_ORCHESTRATOR_PORT", "8765"))
         store = WindowsCredentialStore() if sys.platform == "win32" else None
         machines = VastInstances(store) if store else None
         offers = VastOffers(store) if store else None
-        deployments = DeploymentManager(machines, SSHIdentity()) if machines else None
+        auth_key = os.environ.pop("EVERSPARK_TAILSCALE_AUTH_KEY", "")
+        if machines and auth_key:
+            bridge = NodeBridge(tailscale_ip(), int(os.environ.get("EVERSPARK_NODE_PORT", "8766")))
+            bridge.auth_key = auth_key
+            bridge.start()
+        deployments = DeploymentManager(machines, SSHIdentity(), bridge=bridge) if machines else None
         backend = ControlServer(("127.0.0.1", backend_port), machines, offers, deployments)
         portal = WebUIServer(load_settings(), logger)
         worker = threading.Thread(target=backend.serve_forever, name="archon-backend", daemon=True)
@@ -66,7 +73,7 @@ def start() -> int:
         portal.serve_forever()
     except KeyboardInterrupt:
         pass
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         print(f"Archon startup failed: {exc}", file=sys.stderr)
         return 1
     finally:
@@ -77,6 +84,8 @@ def start() -> int:
                 backend.shutdown()
                 worker.join(timeout=5)
             backend.server_close()
+        if bridge is not None:
+            bridge.close()
         backend_logger.close()
         logger.close()
     return 0

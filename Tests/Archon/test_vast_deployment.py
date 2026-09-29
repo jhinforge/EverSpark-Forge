@@ -70,6 +70,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(creation["disk"], 50)
         self.assertIn("git clone", creation["onstart"])
         self.assertNotIn("deploy.sh", creation["onstart"])
+        self.assertNotIn("env", creation)
         with self.assertRaisesRegex(VastError, "expired"):
             offers.quote(72)
 
@@ -122,6 +123,21 @@ class DeploymentTests(unittest.TestCase):
     def test_image_requires_compatible_offer(self):
         with self.assertRaises(ValueError):
             select_base_image({"cuda_max_good": 12.1})
+
+    def test_agent_rental_passes_credentials_as_instance_env_not_startup_script(self):
+        provider, store = Provider(), FakeCredentialStore()
+        store.set("key")
+        machines = VastInstances(store, opener=provider)
+        node_env = {"EVERSPARK_TAILSCALE_AUTH_KEY": "one-off-secret",
+                    "EVERSPARK_NODE_BOOTSTRAP": "bootstrap-secret",
+                    "EVERSPARK_NODE_BRIDGE_URL": "http://100.101.102.103:8766"}
+        machines.create({"id": 71, "disk_gb": 50},
+                        "nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04", node_env=node_env)
+        body = provider.calls[-1][2]
+        self.assertEqual(body["env"], node_env)
+        self.assertIn("start_node.sh", body["onstart"])
+        self.assertNotIn("one-off-secret", body["onstart"])
+        self.assertNotIn("bootstrap-secret", body["onstart"])
 
     def test_failed_job_identifies_ssh_or_pod_execution(self):
         provider, store = Provider(), FakeCredentialStore()

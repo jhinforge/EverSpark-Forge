@@ -53,7 +53,7 @@ class VastInstances:
     def remove(self) -> None:
         self.store.delete()
 
-    def create(self, offer: dict, image: str) -> dict:
+    def create(self, offer: dict, image: str, node_env: dict | None = None) -> dict:
         key = self.store.get()
         if not key:
             raise VastError("Configure the Vast API Key first", 409)
@@ -63,15 +63,20 @@ class VastInstances:
         # SSH mode supplies the first connection. Git is installed inside the
         # container, then the source is cloned; Forge installation is separate.
         onstart = (
-            "apt-get update && apt-get install -y git ca-certificates && "
+            "apt-get update && apt-get install -y git ca-certificates curl && "
             "if [ ! -d /workspace/EverSpark-Forge/.git ]; then "
             "git clone --branch refactor/distributed-architecture --single-branch "
             "https://github.com/jhinforge/EverSpark-Forge.git /workspace/EverSpark-Forge; fi"
         )
+        if node_env:
+            onstart += (" && (nohup bash /workspace/EverSpark-Forge/Legate/Envoy/start_node.sh "
+                        ">/workspace/everspark-node.log 2>&1 </dev/null &)")
+        body = {"image": image, "disk": disk, "runtype": "ssh_direct",
+                "onstart": onstart, "cancel_unavail": True, "label": "EverSpark Forge"}
+        if node_env:
+            body["env"] = node_env
         request = Request(f"{CREATE_URL}{offer['id']}/",
-            data=json.dumps({"image": image, "disk": disk, "runtype": "ssh_direct",
-                             "onstart": onstart, "cancel_unavail": True,
-                             "label": "EverSpark Forge"}).encode("utf-8"),
+            data=json.dumps(body).encode("utf-8"),
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             method="PUT")
         try:

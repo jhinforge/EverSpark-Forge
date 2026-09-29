@@ -34,9 +34,10 @@ class RemoteCommandError(VastError):
 
 class DeploymentManager:
     def __init__(self, machines, identity, *, run=subprocess.run, state_path: Path | None = None,
-                 log_path: Path | None = None):
+                 log_path: Path | None = None, bridge=None):
         self.machines = machines
         self.identity = identity
+        self.bridge = bridge
         self.run = run
         self.jobs = {}
         self.threads = {}
@@ -148,7 +149,8 @@ class DeploymentManager:
         stage = "ssh_identity"
         error_type = None
         try:
-            if not key_ready:
+            use_agent = bool(self.bridge and self.bridge.configured(instance_id))
+            if not key_ready and not use_agent:
                 self._stage(job_id, stage)
                 public_key = self.identity.public_key()
                 stage = "attach_ssh_key"
@@ -176,26 +178,34 @@ class DeploymentManager:
             else:
                 command = (f"python3 {REPO}/Legate/Forge/ConceptForge/verify.py "
                            f"{shlex.quote(message.strip())}")
-            stage = "remote_execution"
+            stage = "agent_execution" if use_agent else "remote_execution"
             self._stage(job_id, stage)
-            output = self._ssh(machine, command, timeout=240 if action == "discuss" else 1800,
-                               job_id=job_id, action=action, stage=stage)
+            if use_agent:
+                self._event(job_id, instance_id, action, "agent_start", stage=stage)
+                output = self.bridge.execute(instance_id, action, message,
+                                              timeout=240 if action == "discuss" else 1800)
+                self._event(job_id, instance_id, action, "agent_exit", stage=stage)
+            else:
+                output = self._ssh(machine, command, timeout=240 if action == "discuss" else 1800,
+                                   job_id=job_id, action=action, stage=stage)
             update = {"status": "completed"}
             if action == "discuss":
                 update["reply"] = output[-4000:]
             else:
                 stage = "read_revision"
                 self._stage(job_id, stage)
-                update["revision"] = self._ssh(machine, f"git -C {REPO} rev-parse --short HEAD",
-                                               stage="read_revision", job_id=job_id,
-                                               action=action).strip()
+                update["revision"] = (self.bridge.execute(instance_id, "revision", timeout=45)
+                                      if use_agent else self._ssh(
+                                          machine, f"git -C {REPO} rev-parse --short HEAD",
+                                          stage="read_revision", job_id=job_id,
+                                          action=action)).strip()
         except Exception as exc:
             # A background thread must always finish its job, including when
             # Windows subprocess decoding or provider response handling fails.
             error_type = type(exc).__name__
             update = {"status": "failed", "stage": getattr(exc, "stage", stage),
                       "detail": getattr(exc, "detail", str(exc))[-1600:] or type(exc).__name__}
-            if isinstance(exc, RemoteCommandError):
+            if isinstance(getattr(exc, "exit_code", None), int):
                 update["exit_code"] = exc.exit_code
         with self.lock:
             self.jobs[job_id].update(update)

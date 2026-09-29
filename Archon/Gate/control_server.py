@@ -41,6 +41,8 @@ class ControlHandler(BaseHTTPRequestHandler):
                     if self.server.deployments:
                         for machine in result["instances"]:
                             machine["forge"] = self.server.deployments.status(machine["id"])
+                            if self.server.deployments.bridge:
+                                machine["node"] = self.server.deployments.bridge.status(machine["id"])
                     self._send(200, {"ok": True, **result})
                 elif path == "/machines/vast/deployment-job":
                     from urllib.parse import parse_qs
@@ -136,7 +138,24 @@ class ControlHandler(BaseHTTPRequestHandler):
                         image = select_base_image(offer)
                     except ValueError as exc:
                         raise VastError(str(exc), 400) from None
-                    self._send(200, {"ok": True, **self.server.machines.create(offer, image)})
+                    bridge = self.server.deployments.bridge
+                    node_env = None
+                    token = None
+                    if bridge and bridge.auth_key:
+                        token = bridge.reserve()
+                        node_env = {"EVERSPARK_TAILSCALE_AUTH_KEY": bridge.auth_key,
+                                    "EVERSPARK_NODE_BOOTSTRAP": token,
+                                    "EVERSPARK_NODE_BRIDGE_URL": bridge.url}
+                    try:
+                        rental = self.server.machines.create(offer, image, node_env=node_env)
+                        if token:
+                            bridge.bind(token, rental["instance_id"])
+                    except Exception:
+                        if token:
+                            bridge.discard(token)
+                        raise
+                    self._send(200, {"ok": True, **rental,
+                                     "node_mode": "agent" if token else "ssh"})
                 elif path in {"/machines/vast/deploy", "/machines/vast/update-source",
                               "/machines/vast/discuss"}:
                     if not self.server.deployments or set(payload) - {"instance_id", "message"}:

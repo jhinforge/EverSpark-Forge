@@ -1282,6 +1282,12 @@ function renderMachine(machine) {
   forge.textContent = t(labels[machine.forge?.status] || "Not deployed") +
     (machine.forge?.revision ? ` · ${machine.forge.revision}` : "");
   card.appendChild(forge);
+  if (machine.node && machine.node.status !== "unconfigured") {
+    const node = document.createElement("p");
+    const nodeLabels = {joining: "Joining", online: "Online", offline: "Offline"};
+    node.textContent = `${t("Node Agent")}: ${t(nodeLabels[machine.node.status] || "Offline")}`;
+    card.appendChild(node);
+  }
   if (state.podJobs[machine.id]) {
     const progress = document.createElement("p");
     progress.dataset.podProgress = String(machine.id);
