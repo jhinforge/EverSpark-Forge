@@ -28,6 +28,9 @@ const state = {
   vastNextToken: null,
   vastOfferRequest: 0,
   podJobs: {},
+  machineLoadPromise: null,
+  lastMachineSignature: "",
+  destroyedPods: new Set(),
 };
 localStorage.setItem("everspark.session", state.sessionId);
 
@@ -134,6 +137,7 @@ const elements = {
   directDownloadStatus: $("#directDownloadStatus"),
   directDownloadDetail: $("#directDownloadDetail"),
   vastCredentialStatus: $("#vastCredentialStatus"),
+  vastBalance: $("#vastBalance"),
   vastApiKey: $("#vastApiKey"),
   vastInstanceList: $("#vastInstanceList"),
   vastOfferList: $("#vastOfferList"),
@@ -1085,7 +1089,7 @@ function setView(name) {
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
-  if (name === "machines") { loadMachines(); loadVastOffers(); loadVastGpuNames(); }
+  if (name === "machines") { loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
   if (name === "models") loadModelConnections();
   if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadRestorePoints()]);
 }
@@ -1175,6 +1179,7 @@ function renderOffer(offer, diskGb) {
       });
       showNotice(`Vast #${result.instance_id} · ${t("Loading machines…")}`, "success");
       await loadMachines();
+      void loadVastBalance();
     } catch (error) { showNotice(error.message); rent.disabled = false; }
   });
   card.append(title, price, location, memory, reliability, details, rent);
@@ -1348,36 +1353,80 @@ function renderMachine(machine) {
     }
     card.appendChild(actions);
   }
+  const destroy = document.createElement("button");
+  destroy.type = "button";
+  destroy.className = "ghost-button";
+  uiText(destroy, "Destroy Pod");
+  destroy.addEventListener("click", async () => {
+    if (!window.confirm(t("Destroy Vast Pod #{id}? All data on this Pod will be permanently deleted.",
+                          { id: machine.id }))) return;
+    destroy.disabled = true;
+    try {
+      await api("/api/machines/vast/destroy", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instance_id: machine.id }),
+      });
+      state.destroyedPods.add(machine.id);
+      delete state.podJobs[machine.id];
+      card.remove();
+      if (!elements.vastInstanceList.childElementCount) machineMessage("No Vast instances found.");
+      showNotice(t("Vast Pod #{id} destroyed.", { id: machine.id }), "success");
+      await Promise.all([loadMachines(), loadVastBalance()]);
+    } catch (error) { showNotice(error.message); }
+    finally { destroy.disabled = false; }
+  });
+  card.appendChild(destroy);
   elements.vastInstanceList.appendChild(card);
 }
 
-async function loadMachines(cursor = "") {
-  if (!cursor) {
-    state.vastNextToken = null;
-    elements.moreVastInstances.hidden = true;
-    machineMessage("Loading machines…");
-  }
+async function loadVastBalance() {
   try {
-    const credential = await api("/api/machines/vast/credential");
-    uiText(elements.vastCredentialStatus, credential.configured
-      ? "Vast API Key saved on this machine." : "No Vast API Key saved yet.");
-    elements.removeVastKey.hidden = !credential.configured;
-    if (!credential.configured) {
-      machineMessage("Save a Vast API Key to see your instances.");
-      return;
-    }
-    const url = `/api/machines/vast/instances${cursor ? `?after_token=${encodeURIComponent(cursor)}` : ""}`;
-    renderMachinesPage(await api(url), cursor);
-  } catch (error) {
-    if (!cursor) machineMessage(error.message);
-    else showNotice(error.message);
+    const data = await api("/api/machines/vast/balance");
+    uiText(elements.vastBalance, "Vast balance: {amount}",
+      { amount: new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(data.balance_usd) });
+  } catch (_error) {
+    uiText(elements.vastBalance, "Vast balance: unavailable");
   }
 }
 
-function renderMachinesPage(data, cursor = "") {
+function loadMachines(cursor = "", silent = false) {
+  if (state.machineLoadPromise) return state.machineLoadPromise;
+  state.machineLoadPromise = (async () => {
+    if (!cursor && !silent) machineMessage("Loading machines…");
+    try {
+      const credential = await api("/api/machines/vast/credential");
+      uiText(elements.vastCredentialStatus, credential.configured
+        ? "Vast API Key saved on this machine." : "No Vast API Key saved yet.");
+      elements.removeVastKey.hidden = !credential.configured;
+      if (!credential.configured) {
+        state.lastMachineSignature = "";
+        state.vastNextToken = null;
+        elements.moreVastInstances.hidden = true;
+        machineMessage("Save a Vast API Key to see your instances.");
+        return;
+      }
+      const url = `/api/machines/vast/instances${cursor ? `?after_token=${encodeURIComponent(cursor)}` : ""}`;
+      renderMachinesPage(await api(url), cursor, silent);
+    } catch (error) {
+      if (!silent && !cursor) machineMessage(error.message);
+      else if (!silent) showNotice(error.message);
+    }
+  })().finally(() => { state.machineLoadPromise = null; });
+  return state.machineLoadPromise;
+}
+
+function renderMachinesPage(data, cursor = "", silent = false) {
+  const instances = (data.instances || []).filter((machine) => !state.destroyedPods.has(machine.id));
+  if (!cursor && !data.next_token) {
+    const liveIds = new Set((data.instances || []).map((machine) => machine.id));
+    for (const id of state.destroyedPods) if (!liveIds.has(id)) state.destroyedPods.delete(id);
+  }
+  const signature = JSON.stringify([instances, data.next_token]);
+  if (!cursor && silent && state.lastMachineSignature === signature) return;
   if (!cursor) elements.vastInstanceList.replaceChildren();
-  for (const machine of data.instances || []) renderMachine(machine);
+  for (const machine of instances) renderMachine(machine);
   if (!elements.vastInstanceList.childElementCount) machineMessage("No Vast instances found.");
+  if (!cursor) state.lastMachineSignature = signature;
   state.vastNextToken = data.next_token;
   elements.moreVastInstances.hidden = !data.next_token;
 }
@@ -1395,6 +1444,7 @@ async function saveVastKey(event) {
     uiText(elements.vastCredentialStatus, "Vast API Key saved on this machine.");
     elements.removeVastKey.hidden = false;
     renderMachinesPage(result);
+    void loadVastBalance();
     void loadVastOffers();
     void loadVastGpuNames();
     showNotice(t("Vast connection verified and saved."), "success");
@@ -1413,6 +1463,7 @@ async function removeVastKey() {
     $("#searchVastOffers").disabled = false;
     offerMessage("Save a Vast API Key to search offers.");
     $("#vastGpuNames").replaceChildren();
+    uiText(elements.vastBalance, "Vast balance: unavailable");
     await loadMachines();
   } catch (error) { showNotice(error.message); }
 }
@@ -2183,7 +2234,7 @@ function bindEvents() {
     hideNotice();
     await Promise.all([loadSubjects(), loadRuntime(), loadImagePlugins(), loadRemoteStorage()]);
     await loadResources();
-    if ($("#machinesView").classList.contains("active")) await Promise.all([loadMachines(), loadVastOffers()]);
+    if ($("#machinesView").classList.contains("active")) await Promise.all([loadMachines(), loadVastBalance(), loadVastOffers()]);
   });
   $("#vastCredentialForm").addEventListener("submit", saveVastKey);
   $("#vastOfferForm").addEventListener("submit", loadVastOffers);
@@ -2194,7 +2245,10 @@ function bindEvents() {
     uiText(event.currentTarget, panel.hidden ? "Expand" : "Collapse");
   });
   elements.removeVastKey.addEventListener("click", removeVastKey);
-  $("#refreshMachines").addEventListener("click", () => { void loadMachines(); });
+  $("#refreshMachines").addEventListener("click", () => {
+    void loadMachines();
+    void loadVastBalance();
+  });
   elements.moreVastInstances.addEventListener("click", () => {
     if (state.vastNextToken) void loadMachines(state.vastNextToken);
   });
@@ -2254,6 +2308,12 @@ async function initialize() {
   await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadImagePlugins(), loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadModelConnections()]);
   await loadResources();
   setInterval(loadRuntime, 20000);
+  setInterval(() => {
+    if (!document.hidden && $("#machinesView").classList.contains("active")) void loadMachines("", true);
+  }, 10000);
+  setInterval(() => {
+    if (!document.hidden && $("#machinesView").classList.contains("active")) void loadVastBalance();
+  }, 60000);
 }
 
 initialize();

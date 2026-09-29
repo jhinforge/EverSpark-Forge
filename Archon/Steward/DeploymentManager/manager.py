@@ -199,6 +199,15 @@ class DeploymentManager:
                 self._save()
         return True
 
+    def retire_instance(self, instance_id: int) -> None:
+        """Forget an instance only after the provider confirms destruction."""
+        if self.bridge:
+            self.bridge.prune(self.bridge.instance_ids() - {instance_id})
+        with self.lock:
+            self.retired_instances.add(instance_id)
+            if self.states.pop(instance_id, None) is not None:
+                self._save()
+
     def job(self, job_id: str) -> dict:
         with self.lock:
             if job_id not in self.jobs:

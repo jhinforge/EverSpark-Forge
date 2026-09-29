@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import time
 from urllib.error import HTTPError, URLError
@@ -12,6 +13,7 @@ from urllib.request import Request, urlopen
 
 API_URL = "https://console.vast.ai/api/v1/instances"
 CREATE_URL = "https://console.vast.ai/api/v0/asks/"
+ACCOUNT_URL = "https://console.vast.ai/api/v0/users/current"
 _CURSOR = re.compile(r"[A-Za-z0-9_+/=-]{0,1024}\Z")
 _STARTUP_STATUS = re.compile(r"(?:failed:)?(?:package_install|source_checkout|source_ready|agent_launch|install_tailscale|start_tailscaled|authenticate_tailscale|register_agent|registered|registration_failed:(?:http_[0-9]{3}|[A-Za-z]+))\Z")
 
@@ -54,6 +56,51 @@ class VastInstances:
 
     def remove(self) -> None:
         self.store.delete()
+
+    def balance(self) -> dict:
+        key = self.store.get()
+        if not key:
+            raise VastError("Configure the Vast API Key first", 409)
+        request = Request(ACCOUNT_URL, headers={"Authorization": f"Bearer {key}",
+                                                "Accept": "application/json"})
+        try:
+            with self.opener(request, timeout=10) as response:
+                payload = json.load(response)
+        except HTTPError as exc:
+            if exc.code in (401, 403):
+                raise VastError("Vast rejected the API Key", 401) from None
+            raise VastError(f"Could not read Vast balance (HTTP {exc.code})") from None
+        except (URLError, TimeoutError, OSError, ValueError):
+            raise VastError("Could not read Vast balance") from None
+        balance = payload.get("balance") if isinstance(payload, dict) else None
+        if isinstance(balance, bool) or not isinstance(balance, (int, float)) or not math.isfinite(balance):
+            raise VastError("Vast returned an invalid balance")
+        return {"balance_usd": balance}
+
+    def destroy(self, instance_id: int) -> None:
+        key = self.store.get()
+        if not key:
+            raise VastError("Configure the Vast API Key first", 409)
+        if isinstance(instance_id, bool) or not isinstance(instance_id, int) or instance_id < 1:
+            raise VastError("Invalid instance ID", 400)
+        request = Request(f"https://console.vast.ai/api/v0/instances/{instance_id}",
+                          headers={"Authorization": f"Bearer {key}",
+                                   "Accept": "application/json"}, method="DELETE")
+        try:
+            with self.opener(request, timeout=15) as response:
+                payload = json.load(response)
+        except HTTPError as exc:
+            if exc.code in (401, 403):
+                raise VastError("Vast rejected the API Key", 401) from None
+            if exc.code == 404:
+                raise VastError("Vast instance was not found", 404) from None
+            if exc.code == 429:
+                raise VastError("Vast rate limit reached; try again shortly", 429) from None
+            raise VastError(f"Could not destroy Vast instance (HTTP {exc.code})") from None
+        except (URLError, TimeoutError, OSError, ValueError):
+            raise VastError("Cannot confirm whether Vast destroyed the instance; refresh the list before retrying") from None
+        if not isinstance(payload, dict) or payload.get("success") is not True:
+            raise VastError("Vast did not confirm instance destruction; refresh the list before retrying")
 
     def create(self, offer: dict, image: str, node_env: dict | None = None) -> dict:
         key = self.store.get()

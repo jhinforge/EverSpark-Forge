@@ -34,6 +34,8 @@ class ControlHandler(BaseHTTPRequestHandler):
             try:
                 if path == "/machines/vast/credential":
                     self._send(200, {"ok": True, "configured": self.server.machines.configured()})
+                elif path == "/machines/vast/balance":
+                    self._send(200, {"ok": True, **self.server.machines.balance()})
                 elif path == "/machines/vast/instances":
                     from urllib.parse import parse_qs
                     cursor = parse_qs(parsed.query).get("after_token", [""])[0]
@@ -131,6 +133,14 @@ class ControlHandler(BaseHTTPRequestHandler):
                 elif path == "/machines/vast/credential/remove":
                     self.server.machines.remove()
                     self._send(200, {"ok": True, "configured": False})
+                elif path == "/machines/vast/destroy":
+                    if set(payload) != {"instance_id"}:
+                        raise VastError("Invalid destruction request", 400)
+                    instance_id = payload["instance_id"]
+                    self.server.machines.destroy(instance_id)
+                    if self.server.deployments:
+                        self.server.deployments.retire_instance(instance_id)
+                    self._send(200, {"ok": True, "instance_id": instance_id})
                 elif path == "/machines/vast/offers":
                     if self.server.offers is None:
                         self._send(503, {"ok": False, "error": "Offer search is unavailable"})

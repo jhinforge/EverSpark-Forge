@@ -58,6 +58,30 @@ class Identity:
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_destroyed_instance_is_retired_without_touching_other_nodes(self):
+        class Bridge:
+            def __init__(self):
+                self.remaining = {99, 100}
+
+            def instance_ids(self):
+                return set(self.remaining)
+
+            def prune(self, live_ids):
+                self.remaining.intersection_update(live_ids)
+
+        provider, store, bridge = Provider(), FakeCredentialStore(), Bridge()
+        store.set("key")
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "states.json"
+            state.write_text(json.dumps({"99": {"status": "ready"},
+                                         "100": {"status": "ready"}}))
+            manager = DeploymentManager(VastInstances(store, opener=provider), Identity(),
+                bridge=bridge, state_path=state, log_path=Path(directory) / "deploy.log")
+            manager.retire_instance(99)
+            self.assertEqual(bridge.remaining, {100})
+            self.assertEqual(json.loads(state.read_text()), {"100": {"status": "verification_required"}})
+            self.assertIn(99, manager.retired_instances)
+
     def test_startup_diagnostics_uses_fixed_command_and_sanitized_stage(self):
         provider, store = Provider(), FakeCredentialStore()
         store.set("sensitive-key")

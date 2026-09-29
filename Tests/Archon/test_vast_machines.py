@@ -41,6 +41,11 @@ class FakeVast:
         self.calls.append((request.full_url, request.get_header("Authorization"), timeout))
         if request.get_header("Authorization") == "Bearer bad-key":
             raise HTTPError(request.full_url, 401, "Unauthorized", {}, None)
+        if request.full_url.endswith("/users/current"):
+            return io.BytesIO(json.dumps({"balance": 12.345, "email": "private@example.com",
+                                          "ssh_key": "private-key"}).encode())
+        if request.get_method() == "DELETE":
+            return io.BytesIO(b'{"success": true, "msg": "Instance destroyed successfully"}')
         cursor = parse_qs(urlsplit(request.full_url).query).get("after_token", [""])[0]
         payload = {"success": True, "total_instances": 2,
                    "next_token": "next+/=" if not cursor else None,
@@ -70,6 +75,23 @@ class FakeOffers:
 
 
 class VastMachineTests(unittest.TestCase):
+    def test_balance_is_allowlisted_and_destroy_requires_provider_confirmation(self):
+        store, provider = FakeCredentialStore(), FakeVast()
+        store.set("test-key")
+        machines = VastInstances(store, opener=provider)
+        self.assertEqual(machines.balance(), {"balance_usd": 12.345})
+        self.assertNotIn("private@example.com", json.dumps(machines.balance()))
+        with self.assertRaises(VastError) as invalid:
+            machines.destroy(True)
+        self.assertEqual(invalid.exception.status, 400)
+        machines.destroy(23)
+        self.assertEqual(provider.calls[-1][0], "https://console.vast.ai/api/v0/instances/23")
+
+        def unconfirmed(request, timeout):
+            return io.BytesIO(b'{"success": false}')
+        with self.assertRaisesRegex(VastError, "did not confirm"):
+            VastInstances(store, opener=unconfirmed).destroy(23)
+
     def test_missing_instance_is_distinct_from_provider_failure(self):
         store = FakeCredentialStore()
         store.set("key")
@@ -148,6 +170,17 @@ class VastMachineTests(unittest.TestCase):
             page = get("/api/machines/vast/instances")
             self.assertEqual(page["instances"][0]["gpu_name"], "RTX 3090")
             self.assertNotIn("leak-me", json.dumps(page))
+            self.assertEqual(get("/api/machines/vast/balance")["balance_usd"], 12.345)
+            self.assertNotIn("private@example.com", json.dumps(get("/api/machines/vast/balance")))
+            with self.assertRaises(HTTPError) as invalid_destroy:
+                post("/api/machines/vast/destroy", {"instance_id": True})
+            self.assertEqual(invalid_destroy.exception.code, 400)
+            with self.assertRaises(HTTPError) as forbidden_destroy:
+                post("/api/machines/vast/destroy", {"instance_id": 23},
+                     {"Origin": "https://example.invalid"})
+            self.assertEqual(forbidden_destroy.exception.code, 403)
+            self.assertEqual(post("/api/machines/vast/destroy", {"instance_id": 23}),
+                             {"ok": True, "instance_id": 23})
             self.assertIn("RTX 3090", get("/api/machines/vast/gpu-names")["gpu_names"])
             offers = post("/api/machines/vast/offers", {
                 "gpu_name": "rtx 3090", "num_gpus": 2, "country": "jp", "min_gpu_ram_gb": 24,
