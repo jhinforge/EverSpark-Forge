@@ -42,6 +42,7 @@
     "Task stage": "任务阶段",
     "Node Agent": "节点 Agent",
     "Joining": "正在注册",
+    "Waiting for Pod startup and agent registration": "等待 Pod 启动和节点注册",
     "Online": "在线",
     "Offline": "离线",
     "Expand": "展开",

@@ -1287,6 +1287,12 @@ function renderMachine(machine) {
     const nodeLabels = {joining: "Joining", online: "Online", offline: "Offline"};
     node.textContent = `${t("Node Agent")}: ${t(nodeLabels[machine.node.status] || "Offline")}`;
     card.appendChild(node);
+    if (machine.node.status === "joining") {
+      const waiting = document.createElement("p");
+      const elapsed = Number(machine.node.elapsed_seconds) || 0;
+      waiting.textContent = `${t("Waiting for Pod startup and agent registration")} · ${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+      card.appendChild(waiting);
+    }
   }
   if (state.podJobs[machine.id]) {
     const progress = document.createElement("p");

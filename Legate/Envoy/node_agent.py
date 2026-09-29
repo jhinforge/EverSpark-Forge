@@ -60,12 +60,21 @@ def run():
     instance_id = int(os.environ["CONTAINER_ID"])
     bootstrap = os.environ.pop("EVERSPARK_NODE_BOOTSTRAP")
     session = None
+    registration_attempts = 0
     while True:
         if session is None:
             try:
                 session = request(url, "/node/register", {"instance_id": instance_id,
                                                             "bootstrap": bootstrap})["session"]
-            except (OSError, ValueError, KeyError, RuntimeError):
+                registration_attempts = 0
+                print("[EverSpark] agent registered", flush=True)
+            except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                registration_attempts += 1
+                if registration_attempts == 1 or registration_attempts % 10 == 0:
+                    reason = (f"HTTP {exc.status}" if isinstance(exc, BridgeError)
+                              else type(exc).__name__)
+                    print(f"[EverSpark] registration attempt {registration_attempts} failed: {reason}",
+                          flush=True)
                 time.sleep(3)
                 continue
         try:

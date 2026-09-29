@@ -43,7 +43,7 @@ class NodeBridge:
             self.nodes[instance_id] = {
                 "status": "joining" if phase == "joining" else "offline",
                 "seen": 0.0, "session": secret if phase == "online" else None,
-                "tasks": deque(), "results": {},
+                "tasks": deque(), "results": {}, "joined_at": time.monotonic(),
             }
             # A restarted Archon can also complete a registration whose first
             # response was lost as the previous process exited.
@@ -85,7 +85,8 @@ class NodeBridge:
                                    used_key_hash=hashlib.sha256(self.auth_key.encode()).hexdigest())
             self.pending[token] = instance_id
             self.nodes[instance_id] = {"status": "joining", "seen": 0.0,
-                                       "session": None, "tasks": deque(), "results": {}}
+                                       "session": None, "tasks": deque(), "results": {},
+                                       "joined_at": time.monotonic()}
             self.lock.notify_all()
             self.auth_key = None
 
@@ -153,7 +154,10 @@ class NodeBridge:
             if not node:
                 return {"status": "unconfigured"}
             if node["status"] == "online" and time.monotonic() - node["seen"] > 45:
-                return {"status": "offline"}
+                return {"status": "offline", "stage": "agent_disconnected"}
+            if node["status"] == "joining":
+                return {"status": "joining", "stage": "awaiting_agent",
+                        "elapsed_seconds": int(time.monotonic() - node["joined_at"])}
             return {"status": node["status"]}
 
     def configured(self, instance_id: int) -> bool:
@@ -192,7 +196,7 @@ class NodeBridge:
                     raise VastError("Node instance was destroyed", 404)
                 remaining = join_deadline - time.monotonic()
                 if remaining <= 0:
-                    raise NodeRegistrationError()
+                    raise NodeRegistrationError(instance_id)
                 self.lock.wait(min(remaining, 5))
             task_id = secrets.token_hex(16)
             node["results"][task_id] = None
@@ -222,9 +226,11 @@ class NodeTaskError(VastError):
 
 
 class NodeRegistrationError(VastError):
-    def __init__(self):
+    def __init__(self, instance_id: int):
         super().__init__("Node Agent did not register before timeout")
         self.stage = "agent_registration"
+        self.detail = (f"Pod {instance_id}: inspect /workspace/everspark-node.log and "
+                       "/workspace/everspark-tailscale.log for startup and Tailscale errors")
 
 
 class _NodeHandler(BaseHTTPRequestHandler):

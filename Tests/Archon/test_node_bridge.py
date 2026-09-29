@@ -14,7 +14,7 @@ from urllib.request import Request, urlopen
 
 from Archon.Steward.DeploymentManager.manager import DeploymentManager
 from Archon.Gate.control_server import ControlServer
-from Archon.Steward.NodeManager.bridge import NodeBridge, tailscale_ip
+from Archon.Steward.NodeManager.bridge import NodeBridge, NodeRegistrationError, tailscale_ip
 from Archon.Steward.vast_instances import VastError
 from Archon.Vault.windows_credentials import CredentialError
 from Legate.Envoy.node_agent import BridgeError, execute, run as run_agent
@@ -58,6 +58,24 @@ def post(url, path, body):
 
 
 class NodeBridgeTests(unittest.TestCase):
+    def test_waiting_node_exposes_elapsed_time_and_actionable_timeout(self):
+        bridge = NodeBridge("127.0.0.1", 0)
+        try:
+            bridge.configure_auth_key("test-key")
+            token = bridge.reserve()
+            bridge.bind(token, 99)
+            waiting = bridge.status(99)
+            self.assertEqual(waiting["stage"], "awaiting_agent")
+            self.assertGreaterEqual(waiting["elapsed_seconds"], 0)
+            with self.assertRaises(NodeRegistrationError) as error:
+                bridge.execute(99, "deploy", timeout=0)
+            self.assertIn("/workspace/everspark-node.log", error.exception.detail)
+            self.assertIn("/workspace/everspark-tailscale.log", error.exception.detail)
+            bridge.register(token, 99)
+            self.assertEqual(bridge.status(99), {"status": "online"})
+        finally:
+            bridge.close()
+
     def test_machine_list_reconciles_destroyed_node(self):
         with tempfile.TemporaryDirectory() as directory:
             Credentials.values = {}
@@ -275,7 +293,7 @@ class NodeBridgeTests(unittest.TestCase):
             joining = NodeBridge("127.0.0.1", 0, **registry)
             joining.start()
             try:
-                self.assertEqual(joining.status(99), {"status": "joining"})
+                self.assertEqual(joining.status(99)["status"], "joining")
                 session = post(joining.url, "/node/register", {"instance_id": 99,
                                                                   "bootstrap": token})["session"]
                 self.assertNotIn(session, state.read_text())
