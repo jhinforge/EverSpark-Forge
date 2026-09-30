@@ -9,26 +9,23 @@ from urllib.request import Request, urlopen
 
 from concept_forge.port import ChatRequest, ChatResponse, ConceptError
 from concept_forge.connections import ConceptConnections
+from .remote_target import target
 
 
 class RemoteConceptAdapter:
     name = "ollama"
 
-    def __init__(self, model: str, instance_id: int, control_url: str):
-        if instance_id < 1:
-            raise ValueError("Remote Concept Forge requires a valid instance ID")
+    def __init__(self, model: str, instance_id: int | str, control_url: str):
         self.model = model
-        self.instance_id = instance_id
-        if urlsplit(control_url).hostname not in {"127.0.0.1", "localhost"}:
-            raise ValueError("Archon control URL must be local")
-        self.url = control_url.rstrip("/") + "/machines/vast/forge-task"
+        self.instance_id = instance_id  # Kept for compatibility; may now be a node_id string.
+        self.url, self.target_identity = target(instance_id, control_url)
 
     def chat(self, request: ChatRequest) -> ChatResponse:
         message = json.dumps({"messages": request.messages, "model": request.model or self.model,
                               "json_mode": request.json_mode}, ensure_ascii=False)
         if len(message.encode("utf-8")) > 60000:
             raise ConceptError("Concept request exceeds the node task limit")
-        body = json.dumps({"instance_id": self.instance_id, "forge": "concept",
+        body = json.dumps({**self.target_identity, "forge": "concept",
                            "action": "chat", "message": message}, ensure_ascii=False).encode("utf-8")
         call = Request(self.url, data=body, headers={"Content-Type": "application/json",
                        "Host": self.url.split("/")[2]}, method="POST")
@@ -49,7 +46,7 @@ class RemoteConceptAdapter:
 
 
 class RemoteConceptConnections(ConceptConnections):
-    def __init__(self, config: dict, instance_id: int, control_url: str, logger=None):
+    def __init__(self, config: dict, instance_id: int | str, control_url: str, logger=None):
         self.remote_instance_id = instance_id
         self.remote_control_url = control_url
         super().__init__(config, logger=logger)

@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from image_forge.port import ImageRequest
+from .remote_target import target
 
 
 class RemoteImageEngine:
@@ -30,12 +31,10 @@ class RemoteImageEngine:
 
 
 class RemoteImageGateway:
-    def __init__(self, instance_id: int, control_url: str, output_directory: str | Path,
+    def __init__(self, instance_id: int | str, control_url: str, output_directory: str | Path,
                  default_engine: str):
-        if instance_id < 1 or urlsplit(control_url).hostname not in {"127.0.0.1", "localhost"}:
-            raise ValueError("Remote Image Forge requires a node and local Archon control URL")
         self.instance_id = instance_id
-        self.url = control_url.rstrip("/") + "/machines/vast/forge-task"
+        self.url, self.target_identity = target(instance_id, control_url)
         self.output_directory = (Path(output_directory) / "remote" / str(instance_id)).resolve()
         self.default_engine = default_engine
         self.engines = {name: RemoteImageEngine(self, name) for name in ("comfyui", "diffusers")}
@@ -44,7 +43,7 @@ class RemoteImageGateway:
         message = json.dumps(payload, ensure_ascii=False)
         if len(message.encode("utf-8")) > 60000:
             raise ValueError("Image Forge task exceeds the node limit")
-        body = json.dumps({"instance_id": self.instance_id, "forge": "image",
+        body = json.dumps({**self.target_identity, "forge": "image",
                            "action": action, "message": message}, ensure_ascii=False).encode("utf-8")
         request = Request(self.url, data=body, headers={"Content-Type": "application/json"},
                           method="POST")

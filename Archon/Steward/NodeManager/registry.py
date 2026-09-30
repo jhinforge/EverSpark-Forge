@@ -1,93 +1,83 @@
-"""Persist node identities without writing registration secrets to JSON."""
-
-from __future__ import annotations
-
+"""Atomic v2 Node index; no provider inventory or provider credentials."""
+import copy
 import json
+import math
+import os
 from pathlib import Path
+from .identity import validate_id
+from .errors import NodeError
+from .inventory import inventory
+from .transport.credentials import FileCredential, MemoryCredential
 
-from Archon.Vault.windows_credentials import CredentialError
+STATES = {"joining", "online", "offline", "unhealthy", "removed"}
 
 
 class NodeRegistry:
-    def __init__(self, path: Path, credential_factory):
-        self.path = Path(path)
+    def __init__(self, path=None, credential_factory=None):
+        self.path = Path(path) if path else None
         self.credential_factory = credential_factory
+        self._secrets = {}
         try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            raw = json.loads(self.path.read_text()) if self.path else None
         except FileNotFoundError:
-            raw = {"version": 1, "nodes": {}}
-        except (OSError, ValueError) as exc:
-            raise RuntimeError("Cannot read saved Node Agent identities") from exc
-        if not isinstance(raw, dict) or raw.get("version") != 1 or not isinstance(raw.get("nodes"), dict):
-            raise RuntimeError("Saved Node Agent identities have an invalid format")
-        self.nodes = raw["nodes"]
-        self.used_key_hash = raw.get("used_key_hash", "")
-        retired = raw.get("retired", [])
-        if not isinstance(self.used_key_hash, str) or not isinstance(retired, list) or any(
-            not isinstance(value, int) or isinstance(value, bool) or value < 1 for value in retired
-        ):
-            raise RuntimeError("Saved Node Agent identities have an invalid format")
-        self.retired = set(retired)
-        self._clean_retired()
+            raw = None
+        if raw is None:
+            raw = {"version": 2, "nodes": {}, "joins": {}}
+        if not isinstance(raw, dict) or raw.get("version") != 2 or not isinstance(raw.get("nodes"), dict) or not isinstance(raw.get("joins"), dict):
+            raise RuntimeError("Invalid Node registry; legacy registries need deployment-side migration")
+        nodes, joins = raw["nodes"], raw["joins"]
+        try:
+            for node_id, node in nodes.items():
+                validate_id(node_id)
+                if not isinstance(node, dict) or node.get("node_id") != node_id or node.get("status") not in STATES:
+                    raise RuntimeError("Invalid Node record")
+                validate_id(node.get("enrollment_id"), "enrollment_id")
+                inventory(node)
+                if node.get("last_seen") is not None and not isinstance(node["last_seen"], str):
+                    raise RuntimeError("Invalid Node timestamp")
+                if not self.credential(node_id).get() and node["status"] != "removed":
+                    raise RuntimeError("Saved Node credential missing")
+                if node["status"] != "removed":
+                    node["status"] = "offline"
+                else:
+                    try:
+                        self.credential(node_id).delete()
+                    except (RuntimeError, OSError):
+                        pass  # Durable tombstone denies access; cleanup retries next startup.
+            for key, grant in joins.items():
+                if (not isinstance(key, str) or len(key) != 64 or any(c not in "0123456789abcdef" for c in key)
+                        or not isinstance(grant, dict) or set(grant) != {"expires_at", "enrollment_id", "node_id"}
+                        or isinstance(grant["expires_at"], bool) or not isinstance(grant["expires_at"], (int, float)) or not math.isfinite(grant["expires_at"])):
+                    raise RuntimeError("Invalid join grant")
+                if grant["node_id"] is not None:
+                    validate_id(grant["node_id"])
+                if grant["enrollment_id"] is not None:
+                    validate_id(grant["enrollment_id"], "enrollment_id")
+                    if grant["node_id"] not in nodes:
+                        raise RuntimeError("Claimed join references a missing Node")
+        except (NodeError, TypeError, KeyError) as exc:
+            raise RuntimeError("Invalid Node registry") from exc
+        self.nodes, self.joins = {}, {}
+        self.publish(nodes, joins)
 
-    def load(self) -> list[tuple[int, str, str, str]]:
-        restored = []
-        for key, phase in self.nodes.items():
-            if not isinstance(key, str) or not key.isdecimal() or int(key) < 1 or phase not in {
-                "joining", "online"
-            }:
-                raise RuntimeError("Saved Node Agent identities have an invalid format")
-            secret = self._credential(int(key), phase).get()
-            if not secret:
-                raise RuntimeError("A saved Node Agent credential is missing")
-            bootstrap = (secret if phase == "joining"
-                         else self._credential(int(key), "joining").get())
-            if not bootstrap:
-                raise RuntimeError("A saved Node Agent credential is missing")
-            restored.append((int(key), phase, secret, bootstrap))
-        return restored
+    def credential(self, node_id):
+        if self.credential_factory:
+            return self.credential_factory(f"EverSpark Forge/Node {node_id}/credential")
+        if self.path:
+            return FileCredential(self.path.parent/(self.path.stem+"_credentials")/node_id)
+        return MemoryCredential(self._secrets, node_id)
 
-    def save(self, instance_id: int, phase: str, secret: str, *, used_key_hash: str = "") -> None:
-        # Store the credential first: a crash before the index update leaves only
-        # an unused credential, never an index pointing at a missing credential.
-        self._credential(instance_id, phase).set(secret)
-        nodes = {**self.nodes, str(instance_id): phase}
-        key_hash = used_key_hash or self.used_key_hash
-        self._write(nodes, key_hash, self.retired)
-        self.nodes = nodes
-        self.used_key_hash = key_hash
+    def publish(self, nodes, joins):
+        # Candidates are detached from live state. Failed publication consumes nothing.
+        if self.path:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.path.with_name(self.path.name+".tmp")
+            with temporary.open("w", encoding="utf-8") as stream:
+                json.dump({"version": 2, "nodes": nodes, "joins": joins}, stream)
+                stream.flush()
+                os.fsync(stream.fileno())
+            temporary.replace(self.path)
+        self.nodes, self.joins = nodes, joins
 
-    def remove(self, instance_ids: set[int]) -> None:
-        if not instance_ids:
-            return
-        nodes = {key: value for key, value in self.nodes.items() if int(key) not in instance_ids}
-        # Revoke the identities in the index before removing their credentials.
-        retired = self.retired | instance_ids
-        self._write(nodes, self.used_key_hash, retired)
-        self.nodes = nodes
-        self.retired = retired
-        self._clean_retired()
-
-    def _clean_retired(self) -> None:
-        cleaned = set()
-        for instance_id in self.retired:
-            try:
-                self._credential(instance_id, "joining").delete()
-                self._credential(instance_id, "online").delete()
-            except CredentialError:
-                continue  # Retry next time the registry is opened or pruned.
-            cleaned.add(instance_id)
-        if cleaned:
-            self.retired.difference_update(cleaned)
-            self._write(self.nodes, self.used_key_hash, self.retired)
-
-    def _write(self, nodes: dict, key_hash: str, retired: set[int]) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self.path.with_suffix(".tmp")
-        temporary.write_text(json.dumps({"version": 1, "nodes": nodes,
-                                         "used_key_hash": key_hash,
-                                         "retired": sorted(retired)}), encoding="utf-8")
-        temporary.replace(self.path)
-
-    def _credential(self, instance_id: int, phase: str):
-        return self.credential_factory(f"EverSpark Forge/Node {instance_id}/{phase}")
+    def candidates(self):
+        return copy.deepcopy(self.nodes), copy.deepcopy(self.joins)

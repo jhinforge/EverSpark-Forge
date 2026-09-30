@@ -24,7 +24,7 @@ class LocalForgeBindings:
     def __init__(self, config: dict[str, Any], concept_logger: Any = None):
         concept_config = config["concept_forge"]
         image_config = config["image_forge"]
-        instance_id = int(config.get("remote_nodes", {}).get("concept_instance_id", 0))
+        instance_id = config.get("remote_nodes", {}).get("concept_node_id") or int(config.get("remote_nodes", {}).get("concept_instance_id", 0))
         if instance_id:
             provider = str(concept_config.get("provider", "ollama"))
             if provider != "ollama":
@@ -39,7 +39,7 @@ class LocalForgeBindings:
         self.manifests = discover_plugins()
         output = image_config.get("output_directory", str(
             Path(config["memory"]["database"]).parents[1] / "Outputs"))
-        remote_image_id = int(config.get("remote_nodes", {}).get("image_instance_id", 0))
+        remote_image_id = config.get("remote_nodes", {}).get("image_node_id") or int(config.get("remote_nodes", {}).get("image_instance_id", 0))
         if remote_image_id:
             self.gateway = RemoteImageGateway(remote_image_id,
                 str(config.get("remote_nodes", {}).get("control_url", "http://127.0.0.1:8765")),

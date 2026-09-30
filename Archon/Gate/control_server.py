@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from Archon.Steward.vast_instances import VastError
 from Archon.Vault.windows_credentials import CredentialError
 from Legate.Envoy.base_image import select_base_image
+from Archon.Steward.NodeManager.transport.operator import handle as handle_nodes
 
 
 _REMOTE_FORGE_ACTIONS = {
@@ -21,7 +22,8 @@ class ControlServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, address: tuple[str, int], machines=None, offers=None, deployments=None,
-                 image_deployments=None):
+                 image_deployments=None, node_manager=None):
+        self.node_manager = node_manager
         self.machines = machines
         self.offers = offers
         self.deployments = deployments
@@ -33,6 +35,8 @@ class ControlHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlsplit(self.path)
         path = parsed.path
+        if handle_nodes(self, self.server.node_manager, "GET", path):
+            return
         if path.startswith("/machines/"):
             if not self._local_request():
                 return
@@ -130,6 +134,8 @@ class ControlHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
+        if handle_nodes(self, self.server.node_manager, "POST", path):
+            return
         if path.startswith("/machines/"):
             if not self._local_request():
                 return
@@ -182,9 +188,7 @@ class ControlHandler(BaseHTTPRequestHandler):
                         raise VastError("Tailscale auth key already used; set a new key and restart Archon", 409)
                     if bridge and bridge.auth_key:
                         token = bridge.reserve()
-                        node_env = {"EVERSPARK_TAILSCALE_AUTH_KEY": bridge.auth_key,
-                                    "EVERSPARK_NODE_BOOTSTRAP": token,
-                                    "EVERSPARK_NODE_BRIDGE_URL": bridge.url}
+                        node_env = bridge.environment(token)
                     try:
                         rental = self.server.machines.create(offer, image, node_env=node_env)
                         if token:

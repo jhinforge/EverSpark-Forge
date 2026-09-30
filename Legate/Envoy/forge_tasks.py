@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 
 
-REPO = Path("/workspace/EverSpark-Forge")
+from .settings import REPO
 
 
 def command(forge: str, action: str, message: str) -> tuple[list[str], int] | None:

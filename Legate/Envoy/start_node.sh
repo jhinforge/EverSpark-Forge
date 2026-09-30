@@ -43,4 +43,10 @@ stage=register_agent
 printf '%s\n' "$stage" > "$status_file"
 printf '[EverSpark] stage: %s\n' "$stage"
 cd /workspace/EverSpark-Forge
+export EVERSPARK_NODE_PROVIDER=vast
+export EVERSPARK_NODE_PROVIDER_INSTANCE_ID="${CONTAINER_ID:?}"
+export EVERSPARK_NODE_PROXY=http://127.0.0.1:1055
+export EVERSPARK_NODE_DATA_DIR=/workspace/everspark-node
+export EVERSPARK_TASK_JOURNAL=/workspace/everspark-agent-tasks.json
+export EVERSPARK_STARTUP_STATUS="$status_file"
 exec python3 -m Legate.Envoy.node_agent

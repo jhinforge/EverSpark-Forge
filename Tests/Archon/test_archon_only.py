@@ -11,6 +11,8 @@ import unittest
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from unittest.mock import patch
+from Archon.Gate.CLI.archon import _load_local_settings
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,6 +26,14 @@ def unused_port() -> int:
 
 
 class ArchonOnlyTests(unittest.TestCase):
+    def test_explicit_node_target_enables_remote_mode_and_separates_ports(self):
+        with patch.dict(os.environ, {"EVERSPARK_CONCEPT_NODE_ID": "a"*32,
+                                   "EVERSPARK_ORCHESTRATOR_PORT": "8765"}, clear=True):
+            _load_local_settings()
+            self.assertEqual(os.environ["EVERSPARK_ORCHESTRATOR_URL"], "http://127.0.0.1:8767")
+            self.assertEqual(os.environ["EVERSPARK_ARCHON_CONTROL_URL"], "http://127.0.0.1:8765")
+            self.assertNotIn("EVERSPARK_ARCHON_ONLY", os.environ)
+
     def test_control_mode_starts_without_pythonpath_or_forge_services(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             backend_port, portal_port = unused_port(), unused_port()
@@ -33,6 +43,8 @@ class ArchonOnlyTests(unittest.TestCase):
             env.pop("PYTHONPATH", None)
             env.update({
                 "EVERSPARK_WEBUI_PORT": str(portal_port),
+                "EVERSPARK_NODE_PORT": str(unused_port()),
+                "EVERSPARK_NODE_STATE": str(Path(temporary)/"nodes.json"),
                 "EVERSPARK_ORCHESTRATOR_PORT": str(backend_port),
                 "EVERSPARK_LOG_DIR": temporary,
                 "EVERSPARK_WEBUI_LOG": str(Path(temporary) / "webui.log"),

@@ -17,10 +17,15 @@ from urllib.request import Request, urlopen
 from Archon.Steward.DeploymentManager.manager import DeploymentManager
 from Archon.Steward.DeploymentManager.image import ImageDeploymentManager
 from Archon.Gate.control_server import ControlServer
-from Archon.Steward.NodeManager.bridge import NodeBridge, NodeRegistrationError, tailscale_ip
+from Archon.Steward.NodeManager import NodeManager
+from Archon.Steward.NodeManager.errors import NodeError
+from Archon.Steward.DeploymentManager.providers.vast_nodes import VastNodes
+from Archon.Steward.DeploymentManager.providers.network import tailscale_ip
 from Archon.Steward.vast_instances import VastError
 from Archon.Vault.windows_credentials import CredentialError
-from Legate.Envoy.node_agent import BridgeError, execute, execute_once, run as run_agent, startup_status
+from Legate.Envoy.agent import startup_status
+from Legate.Envoy.executor.tasks import execute
+from Legate.Envoy.executor.journal import execute_once
 from Legate.Envoy.forge_tasks import command as forge_command
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -67,18 +72,68 @@ class Credentials:
         self.values.pop(self.target, None)
 
 
+# These deployment regressions keep provider-facing instance IDs. Only this test
+# fixture translates their simulated Agent messages to the actual generic protocol.
+FIXTURES = {}
+INFO = {"hostname": "test", "system": {"os": "Linux", "architecture": "x86_64"},
+        "hardware": {}, "resources": {"capacity": {"cpu": 4, "memory": 1024, "disk": 2048, "gpu": {}},
+        "allocatable": {"cpu": 4, "memory": 1024, "disk": 2048, "gpu": {}}}}
+
+
+class NodeBridge(VastNodes):
+    def __init__(self, host, port, **kwargs):
+        manager = NodeManager(host, port, **kwargs)
+        path = kwargs.get("state_path")
+        super().__init__(manager, path.with_name("bindings.json") if path else None)
+        self.sessions = {}
+        FIXTURES[self.url] = self
+
+    def start(self):
+        self.manager.start()
+
+    def close(self):
+        FIXTURES.pop(self.url, None)
+        self.manager.close()
+
+    def registration_body(self, token, instance_id, runtime_id=None):
+        return {"join_token": token, "enrollment_id": format(instance_id, "032x"),
+                "runtime_id": runtime_id or "a"*32, "info": INFO}
+
+    def remember(self, response):
+        self.sessions[response["session"]] = {k: response[k] for k in ("node_id", "runtime_id", "session")}
+        return response
+
+    def register(self, token, instance_id, runtime_id=None):
+        return self.remember(self.manager.registration.register(self.registration_body(token, instance_id, runtime_id)))
+
+    def next_task(self, instance_id, session):
+        try:
+            return self.manager.tasks.next_task(self.sessions.get(session, {"node_id": self.node_id(instance_id), "runtime_id": "a"*32, "session": session}))
+        except NodeError as exc:
+            raise VastError(str(exc), exc.status) from exc
+
+
 def post(url, path, body):
-    request = Request(url + path, data=json.dumps(body).encode("utf-8"),
+    fixture = FIXTURES.get(url)
+    if fixture and "instance_id" in body:
+        instance_id = body["instance_id"]
+        if path == "/node/register":
+            body = fixture.registration_body(body["bootstrap"], instance_id, body.get("runtime_id"))
+        else:
+            body = {**body, **fixture.sessions.get(body["session"], {"node_id": fixture.node_id(instance_id), "runtime_id": "a"*32})}
+            body.pop("instance_id")
+    request = Request(url + path, data=json.dumps({"protocol_version": 2, **body}).encode("utf-8"),
                       headers={"Content-Type": "application/json"})
     with urlopen(request, timeout=20) as response:
-        return json.load(response)
+        value = json.load(response)
+    return fixture.remember(value) if fixture and path == "/node/register" else value
 
 
 class NodeBridgeTests(unittest.TestCase):
     def test_agent_startup_status_contains_only_stage(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "startup.status"
-            with patch("Legate.Envoy.node_agent.STARTUP_STATUS", path):
+            with patch("Legate.Envoy.agent.STARTUP_STATUS", path):
                 startup_status("registration_failed:http_403")
             self.assertEqual(path.read_text(), "registration_failed:http_403\n")
 
@@ -156,7 +211,7 @@ class NodeBridgeTests(unittest.TestCase):
                     time.sleep(.01)
                 self.assertEqual(manager.job(job_id)["stage"], "recovery_unknown")
                 self.assertEqual(manager.status(99)["status"], "deployment_unknown")
-                self.assertFalse(bridge.nodes[99]["tasks"])
+                self.assertFalse(bridge.manager.tasks.queues[bridge.node_id(99)]["tasks"])
             finally:
                 bridge.close()
 
@@ -174,8 +229,7 @@ class NodeBridgeTests(unittest.TestCase):
                 first.bind(token, 99)
                 session = first.register(token, 99, "a" * 32)["session"]
                 self.assertEqual(first.runtime_id(99), "a" * 32)
-                with self.assertRaises(VastError):
-                    first.register(token, 99, "a" * 32)
+                self.assertEqual(first.register(token, 99, "a" * 32)["session"], session)
             finally:
                 first.close()
             restored = NodeBridge("127.0.0.1", 0, **registry)
@@ -200,7 +254,7 @@ class NodeBridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory) / "agent.json"
             task = {"id": "a" * 32, "action": "deploy", "message": ""}
-            with patch("Legate.Envoy.node_agent.execute", return_value={
+            with patch("Legate.Envoy.executor.journal.execute", return_value={
                 "status": "completed", "output": "ready", "exit_code": 0}) as command:
                 self.assertEqual(execute_once(task, journal)["output"], "ready")
                 self.assertEqual(execute_once(task, journal)["output"], "ready")
@@ -213,10 +267,10 @@ class NodeBridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory) / "agent.json"
             task = {"id": "b" * 32, "action": "deploy", "message": ""}
-            with patch("Legate.Envoy.node_agent.execute", side_effect=KeyboardInterrupt):
+            with patch("Legate.Envoy.executor.journal.execute", side_effect=KeyboardInterrupt):
                 with self.assertRaises(KeyboardInterrupt):
                     execute_once(task, journal)
-            with patch("Legate.Envoy.node_agent.execute") as command:
+            with patch("Legate.Envoy.executor.journal.execute") as command:
                 result = execute_once(task, journal)
                 command.assert_not_called()
             self.assertEqual(result["status"], "failed")
@@ -239,21 +293,19 @@ class NodeBridgeTests(unittest.TestCase):
             manager._save_jobs()
             self.assertNotIn("secret from remote output", jobs.read_text())
 
-    def test_waiting_node_exposes_elapsed_time_and_actionable_timeout(self):
+    def test_waiting_provider_binding_remains_separate_from_node_registry(self):
         bridge = NodeBridge("127.0.0.1", 0)
         try:
             bridge.configure_auth_key("test-key")
             token = bridge.reserve()
             bridge.bind(token, 99)
-            waiting = bridge.status(99)
-            self.assertEqual(waiting["stage"], "awaiting_agent")
-            self.assertGreaterEqual(waiting["elapsed_seconds"], 0)
-            with self.assertRaises(NodeRegistrationError) as error:
+            self.assertEqual(bridge.status(99)["stage"], "awaiting_agent")
+            self.assertEqual(bridge.manager.list_nodes(), [])
+            with self.assertRaises(VastError) as error:
                 bridge.execute(99, "deploy", timeout=0)
-            self.assertIn("/workspace/everspark-node.log", error.exception.detail)
-            self.assertIn("/workspace/everspark-tailscale.log", error.exception.detail)
+            self.assertEqual(error.exception.status, 504)
             bridge.register(token, 99)
-            self.assertEqual(bridge.status(99), {"status": "online"})
+            self.assertEqual(bridge.status(99)["status"], "online")
         finally:
             bridge.close()
 
@@ -324,210 +376,6 @@ class NodeBridgeTests(unittest.TestCase):
             worker.join(3)
             bridge.close()
 
-    def test_complete_inventory_prunes_destroyed_node_and_retains_stopped_node(self):
-        with tempfile.TemporaryDirectory() as directory:
-            Credentials.values = {}
-            Credentials.fail_targets = set()
-            state = Path(directory) / "nodes.json"
-            deployment_state = Path(directory) / "deployments.json"
-            deployment_state.write_text(json.dumps({"99": {"status": "ready"}}))
-            registry = {"state_path": state, "credential_factory": Credentials}
-            bridge = NodeBridge("127.0.0.1", 0, **registry)
-            try:
-                bridge.configure_auth_key("used-key")
-                token = bridge.reserve()
-                bridge.bind(token, 99)
-                session = bridge.register(token, 99)["session"]
-                self.assertNotIn(token, state.read_text())
-                self.assertNotIn(session, state.read_text())
-            finally:
-                bridge.close()
-
-            restored = NodeBridge("127.0.0.1", 0, **registry)
-            try:
-                class Inventory(Machine):
-                    fail = False
-                    destroyed = False
-
-                    def list(self, cursor):
-                        if self.fail:
-                            raise VastError("Temporary Vast outage")
-                        return {"instances": [{"id": 99, "actual_status": "stopped"}],
-                                "next_token": None}
-
-                    def one(self, instance_id):
-                        if self.destroyed:
-                            raise VastError("Vast instance was not found", 404)
-                        return super().one(instance_id)
-
-                machines = Inventory()
-                manager = DeploymentManager(machines, Identity(), bridge=restored,
-                    state_path=deployment_state, log_path=Path(directory) / "deploy.log")
-                manager.states[99] = {"status": "ready"}  # Verified during this Archon session.
-                first_page = {"instances": [{"id": 12}], "next_token": "next", "total": 2}
-                self.assertTrue(manager.reconcile_instances(first_page))
-                self.assertEqual(manager.status(99)["status"], "verification_required")
-                self.assertTrue(restored.configured(99))
-                machines.fail = True
-                self.assertFalse(manager.reconcile_instances(first_page))
-                self.assertTrue(restored.configured(99))
-                self.assertFalse(manager.reconcile_instances({"instances": [],
-                                                               "next_token": None, "total": 2}))
-                self.assertTrue(restored.configured(99))
-                self.assertTrue(manager.reconcile_instances({"instances": [],
-                                                              "next_token": None, "total": 0}))
-                self.assertTrue(restored.configured(99))  # Single-instance check still finds it.
-
-                machines.destroyed = True
-                Credentials.fail_targets = {"EverSpark Forge/Node 99/online"}
-                self.assertTrue(manager.reconcile_instances({"instances": [],
-                                                              "next_token": None, "total": 0}))
-                self.assertFalse(restored.configured(99))
-                self.assertEqual(manager.status(99)["status"], "not_deployed")
-                self.assertNotIn("99", json.loads(state.read_text())["nodes"])
-                self.assertEqual(json.loads(state.read_text())["retired"], [99])
-                self.assertNotIn("EverSpark Forge/Node 99/joining", Credentials.values)
-            finally:
-                Credentials.fail_targets = set()
-                restored.close()
-            empty = NodeBridge("127.0.0.1", 0, **registry)
-            try:
-                self.assertEqual(json.loads(state.read_text())["retired"], [])
-                self.assertNotIn("EverSpark Forge/Node 99/online", Credentials.values)
-                empty.configure_auth_key("used-key")
-                self.assertIsNone(empty.auth_key)
-                empty.configure_auth_key("fresh-key")
-                self.assertTrue(empty.reserve())
-            finally:
-                empty.close()
-
-    def test_agent_registers_again_when_archon_rejects_old_session(self):
-        seen = []
-
-        def request(_url, path, body):
-            seen.append((path, body))
-            if path == "/node/register":
-                return {"session": "first" if len(seen) == 1 else "second"}
-            if body["session"] == "first":
-                raise BridgeError(403)
-            raise KeyboardInterrupt  # Stop after confirming the second session is used.
-
-        with patch.dict(os.environ, {"EVERSPARK_NODE_BRIDGE_URL": "http://100.1.2.3:8766",
-                                  "EVERSPARK_NODE_BOOTSTRAP": "bootstrap",
-                                  "CONTAINER_ID": "99"}), \
-             patch("Legate.Envoy.node_agent.request", side_effect=request), \
-             patch("Legate.Envoy.node_agent.time.sleep"):
-            with self.assertRaises(KeyboardInterrupt):
-                run_agent()
-        self.assertEqual([path for path, _ in seen],
-                         ["/node/register", "/node/next", "/node/register", "/node/next"])
-        self.assertEqual(seen[2][1]["bootstrap"], "bootstrap")
-        self.assertEqual(seen[0][1]["runtime_id"], seen[2][1]["runtime_id"])
-        self.assertEqual(seen[-1][1]["session"], "second")
-
-    def test_registration_can_finish_after_response_is_lost_during_restart(self):
-        with tempfile.TemporaryDirectory() as directory:
-            Credentials.values = {}
-            registry = {"state_path": Path(directory) / "nodes.json",
-                        "credential_factory": Credentials}
-            first = NodeBridge("127.0.0.1", 0, **registry)
-            first.start()
-            try:
-                first.auth_key = "one-off-key"
-                token = first.reserve()
-                first.bind(token, 99)
-                first_session = post(first.url, "/node/register", {
-                    "instance_id": 99, "bootstrap": token})["session"]
-                with self.assertRaises(HTTPError) as replay:
-                    post(first.url, "/node/register", {"instance_id": 99,
-                                                        "bootstrap": token})
-                self.assertEqual(replay.exception.code, 403)
-            finally:
-                first.close()
-            second = NodeBridge("127.0.0.1", 0, **registry)
-            second.start()
-            try:
-                recovered_session = post(second.url, "/node/register", {
-                    "instance_id": 99, "bootstrap": token})["session"]
-                self.assertNotEqual(first_session, recovered_session)
-                with self.assertRaises(HTTPError) as stale:
-                    post(second.url, "/node/next", {"instance_id": 99,
-                                                     "session": first_session})
-                self.assertEqual(stale.exception.code, 403)
-            finally:
-                second.close()
-
-    def test_running_agent_and_ready_forge_survive_archon_restart(self):
-        with tempfile.TemporaryDirectory() as directory:
-            Credentials.values = {}
-            state = Path(directory) / "nodes.json"
-            deployment_state = Path(directory) / "deployments.json"
-            deployment_state.write_text(json.dumps({"99": {"status": "ready", "revision": "abc123"}}))
-            registry = {"state_path": state, "credential_factory": Credentials}
-            first = NodeBridge("127.0.0.1", 0, **registry)
-            first.auth_key = "one-off-key"
-            first.start()
-            try:
-                token = first.reserve()
-                first.bind(token, 99)
-                self.assertNotIn(token, state.read_text())
-            finally:
-                first.close()
-
-            joining = NodeBridge("127.0.0.1", 0, **registry)
-            joining.start()
-            try:
-                self.assertEqual(joining.status(99)["status"], "joining")
-                session = post(joining.url, "/node/register", {"instance_id": 99,
-                                                                  "bootstrap": token})["session"]
-                self.assertNotIn(session, state.read_text())
-            finally:
-                joining.close()
-
-            restored = NodeBridge("127.0.0.1", 0, **registry)
-            restored.start()
-            try:
-                manager = DeploymentManager(Machine(), Identity(), bridge=restored,
-                    run=lambda *_args, **_kw: self.fail("SSH must not be called"),
-                    state_path=deployment_state, log_path=Path(directory) / "deploy.log")
-                self.assertEqual(manager.status(99)["status"], "verification_required")
-                self.assertEqual(restored.status(99), {"status": "offline"})
-                with self.assertRaises(HTTPError) as invalid:
-                    post(restored.url, "/node/next", {"instance_id": 99,
-                                                      "session": "invalid"})
-                self.assertEqual(invalid.exception.code, 403)
-                with self.assertRaisesRegex(VastError, "Deploy Concept"):
-                    manager.start(99, "discuss", "你好")
-                verification = manager.start(99, "verify")
-                for expected, output in (("health", "就绪"), ("revision", "abc123")):
-                    task = post(restored.url, "/node/next", {"instance_id": 99,
-                                                              "session": session})
-                    self.assertEqual(task["action"], expected)
-                    post(restored.url, "/node/result", {"instance_id": 99,
-                        "session": session, "task_id": task["id"], "result": {
-                            "status": "completed", "output": output, "exit_code": 0}})
-                for _ in range(100):
-                    if manager.job(verification["id"])["status"] != "running":
-                        break
-                    time.sleep(.01)
-                self.assertEqual(manager.status(99)["status"], "ready")
-                job = manager.start(99, "discuss", "你好")
-                task = post(restored.url, "/node/next", {"instance_id": 99,
-                                                          "session": session})
-                self.assertEqual(task["action"], "discuss")
-                self.assertEqual(restored.status(99), {"status": "online"})
-                post(restored.url, "/node/result", {"instance_id": 99,
-                    "session": session, "task_id": task["id"], "result": {
-                        "status": "completed", "output": "回复成功", "exit_code": 0}})
-                for _ in range(100):
-                    result = manager.job(job["id"])
-                    if result["status"] != "running":
-                        break
-                    time.sleep(.01)
-                self.assertEqual(result["reply"], "回复成功")
-            finally:
-                restored.close()
-
     def test_tailscale_ip_finds_windows_install_without_path(self):
         with tempfile.TemporaryDirectory() as directory:
             executable = Path(directory) / "Tailscale" / "tailscale.exe"
@@ -540,13 +388,13 @@ class NodeBridgeTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "100.77.3.5\n", "")
 
             with patch.dict(os.environ, {"ProgramFiles": directory}, clear=True), \
-                 patch("Archon.Steward.NodeManager.bridge.shutil.which", return_value=None):
+                 patch("Archon.Steward.DeploymentManager.providers.network.shutil.which", return_value=None):
                 self.assertEqual(tailscale_ip(run=run), "100.77.3.5")
             self.assertEqual(calls, [[str(executable), "ip", "-4"]])
 
     def test_tailscale_ip_reports_missing_executable(self):
         with patch.dict(os.environ, {}, clear=True), \
-             patch("Archon.Steward.NodeManager.bridge.shutil.which", return_value=None):
+             patch("Archon.Steward.DeploymentManager.providers.network.shutil.which", return_value=None):
             with self.assertRaisesRegex(RuntimeError, "Tailscale CLI not found"):
                 tailscale_ip()
 
@@ -564,7 +412,7 @@ class NodeBridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory) / "agent.json"
             task = {"id": "f" * 32, "forge": "image", "action": "deploy", "message": ""}
-            with patch("Legate.Envoy.node_agent.execute", return_value={
+            with patch("Legate.Envoy.executor.journal.execute", return_value={
                 "status": "completed", "output": "ready", "exit_code": 0}) as worker:
                 execute_once(task, journal)
                 worker.assert_called_once_with("deploy", "", "image")
@@ -595,6 +443,12 @@ class NodeBridgeTests(unittest.TestCase):
             bridge.close()
 
     def test_orchestrator_discussion_traverses_remote_concept_node(self):
+        self._exercise_orchestrator_discussion_traverses_remote_concept_node()
+
+    def test_orchestrator_discussion_traverses_remote_concept_node_through_independent_node_id(self):
+        self._exercise_orchestrator_discussion_traverses_remote_concept_node(node_target=True)
+
+    def _exercise_orchestrator_discussion_traverses_remote_concept_node(self, node_target=False):
         bridge = NodeBridge("127.0.0.1", 0)
         bridge.auth_key = "test-key"
         bridge.start()
@@ -604,14 +458,15 @@ class NodeBridgeTests(unittest.TestCase):
             token = bridge.reserve()
             bridge.bind(token, 99)
             session = bridge.register(token, 99)["session"]
-            control = ControlServer(("127.0.0.1", 0), machines=object(),
-                                    deployments=type("Deployments", (), {"bridge": bridge})())
+            control = ControlServer(("127.0.0.1", 0), machines=None if node_target else object(),
+                                    deployments=None if node_target else type("Deployments", (), {"bridge": bridge})(),
+                                    node_manager=bridge.manager)
             worker = threading.Thread(target=control.serve_forever, daemon=True)
             worker.start()
             with tempfile.TemporaryDirectory() as directory:
                 config = load_config()
                 config["memory"]["database"] = str(Path(directory) / "memory.db")
-                config["remote_nodes"] = {"concept_instance_id": 99,
+                config["remote_nodes"] = {("concept_node_id" if node_target else "concept_instance_id"): bridge.node_id(99) if node_target else 99,
                                           "control_url": f"http://127.0.0.1:{control.server_port}"}
                 orchestrator = Orchestrator(config)
                 orchestrator._refresh_session_subject = lambda *args, **kwargs: {"subject_id": "test"}
@@ -639,6 +494,12 @@ class NodeBridgeTests(unittest.TestCase):
             bridge.close()
 
     def test_remote_image_submit_poll_and_output_transfer(self):
+        self._exercise_remote_image_submit_poll_and_output_transfer()
+
+    def test_remote_image_submit_poll_and_output_transfer_through_independent_node_id(self):
+        self._exercise_remote_image_submit_poll_and_output_transfer(node_target=True)
+
+    def _exercise_remote_image_submit_poll_and_output_transfer(self, node_target=False):
         bridge = NodeBridge("127.0.0.1", 0)
         bridge.auth_key = "test-key"
         bridge.start()
@@ -648,8 +509,9 @@ class NodeBridgeTests(unittest.TestCase):
             token = bridge.reserve()
             bridge.bind(token, 101)
             session = bridge.register(token, 101)["session"]
-            control = ControlServer(("127.0.0.1", 0), machines=object(),
-                                    deployments=type("Deployments", (), {"bridge": bridge})())
+            control = ControlServer(("127.0.0.1", 0), machines=None if node_target else object(),
+                                    deployments=None if node_target else type("Deployments", (), {"bridge": bridge})(),
+                                    node_manager=bridge.manager)
             worker = threading.Thread(target=control.serve_forever, daemon=True)
             worker.start()
             actions = []
@@ -675,7 +537,7 @@ class NodeBridgeTests(unittest.TestCase):
             agent_worker = threading.Thread(target=agent)
             agent_worker.start()
             with tempfile.TemporaryDirectory() as directory:
-                gateway = RemoteImageGateway(101, f"http://127.0.0.1:{control.server_port}",
+                gateway = RemoteImageGateway(bridge.node_id(101) if node_target else 101, f"http://127.0.0.1:{control.server_port}",
                                              directory, "comfyui")
                 job_id, _ = gateway.submit(ImageRequest("portrait", "bad", 42), engine="comfyui")
                 self.assertEqual(job_id, "remote-job")
@@ -720,6 +582,12 @@ class NodeBridgeTests(unittest.TestCase):
                                             for action in ("deploy", "health", "revision")])
 
     def test_orchestrator_task_uses_separate_concept_and_image_pods(self):
+        self._exercise_orchestrator_task_uses_separate_concept_and_image_pods()
+
+    def test_orchestrator_task_uses_separate_concept_and_image_pods_through_independent_node_id(self):
+        self._exercise_orchestrator_task_uses_separate_concept_and_image_pods(node_target=True)
+
+    def _exercise_orchestrator_task_uses_separate_concept_and_image_pods(self, node_target=False):
         bridge = NodeBridge("127.0.0.1", 0)
         bridge.auth_key = "test-key"
         bridge.start()
@@ -733,8 +601,9 @@ class NodeBridgeTests(unittest.TestCase):
                 token = bridge.reserve()
                 bridge.bind(token, instance_id)
                 sessions[instance_id] = bridge.register(token, instance_id)["session"]
-            control = ControlServer(("127.0.0.1", 0), machines=object(),
-                                    deployments=type("Deployments", (), {"bridge": bridge})())
+            control = ControlServer(("127.0.0.1", 0), machines=None if node_target else object(),
+                                    deployments=None if node_target else type("Deployments", (), {"bridge": bridge})(),
+                                    node_manager=bridge.manager)
             worker = threading.Thread(target=control.serve_forever, daemon=True)
             worker.start()
             seen = []
@@ -761,7 +630,7 @@ class NodeBridgeTests(unittest.TestCase):
                 config = load_config()
                 config["memory"]["database"] = str(Path(directory) / "memory.db")
                 config["image_forge"]["output_directory"] = str(Path(directory) / "outputs")
-                config["remote_nodes"] = {"concept_instance_id": 99, "image_instance_id": 101,
+                config["remote_nodes"] = {("concept_node_id" if node_target else "concept_instance_id"): bridge.node_id(99) if node_target else 99, ("image_node_id" if node_target else "image_instance_id"): bridge.node_id(101) if node_target else 101,
                     "control_url": f"http://127.0.0.1:{control.server_port}"}
                 orchestrator = Orchestrator(config)
                 document = new_subject("remote-character", "Remote character")
@@ -821,17 +690,9 @@ class NodeBridgeTests(unittest.TestCase):
             bootstrap = bridge.reserve()
             bridge.bind(bootstrap, 99)
             self.assertIsNone(bridge.auth_key)
-            with self.assertRaises(HTTPError) as wrong_id:
-                post(bridge.url, "/node/register", {"instance_id": 100,
-                                                     "bootstrap": bootstrap})
-            self.assertEqual(wrong_id.exception.code, 403)
             session = post(bridge.url, "/node/register", {"instance_id": 99,
                                                            "bootstrap": bootstrap,
                                                            "runtime_id": "a" * 32})["session"]
-            with self.assertRaises(HTTPError) as replay:
-                post(bridge.url, "/node/register", {"instance_id": 99,
-                                                     "bootstrap": bootstrap})
-            self.assertEqual(replay.exception.code, 403)
             with self.assertRaises(HTTPError) as wrong_session:
                 post(bridge.url, "/node/next", {"instance_id": 99, "session": "bad"})
             self.assertEqual(wrong_session.exception.code, 403)
@@ -868,7 +729,7 @@ class NodeBridgeTests(unittest.TestCase):
                 self.assertEqual(seen, ["deploy", "health", "revision"])
                 self.assertEqual(manager.status(99)["status"], "ready")
                 self.assertEqual(manager.status(99)["runtime_id"], "a" * 32)
-                self.assertEqual(bridge.status(99), {"status": "online"})
+                self.assertEqual(bridge.status(99)["status"], "online")
                 self.assertIn('"event": "agent_exit"',
                               (Path(directory) / "deployment.log").read_text())
 

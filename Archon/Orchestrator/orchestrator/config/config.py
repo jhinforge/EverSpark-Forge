@@ -98,6 +98,8 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         config, "EVERSPARK_ORCHESTRATOR_PORT", ("orchestrator", "port"), int
     )
     config.setdefault("remote_nodes", {})
+    _environment_override(config, "EVERSPARK_CONCEPT_NODE_ID", ("remote_nodes", "concept_node_id"))
+    _environment_override(config, "EVERSPARK_IMAGE_NODE_ID", ("remote_nodes", "image_node_id"))
     _environment_override(config, "EVERSPARK_CONCEPT_INSTANCE_ID",
                           ("remote_nodes", "concept_instance_id"), int)
     _environment_override(config, "EVERSPARK_IMAGE_INSTANCE_ID",
