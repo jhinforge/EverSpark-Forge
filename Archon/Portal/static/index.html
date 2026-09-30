@@ -7,6 +7,8 @@
     <title>EverSpark Forge</title>
     <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/i18n.js" defer></script>
+    <script src="/static/node-card.js" defer></script>
+    <script src="/static/node-connection.js" defer></script>
     <script src="/static/app.js" defer></script>
   </head>
   <body>
@@ -272,6 +274,14 @@
               <button class="primary-button" id="saveVastKey" type="submit">Verify and save</button>
               <button class="ghost-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
             </div>
+          </form>
+          <form class="storage-panel machine-credential" id="nodeConnectionForm">
+            <div><p class="section-kicker">NODE CONNECTION</p><h3>Automatic Node connection</h3>
+              <p class="section-copy" id="nodeConnectionStatus">Checking Node connection…</p>
+              <p class="section-copy">Connect Tailscale on this Windows host, then enter a fresh auth key. EverSpark automatically joins the rented machine and starts its Agent. The key is used for one rental and is kept only for this Archon session.</p></div>
+            <label for="nodeConnectionKey">Tailscale auth key</label>
+            <input id="nodeConnectionKey" type="password" autocomplete="new-password" spellcheck="false" required>
+            <button class="primary-button" type="submit">Configure automatic connection</button>
           </form>
           <div class="section-toolbar machine-heading"><h3>Search Vast offers</h3><button class="ghost-button" id="toggleVastOffers" type="button" aria-expanded="true">Collapse</button></div>
           <div id="vastOffersPanel">

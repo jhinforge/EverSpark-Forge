@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from Archon.Steward.vast_instances import VastError
 from Archon.Vault.windows_credentials import CredentialError
 from Legate.Envoy.base_image import select_base_image
+from Archon.Steward.DeploymentManager.providers import onboarding
 from Archon.Steward.NodeManager.transport.operator import handle as handle_nodes
 
 
@@ -44,7 +45,10 @@ class ControlHandler(BaseHTTPRequestHandler):
                 self._send(503, {"ok": False, "error": "Machine management is unavailable"})
                 return
             try:
-                if path == "/machines/vast/credential":
+                if path == "/machines/vast/node-connection":
+                    bridge = self.server.deployments.bridge if self.server.deployments else None
+                    self._send(200, {"ok": True, **onboarding.status(bridge)})
+                elif path == "/machines/vast/credential":
                     self._send(200, {"ok": True, "configured": self.server.machines.configured()})
                 elif path == "/machines/vast/balance":
                     self._send(200, {"ok": True, **self.server.machines.balance()})
@@ -59,10 +63,13 @@ class ControlHandler(BaseHTTPRequestHandler):
                             machine["forge"] = self.server.deployments.status(machine["id"])
                             if machine.get("actual_status") == "stopped" and machine["forge"]["status"] == "ready":
                                 machine["forge"] = {"status": "verification_required"}
+                            machine["node"] = {"status": "unconfigured"}
                             if self.server.deployments.bridge:
                                 machine["node"] = self.server.deployments.bridge.status(machine["id"])
                                 if machine.get("actual_status") == "stopped" and machine["node"]["status"] != "unconfigured":
-                                    machine["node"] = {"status": "offline", "stage": "pod_stopped"}
+                                    machine["node"].update(status="offline", stage="pod_stopped")
+                                    if machine["node"].get("resources"):
+                                        machine["node"]["resources"]["allocatable"] = None
                     if self.server.image_deployments:
                         for machine in result["instances"]:
                             machine["image_forge"] = self.server.image_deployments.status(machine["id"])
@@ -152,7 +159,10 @@ class ControlHandler(BaseHTTPRequestHandler):
                 payload = json.loads(self.rfile.read(length))
                 if not isinstance(payload, dict):
                     raise ValueError
-                if path == "/machines/vast/credential":
+                if path == "/machines/vast/node-connection":
+                    bridge = self.server.deployments.bridge if self.server.deployments else None
+                    self._send(200, {"ok": True, **onboarding.configure(bridge, payload)})
+                elif path == "/machines/vast/credential":
                     page = self.server.machines.save(payload.get("key"))
                     self._send(200, {"ok": True, "configured": True, **page})
                 elif path == "/machines/vast/credential/remove":
@@ -174,8 +184,14 @@ class ControlHandler(BaseHTTPRequestHandler):
                     else:
                         self._send(200, {"ok": True, **self.server.offers.search(payload)})
                 elif path == "/machines/vast/rent":
-                    if not self.server.offers or not self.server.deployments or set(payload) != {"offer_id"}:
+                    if not self.server.offers or not self.server.deployments or (set(payload) - {"offer_id", "require_agent"} or "offer_id" not in payload):
                         raise VastError("Invalid rental request", 400)
+                    require_agent = payload.get("require_agent", False)
+                    if not isinstance(require_agent, bool):
+                        raise VastError("Invalid rental mode", 400)
+                    bridge = self.server.deployments.bridge
+                    if require_agent and not onboarding.status(bridge)["ready"]:
+                        raise VastError("Configure automatic Node connection before renting", 409)
                     offer = self.server.offers.quote(payload["offer_id"])
                     try:
                         image = select_base_image(offer)

@@ -451,3 +451,10 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 
 .local-import-actions { justify-content: flex-start; flex-wrap: wrap; }
 .local-import-actions input[type="file"] { min-width: 0; max-width: 100%; color: var(--muted); }
+
+.node-inventory { margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,.12); }
+.machine-card .node-state { margin: 0; font-size: 15px; font-weight: 700; color: var(--cyan); }
+.node-inventory[data-node-status="unconfigured"] .node-state, .node-inventory[data-node-status="unhealthy"] .node-state { color: #f6c76b; }
+.node-resources { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 12px; }
+.node-resources th, .node-resources td { padding: 7px 3px; text-align: left; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.node-resources th { color: var(--muted); }

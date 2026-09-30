@@ -123,6 +123,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         routes = {
             "/api/health": self._health,
             "/api/runtime/status": self._runtime_status,
+            "/api/machines/vast/node-connection": lambda: self._proxy_control_get("/machines/vast/node-connection", parsed.query),
             "/api/machines/vast/credential": lambda: self._proxy_control_get(
                 "/machines/vast/credential"),
             "/api/machines/vast/balance": lambda: self._proxy_control_get(
@@ -206,6 +207,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         try:
             if path in {"/api/machines/vast/credential", "/api/machines/vast/credential/remove",
                         "/api/machines/vast/destroy", "/api/machines/vast/deploy-image",
+                        "/api/machines/vast/node-connection",
                         "/api/machines/vast/offers", "/api/machines/vast/rent", "/api/machines/vast/startup-diagnostics",
                         "/api/machines/vast/deploy", "/api/machines/vast/verify", "/api/machines/vast/update-source",
                         "/api/machines/vast/discuss"}:

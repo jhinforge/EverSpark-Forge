@@ -114,7 +114,7 @@ class VastInstances:
         status = "/workspace/everspark-startup.status"
         onstart = (
             f"printf 'package_install\\n' > {status}; "
-            "(apt-get update && apt-get install -y git ca-certificates curl) || "
+            "(apt-get update && apt-get install -y git ca-certificates curl python3) || "
             f"{{ printf 'failed:package_install\\n' > {status}; exit 1; }}; "
             f"printf 'source_checkout\\n' > {status}; "
             "(if [ ! -d /workspace/EverSpark-Forge/.git ]; then "

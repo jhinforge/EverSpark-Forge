@@ -1089,7 +1089,7 @@ function setView(name) {
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
-  if (name === "machines") { loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
+  if (name === "machines") { nodeConnection.refresh(); loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
   if (name === "models") loadModelConnections();
   if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadRestorePoints()]);
 }
@@ -1175,10 +1175,11 @@ function renderOffer(offer, diskGb) {
     try {
       const result = await api("/api/machines/vast/rent", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ offer_id: offer.id }),
+        body: JSON.stringify({ offer_id: offer.id, require_agent: true }),
       });
       showNotice(`Vast #${result.instance_id} · ${t("Loading machines…")}`, "success");
       await loadMachines();
+      void nodeConnection.refresh();
       void loadVastBalance();
     } catch (error) { showNotice(error.message); rent.disabled = false; }
   });
@@ -1327,37 +1328,18 @@ function renderMachine(machine) {
       (machine.image_forge.revision ? ` · ${machine.image_forge.revision}` : "");
     card.appendChild(imageForge);
   }
-  if (machine.node && machine.node.status !== "unconfigured") {
-    const node = document.createElement("p");
-    const nodeLabels = {joining: "Joining", online: "Online", offline: "Offline"};
-    node.textContent = `${t("Node Agent")}: ${t(nodeLabels[machine.node.status] || "Offline")}`;
-    card.appendChild(node);
-    if (machine.node.status === "joining") {
-      const waiting = document.createElement("p");
-      const elapsed = Number(machine.node.elapsed_seconds) || 0;
-      waiting.textContent = `${t("Waiting for Pod startup and agent registration")} · ${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
-      card.appendChild(waiting);
-    }
-    if (machine.node.status !== "online") {
-      const diagnose = document.createElement("button");
-      diagnose.type = "button";
-      diagnose.className = "ghost-button";
-      diagnose.textContent = "查看启动诊断";
-      diagnose.addEventListener("click", async () => {
-        diagnose.disabled = true;
-        try {
-          const result = await api("/api/machines/vast/startup-diagnostics", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ instance_id: machine.id }),
-          });
-          showNotice(`Vast #${machine.id} · ${result.stage === "pending" ? "诊断结果尚未生成，请稍后重试" : result.stage}`,
-            result.stage === "registered" ? "success" : undefined);
-        } catch (error) { showNotice(error.message); }
-        finally { diagnose.disabled = false; }
-      });
-      card.appendChild(diagnose);
-    }
-  }
+  card.appendChild(window.EverSparkNodeCard.render(machine.node, { t, bind: uiText,
+    diagnose: async (button) => {
+      button.disabled = true;
+      try {
+        const result = await api("/api/machines/vast/startup-diagnostics", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ instance_id: machine.id }),
+        });
+        showNotice(`Vast #${machine.id} · ${result.stage}`, result.stage === "registered" ? "success" : undefined);
+      } catch (error) { showNotice(error.message); }
+      finally { button.disabled = false; }
+    },
+  }));
   if (state.podJobs[machine.id]) {
     const progress = document.createElement("p");
     progress.dataset.podProgress = String(machine.id);
@@ -1427,6 +1409,9 @@ function renderMachine(machine) {
   card.appendChild(destroy);
   elements.vastInstanceList.appendChild(card);
 }
+
+const nodeConnection = window.EverSparkNodeConnection.initialize({ api, bind: uiText,
+  notice: (message, kind) => showNotice(t(message), kind) });
 
 async function loadVastBalance() {
   try {

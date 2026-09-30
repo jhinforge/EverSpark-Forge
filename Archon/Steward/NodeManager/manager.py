@@ -32,6 +32,21 @@ class NodeManager:
         self.thread.start()
         self.monitor.start()
 
+    def listen_on(self, host):
+        """Move the listener without replacing identity, leases or task queues."""
+        if host == self.server.server_address[0]:
+            return
+        replacement = NodeServer((host, self.server.server_port), self)
+        worker = threading.Thread(target=replacement.serve_forever, daemon=True, name="archon-nodes")
+        previous, previous_thread = self.server, self.thread
+        self.server, self.thread = replacement, worker
+        self.url = f"http://{host}:{replacement.server_port}"
+        worker.start()
+        if previous_thread:
+            previous.shutdown()
+            previous_thread.join(5)
+        previous.server_close()
+
     def _monitor(self):
         while not self.stop.wait(min(1, self.heartbeat_interval)):
             try:
