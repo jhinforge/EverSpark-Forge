@@ -1,0 +1,13 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const context = {window: {}};
+vm.runInNewContext(fs.readFileSync('Archon/Portal/static/deployment-progress.js', 'utf8'), context);
+const display = context.window.EverSparkDeploymentProgress;
+assert.match(display.format({stage:'deploy', progress:{stage:'downloading_models',elapsed_seconds:65,stale:false}}), /Downloading models.*65 seconds/);
+assert.match(display.format({progress:{stage:'installing_runtime',elapsed_seconds:8,stale:true}}), /Heartbeat interrupted/);
+assert.match(display.failure({stage:'health',exit_code:7,detail:'模型下载失败'}), /health.*Exit code: 7.*模型下载失败/);
+assert.equal(display.format({stage:'queued'}), 'Waiting for execution');
+context.window.EverSparkI18n = {t: (key) => key === 'Downloading models' ? '下载模型' : key};
+assert.match(display.format({progress:{stage:'downloading_models',elapsed_seconds:1}}), /下载模型/);
+console.log('Deployment progress: 5 checks passed');

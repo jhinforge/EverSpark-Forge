@@ -12,7 +12,32 @@ class TaskChannel:
         self.manager, self.queues = manager, {}
 
     def ensure(self, node_id):
-        self.queues.setdefault(node_id, {"tasks": deque(), "results": {}})
+        self.queues.setdefault(node_id, {"tasks": deque(), "results": {}, "delivered": {}, "progress": {}})
+
+    def reconnect(self, node_id):
+        """Reconcile original task IDs with the new runtime's durable journal."""
+        self.ensure(node_id)
+        node = self.queues[node_id]
+        for task in node["delivered"].values():
+            if task["id"] in node["results"] and node["results"][task["id"]] is None:
+                node["tasks"].appendleft(task)
+        node["delivered"].clear()
+        node["progress"].clear()
+
+    def progress(self, node_id, value):
+        from .task_progress import validate_progress
+        progress = validate_progress(value)
+        node = self.queues.get(node_id)
+        if progress and node and progress["task_id"] in node["delivered"]:
+            node["progress"][progress["task_id"]] = {**progress, "received_at": time.monotonic()}
+
+    def status(self, node_id, task_id):
+        with self.manager.lock:
+            value = self.queues.get(node_id, {}).get("progress", {}).get(task_id)
+            if not value:
+                return {}
+            return {k: v for k, v in value.items() if k != "received_at"} | {
+                "stale": time.monotonic() - value["received_at"] > self.manager.lease_timeout}
 
     def _authenticated(self, body, pulling=False):
         record, _ = authenticate(self.manager, body)
@@ -28,7 +53,11 @@ class TaskChannel:
             if not node["tasks"]:
                 self.manager.lock.wait(12)
                 node = self._authenticated(body, pulling=True)
-            return node["tasks"].popleft() if node["tasks"] else {}
+            if not node["tasks"]:
+                return {}
+            task = node["tasks"].popleft()
+            node["delivered"][task["id"]] = task
+            return task
 
     def finish(self, body: dict):
         task_id, result = body.get("task_id"), body.get("result")
@@ -42,9 +71,13 @@ class TaskChannel:
                 raise NodeError("Invalid node task result", 400)
             if len(str(result.get("output", "")).encode("utf-8")) > 60000:
                 raise NodeError("Node task result is too large", 400)
+            phase = {}
+            if "stage" in result:
+                from .task_progress import validate_progress
+                phase = {"stage": validate_progress({"task_id": task_id, "stage": result["stage"], "elapsed_seconds": 0})["stage"]}
             node["results"][task_id] = {"status": result["status"],
                                          "output": str(result.get("output", "")),
-                                         "exit_code": result.get("exit_code")}
+                                         "exit_code": result.get("exit_code"), **phase}
             self.manager.lock.notify_all()
 
 
@@ -94,13 +127,23 @@ class TaskChannel:
                     if remaining <= 0:
                         node["results"].pop(task_id, None)
                         node["tasks"] = deque(task for task in node["tasks"] if task["id"] != task_id)
-                        raise NodeError("Node Agent task timed out", 504)
+                        error = NodeError("Node Agent task timed out", 504)
+                        if task_id in node["delivered"]:
+                            error.stage = "outcome_unknown"
+                            error.detail = "Node Agent task timed out after delivery; outcome unknown. Verify Forge health before retrying."
+                        raise error
                     self.manager.lock.wait(min(remaining, 5))
             except BaseException:
+                node["delivered"].pop(task_id, None)
+                node["progress"].pop(task_id, None)
                 node["results"].pop(task_id, None)
                 node["tasks"] = deque(task for task in node["tasks"] if task["id"] != task_id)
                 raise
+            node["delivered"].pop(task_id, None)
+            progress = node["progress"].pop(task_id, {})
             result = node["results"].pop(task_id)
             if result["status"] != "completed":
-                raise NodeTaskError(result["output"], result["exit_code"])
+                error = NodeTaskError(result["output"], result["exit_code"])
+                error.stage = result.get("stage", progress.get("stage", error.stage))
+                raise error
             return result["output"]

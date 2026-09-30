@@ -1,4 +1,4 @@
-"""Recheck an existing Concept Forge after control or Agent recovery.
+"""Recheck an existing Forge after control or Agent recovery.
 
 Inventory polling only schedules work; the existing verify task performs the
 health check. A failed check is not retried on every WebUI poll.
@@ -9,22 +9,35 @@ from Archon.Steward.vast_instances import VastError
 
 
 class ConnectionVerification:
-    def __init__(self, manager):
-        self.manager = manager
+    def __init__(self, manager, name="concept"):
+        self.manager, self.name = manager, name
         self.lock = threading.Lock()
         self.pending = set()
         self.attempted = {}
+        self.online = {}
 
     def consider(self, instance_id):
         manager = self.manager
-        if not manager.bridge or manager.status(instance_id).get("status") != "verification_required":
+        if not manager.bridge:
             return
         node = manager.bridge.status(instance_id)
         runtime = node.get("runtime_id")
-        if node.get("status") != "online" or not runtime:
+        available = node.get("status") == "online" and bool(runtime)
+        with self.lock:
+            previous = self.online.get(instance_id)
+            self.online[instance_id] = available
+            if previous is True and not available:
+                self.attempted.pop(instance_id, None)
+        if not available:
+            with manager.lock:
+                if manager.states.get(instance_id, {}).get("status") == "ready":
+                    manager.states[instance_id] = {"status": "verification_required"}
+                    manager._save()
+            return
+        if manager.status(instance_id).get("status") != "verification_required":
             return
         with manager.lock:
-            if instance_id in manager.retired_instances or any(
+            if instance_id in getattr(manager, "retired_instances", set()) or any(
                 job["instance_id"] == instance_id and job["status"] == "running"
                 for job in manager.jobs.values()
             ):
@@ -34,7 +47,7 @@ class ConnectionVerification:
                 return
             self.pending.add(instance_id)
         threading.Thread(target=self._start, args=(instance_id, runtime),
-                         daemon=True, name="concept-reconnect-verification").start()
+                         daemon=True, name=f"{self.name}-reconnect-verification").start()
 
     def _start(self, instance_id, runtime):
         try:
@@ -48,8 +61,8 @@ class ConnectionVerification:
         except Exception as exc:
             # The manual verification action remains available after failure.
             logging.getLogger(__name__).warning(
-                "Could not schedule Concept verification for instance %s: %s",
-                instance_id, type(exc).__name__)
+                "Could not schedule %s verification for instance %s: %s",
+                self.name, instance_id, type(exc).__name__)
             with self.lock:
                 self.attempted[instance_id] = runtime
         else:

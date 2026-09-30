@@ -628,7 +628,7 @@ class NodeBridgeTests(unittest.TestCase):
             self.assertEqual(manager.job(job["id"])["status"], "completed")
             self.assertEqual(manager.status(99), {"status": "ready", "revision": "abc123"})
             self.assertEqual(ImageDeploymentManager(Machine(), bridge, state_path=state_path).status(99),
-                             {"status": "ready", "revision": "abc123"})
+                             {"status": "verification_required"})
             self.assertEqual(bridge.calls, [(99, action, "image")
                                             for action in ("deploy", "health", "revision")])
 

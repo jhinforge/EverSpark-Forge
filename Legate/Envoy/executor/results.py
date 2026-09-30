@@ -16,4 +16,5 @@ def command_result(done, action):
     else:
         output = output[-DIAGNOSTIC_TAIL:]
     return {"status": "completed" if succeeded else "failed", "output": output,
-            "exit_code": done.returncode}
+            "exit_code": done.returncode,
+            **({"stage": done.stage} if getattr(done, "stage", None) else {})}

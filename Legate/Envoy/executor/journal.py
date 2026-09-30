@@ -1,10 +1,11 @@
 """Preserved intent/result journal and conservative interrupted-task recovery."""
 import hashlib
 import json
-import os
 from pathlib import Path
 from ..settings import TASK_JOURNAL
 from .tasks import execute
+from . import progress
+from .storage import save
 
 
 def execute_once(task: dict, journal: Path = TASK_JOURNAL, executor=None) -> dict:
@@ -29,29 +30,20 @@ def execute_once(task: dict, journal: Path = TASK_JOURNAL, executor=None) -> dic
             raise ValueError("Task identity collision")
         if previous["state"] == "completed":
             return previous["result"]
-        return {"status": "failed", "output": "Agent restarted during execution; outcome unknown",
-                "exit_code": None}
-
-    def save():
-        journal.parent.mkdir(parents=True, exist_ok=True)
-        temporary = journal.with_name(journal.name + ".tmp")
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                if hasattr(os, "fchmod"):
-                    os.fchmod(handle.fileno(), 0o600)
-                handle.flush()
-                os.fsync(handle.fileno())
-                json.dump(entries, handle, ensure_ascii=False)
-        except BaseException:
-            temporary.unlink(missing_ok=True)
-            raise
-        temporary.replace(journal)
+        result = {"status": "failed", "output": "Agent restarted during execution; outcome unknown. Task was not automatically repeated; verify Forge health before retrying.",
+                  "exit_code": None}
+        entries[task_id] = {"fingerprint": fingerprint, "state": "completed", "result": result}
+        save(journal, entries)
+        return result
 
     entries[task_id] = {"fingerprint": fingerprint, "state": "running"}
-    save()  # Fail closed: never execute if the intent could not be recorded.
-    result = (executor or execute)(task["action"], task.get("message", ""), task.get("forge", "concept"))
+    save(journal, entries)  # Fail closed: never execute if the intent could not be recorded.
+    progress.begin(task_id)
+    try:
+        result = (executor or execute)(task["action"], task.get("message", ""), task.get("forge", "concept"))
+    finally:
+        progress.finish()
     entries[task_id] = {"fingerprint": fingerprint, "state": "completed", "result": result}
-    save()
+    save(journal, entries)
     return result
 

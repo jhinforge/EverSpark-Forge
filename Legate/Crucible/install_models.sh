@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+phase() {
+  if [ "${EVERSPARK_DEPLOY_PROGRESS:-0}" = 1 ]; then
+    printf '[EverSpark:deploy] %s\n' "$1"
+  fi
+}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -24,6 +29,7 @@ case "$SELECTION" in all|concept|image) ;; *) printf '[ERROR] invalid model sele
 # These are the same model steps previously run inline by setup.sh.
 python3 -m venv "$MODEL_TOOLS"
 "${MODEL_TOOLS}/bin/python" -m pip install --disable-pip-version-check 'huggingface_hub>=1,<2'
+phase downloading_models
 "${MODEL_TOOLS}/bin/python" "${REPO_ROOT}/Legate/Crucible/Models/model_manager.py" download --models "$SELECTION"
 
 if { [ "$SELECTION" = all ] || [ "$SELECTION" = concept ]; } && [ "$SKIP_IMPORT" = false ]; then
@@ -42,6 +48,7 @@ if { [ "$SELECTION" = all ] || [ "$SELECTION" = concept ]; } && [ "$SKIP_IMPORT"
   trap cleanup_setup_concept EXIT
   export OLLAMA_HOST="${EVERSPARK_OLLAMA_HOST:-127.0.0.1:11434}"
   export OLLAMA_MODELS="${OLLAMA_MODELS:-${REPO_ROOT}/Data/Models/ConceptForge/Ollama}"
+  phase importing_model
   "${MODEL_TOOLS}/bin/python" "${REPO_ROOT}/Legate/Crucible/Models/model_manager.py" import-concept
   trap - EXIT
   cleanup_setup_concept

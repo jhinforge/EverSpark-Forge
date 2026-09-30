@@ -11,7 +11,7 @@ from Legate.Envoy.executor.journal import execute_once
 
 class AgentResultTests(unittest.TestCase):
     def command(self, action, output, code=0, error="", forge="image"):
-        with patch("Legate.Envoy.executor.tasks.subprocess.run", return_value=
+        with patch("Legate.Envoy.executor.tasks.run_deployment" if action == "deploy" else "Legate.Envoy.executor.tasks.subprocess.run", return_value=
                    CompletedProcess([], code, output, error)):
             return execute(action, "{}", forge)
 
@@ -49,7 +49,7 @@ class AgentResultTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             task = {"id": "a" * 32, "forge": "image", "action": "deploy", "message": ""}
             output = "安装进度\n" * 20000 + "Image Forge ready"
-            with patch("Legate.Envoy.executor.tasks.subprocess.run", return_value=
+            with patch("Legate.Envoy.executor.tasks.run_deployment", return_value=
                        CompletedProcess([], 0, output, "")) as run:
                 journal = Path(directory) / "tasks.json"
                 first = execute_once(task, journal)

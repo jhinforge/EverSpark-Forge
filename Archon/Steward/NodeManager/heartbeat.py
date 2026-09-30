@@ -20,6 +20,7 @@ class Heartbeat:
             ):
                 raise NodeError("Invalid heartbeat state or load", 400)
             available = allocatable(body.get("allocatable"), node["resources"]["capacity"])
+            self.manager.tasks.progress(node["node_id"], body.get("task"))
             seen = timestamp()
             if node["status"] != state:
                 nodes, joins = self.manager.registry.candidates()

@@ -72,6 +72,8 @@ class Registration:
             manager.registry.publish(nodes, joins)  # session becomes usable only after durable publication
             manager.leases[node_id] = Lease(runtime, session, time.monotonic(), seen, capacity["allocatable"])
             manager.tasks.ensure(node_id)
+            if previous_lease and previous_lease.runtime_id != runtime:
+                manager.tasks.reconnect(node_id)
             manager.lock.notify_all()
             return {"node_id": node_id, "credential": credential, "runtime_id": runtime, "session": session,
                     "heartbeat_interval": manager.heartbeat_interval, "lease_timeout": manager.lease_timeout}

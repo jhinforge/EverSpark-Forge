@@ -76,6 +76,7 @@ class ControlHandler(BaseHTTPRequestHandler):
                                         machine["node"]["resources"]["allocatable"] = None
                     if self.server.image_deployments:
                         for machine in result["instances"]:
+                            self.server.image_deployments.reconcile_machine(machine)
                             machine["image_forge"] = self.server.image_deployments.status(machine["id"])
                             if machine.get("actual_status") == "stopped" and machine["image_forge"]["status"] == "ready":
                                 machine["image_forge"] = {"status": "verification_required"}

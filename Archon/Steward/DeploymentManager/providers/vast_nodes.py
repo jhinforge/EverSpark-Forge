@@ -118,6 +118,10 @@ class VastNodes:
             self._save({k: v for k, v in self.bindings.items() if int(k) not in removed}, self.used_key_hash)
             return removed
 
+    def task_status(self, instance_id, task_id):
+        node_id = self.node_id(instance_id)
+        return self.manager.tasks.status(node_id, task_id) if node_id else {}
+
     def execute(self, instance_id, action, message="", timeout=240, **kwargs):
         deadline = time.monotonic()+timeout
         if not self.configured(instance_id):

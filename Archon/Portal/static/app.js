@@ -1237,7 +1237,7 @@ async function runPodAction(instanceId, action, message = "") {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const data = await api(`/api/machines/vast/deployment-job?id=${encodeURIComponent(result.job.id)}`);
     if (data.job.status === "running") {
-      state.podJobs[instanceId] = data.job.stage || "queued";
+      state.podJobs[instanceId] = window.EverSparkDeploymentProgress.format(data.job);
       const progress = document.querySelector(`[data-pod-progress="${instanceId}"]`);
       if (progress) progress.textContent = `${t("Task stage")}: ${state.podJobs[instanceId]}`;
       continue;
@@ -1245,9 +1245,7 @@ async function runPodAction(instanceId, action, message = "") {
     delete state.podJobs[instanceId];
     await loadMachines();
     if (data.job.status === "failed") {
-      const stage = data.job.stage || "unknown";
-      const code = data.job.exit_code == null ? "" : ` (exit ${data.job.exit_code})`;
-      showNotice(`${t("Deployment failed")} · ${stage}${code}: ${data.job.detail || t("No error output")}`);
+      showNotice(`${t("Deployment failed")} · ${window.EverSparkDeploymentProgress.failure(data.job)}`);
       return;
     }
     if (action === "discuss") showNotice(data.job.reply, "success");
@@ -1268,15 +1266,15 @@ async function deployImageForge(instanceId, action = "deploy-image") {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const data = await api(`/api/machines/vast/image-deployment-job?id=${encodeURIComponent(result.job.id)}`);
     if (data.job.status === "running") {
-      state.podJobs[instanceId] = data.job.stage;
+      state.podJobs[instanceId] = window.EverSparkDeploymentProgress.format(data.job);
       const progress = document.querySelector(`[data-pod-progress="${instanceId}"]`);
-      if (progress) progress.textContent = `${t("Task stage")}: ${data.job.stage}`;
+      if (progress) progress.textContent = `${t("Task stage")}: ${state.podJobs[instanceId]}`;
       continue;
     }
     delete state.podJobs[instanceId];
     await loadMachines();
     showNotice(data.job.status === "completed" ? t("Image Forge ready") :
-      `${t("Deployment failed")}: ${data.job.detail || t("No error output")}`,
+      `${t("Deployment failed")}: ${window.EverSparkDeploymentProgress.failure(data.job)}`,
     data.job.status === "completed" ? "success" : undefined);
     return;
   }
@@ -1318,6 +1316,12 @@ function renderMachine(machine) {
   forge.textContent = t(labels[machine.forge?.status] || "Not deployed") +
     (machine.forge?.revision ? ` · ${machine.forge.revision}` : "");
   card.appendChild(forge);
+  if (machine.forge?.detail) {
+    const detail = document.createElement("p");
+    detail.className = "machine-deployment-error";
+    detail.textContent = window.EverSparkDeploymentProgress.failure(machine.forge);
+    card.appendChild(detail);
+  }
   if (machine.image_forge) {
     const imageForge = document.createElement("p");
     const imageLabels = {ready: "Image Forge ready", deploying: "Image Forge deploying",
@@ -1328,6 +1332,12 @@ function renderMachine(machine) {
     imageForge.textContent = t(imageLabels[machine.image_forge.status] || "Image Forge not deployed") +
       (machine.image_forge.revision ? ` · ${machine.image_forge.revision}` : "");
     card.appendChild(imageForge);
+    if (machine.image_forge.detail) {
+      const detail = document.createElement("p");
+      detail.className = "machine-deployment-error";
+      detail.textContent = window.EverSparkDeploymentProgress.failure(machine.image_forge);
+      card.appendChild(detail);
+    }
   }
   card.appendChild(window.EverSparkNodeCard.render(machine.node, { t, bind: uiText,
     diagnose: async (button) => {
@@ -1341,10 +1351,12 @@ function renderMachine(machine) {
       finally { button.disabled = false; }
     },
   }));
-  if (state.podJobs[machine.id]) {
+  const activeDeployment = machine.image_forge?.job || machine.forge?.job;
+  const deploymentText = activeDeployment ? window.EverSparkDeploymentProgress.format(activeDeployment) : state.podJobs[machine.id];
+  if (deploymentText) {
     const progress = document.createElement("p");
     progress.dataset.podProgress = String(machine.id);
-    progress.textContent = `${t("Task stage")}: ${state.podJobs[machine.id]}`;
+    progress.textContent = `${t("Task stage")}: ${deploymentText}`;
     card.appendChild(progress);
   }
   if (machine.actual_status === "running" &&

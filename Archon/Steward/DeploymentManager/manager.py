@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 
 from Archon.Steward.vast_instances import VastError
 from .verification import ConnectionVerification
+from .progress import job_progress, active_job
 
 
 REPO = "/workspace/EverSpark-Forge"
@@ -144,7 +145,7 @@ class DeploymentManager:
                 self.states[instance_id] = {"status": "verification_required"}
                 self._save()
                 state = self.states[instance_id]
-            return dict(state)
+            return active_job(self, instance_id, dict(state))
 
     def reconcile_instances(self, first_page: dict) -> bool:
         """Forget destroyed instances only after a complete, valid Vast inventory."""
@@ -235,7 +236,7 @@ class DeploymentManager:
                             f"{Path(entry.filename).name}:{entry.lineno}:{entry.name}"
                             for entry in traceback.extract_stack(frame)[-8:]
                         ]
-            return result
+            return job_progress(self.bridge, result)
 
     def start(self, instance_id: int, action: str, message: str = "") -> dict:
         if action not in {"deploy", "update", "discuss", "verify"}:
@@ -438,7 +439,10 @@ class DeploymentManager:
                     "ready" if action in {"deploy", "verify"} and update["status"] == "completed" else
                     "source_updated" if action == "update" and update["status"] == "completed" else
                     "verification_required" if action == "verify" else
+                    ("deployment_unknown" if action == "deploy" else "update_unknown") if "outcome unknown" in update.get("detail", "") else
                     "deployment_failed" if action == "deploy" else "update_failed"),
+                    **({"detail": update["detail"], "stage": update.get("stage"),
+                        "exit_code": update.get("exit_code")} if update["status"] == "failed" else {}),
                     **({"revision": update["revision"]} if "revision" in update else {}),
                     **({"runtime_id": runtime_id} if runtime_id else {})}
                 self._save()

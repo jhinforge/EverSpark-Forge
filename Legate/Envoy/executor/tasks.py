@@ -4,6 +4,7 @@ import subprocess
 from ..forge_tasks import command
 from ..settings import REPO, TASK_JOURNAL
 from .results import command_result
+from .process import run_deployment
 
 
 def execute(action: str, message: str, forge: str = "concept") -> dict:
@@ -30,6 +31,8 @@ def execute(action: str, message: str, forge: str = "concept") -> dict:
         return {"status": "failed", "output": "Unknown Node Agent task", "exit_code": 2}
     args, timeout = selected
     try:
+        if action == "deploy":
+            return command_result(run_deployment(args, REPO, timeout), action)
         done = subprocess.run(args, cwd=REPO, capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=timeout,
                               stdin=subprocess.DEVNULL)

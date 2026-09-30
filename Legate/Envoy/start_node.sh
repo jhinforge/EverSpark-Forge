@@ -49,4 +49,4 @@ export EVERSPARK_NODE_PROXY=http://127.0.0.1:1055
 export EVERSPARK_NODE_DATA_DIR=/workspace/everspark-node
 export EVERSPARK_TASK_JOURNAL=/workspace/everspark-agent-tasks.json
 export EVERSPARK_STARTUP_STATUS="$status_file"
-exec python3 -m Legate.Envoy.node_agent
+exec python3 -m Legate.Envoy.supervisor

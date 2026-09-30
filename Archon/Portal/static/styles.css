@@ -460,3 +460,5 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .node-resources th { color: var(--muted); }
 
 .machine-credential .node-connection-error { color: #ff9a9a; font-weight: 600; }
+
+.machine-card .machine-deployment-error { color: #ff9a9a; white-space: pre-wrap; max-height: 220px; overflow-y: auto; font-size: 13px; }

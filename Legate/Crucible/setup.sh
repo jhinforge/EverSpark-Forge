@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+phase() {
+  if [ "${EVERSPARK_DEPLOY_PROGRESS:-0}" = 1 ]; then
+    printf '[EverSpark:deploy] %s\n' "$1"
+  fi
+}
 
 LAUNCHER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${LAUNCHER_DIR}/../.." && pwd)"
@@ -54,6 +59,7 @@ if [ "$PLAN_ONLY" = true ]; then
   exit 0
 fi
 
+phase initializing
 bash "${LAUNCHER_DIR}/init.sh"
 
 if [ "${EVERSPARK_NETWORK_BACKEND:-local}" = "cloudflare" ]; then
@@ -68,6 +74,7 @@ if [ "${EVERSPARK_STORAGE_BACKEND:-local}" = "rclone" ]; then
   core_rclone_install
 fi
 
+phase installing_runtime
 bash "${REPO_ROOT}/Legate/Crucible/install_runtime.sh"
 if [ -f "${REPO_ROOT}/Legate/Warden/image_backend.py" ] &&
    [ "$(python3 "${REPO_ROOT}/Legate/Warden/image_backend.py")" = "diffusers" ]; then
@@ -81,6 +88,7 @@ fi
 
 model_options=(--models "$SELECTION")
 if [ "$SKIP_IMPORT" = true ]; then model_options+=(--skip-concept-import); fi
+phase downloading_models
 bash "${REPO_ROOT}/Legate/Crucible/install_models.sh" "${model_options[@]}"
 
 bash "${REPO_ROOT}/Archon/Gate/CLI/install.sh"

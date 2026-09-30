@@ -1,6 +1,20 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Waiting for execution": "等待执行",
+    "Executing": "执行中",
+    "Initializing environment": "初始化环境",
+    "Installing runtime and dependencies": "安装运行时与依赖",
+    "Downloading models": "下载模型",
+    "Importing Concept model": "导入 Concept 模型",
+    "Starting Image service": "启动 Image 服务",
+    "Checking service health": "检查服务健康",
+    "Reading source revision": "读取代码版本",
+    "Waiting for deployment progress": "等待部署进度",
+    "Checking Concept service": "检查 Concept 服务",
+    "Current phase: {seconds} seconds": "当前阶段 {seconds} 秒",
+    "Heartbeat interrupted; waiting for recovery": "心跳中断，等待恢复",
+    "Exit code: {code}": "退出码 {code}",
     "Key usage": "密钥使用方式",
     "Single use (one-off key)": "单次使用（一次性密钥）",
     "Long-term use (Reusable key)": "长期使用（可重复使用密钥）",
