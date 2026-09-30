@@ -17,6 +17,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 from Archon.Steward.vast_instances import VastError
+from .verification import ConnectionVerification
 
 
 REPO = "/workspace/EverSpark-Forge"
@@ -86,6 +87,7 @@ class DeploymentManager:
             self.jobs[job_id] = job
         self.lock = threading.Lock()
         self.retired_instances = set()
+        self.connection_verification = ConnectionVerification(self)
         if any(job.get("stage") == "archon_restart" for job in self.jobs.values()):
             self._save_jobs()
         for job_id in recover:
@@ -148,6 +150,7 @@ class DeploymentManager:
         """Forget destroyed instances only after a complete, valid Vast inventory."""
         known = set()
         stopped = set()
+        running = set()
         seen_cursors = set()
         page = first_page
         while True:
@@ -158,6 +161,8 @@ class DeploymentManager:
                 known.add(instance_id)
                 if machine.get("actual_status") == "stopped":
                     stopped.add(instance_id)
+                if machine.get("actual_status") == "running":
+                    running.add(instance_id)
             cursor = page.get("next_token")
             if not cursor:
                 break
@@ -197,6 +202,8 @@ class DeploymentManager:
                     self.states.pop(instance_id)
             if removed or changed:
                 self._save()
+        for instance_id in running:
+            self.connection_verification.consider(instance_id)
         return True
 
     def retire_instance(self, instance_id: int) -> None:
