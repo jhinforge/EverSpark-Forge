@@ -1,6 +1,20 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Key usage": "密钥使用方式",
+    "Single use (one-off key)": "单次使用（一次性密钥）",
+    "Long-term use (Reusable key)": "长期使用（可重复使用密钥）",
+    "Long expiry does not mean reusable. Enable Reusable in Tailscale to use this key for multiple rentals.": "长期有效不等于可重复使用。用于多次租机时，请确认密钥在 Tailscale 中已开启 Reusable。",
+    "Wait for the current rental to finish": "当前租机请求仍在处理中，请稍后再配置。",
+    "Invalid Tailscale key mode": "密钥使用方式无效。",
+
+    "This key has Reusable enabled in Tailscale.": "此密钥已在 Tailscale 中开启 Reusable（可重复使用）。",
+    "Configuring connection…": "正在配置连接…",
+    "Node connection request timed out. You can retry.": "节点连接请求超时，按钮已恢复，可以重试。",
+    "Reusable Node connection is ready for additional rentals.": "可重复使用的节点连接已就绪，可继续租机。",
+    "Automatic Node connection is not ready. Check Tailscale on this host.": "自动节点连接尚未就绪，请检查本机 Tailscale 连接。",
+    "Connect Tailscale on this Windows host, then enter a fresh auth key. EverSpark automatically joins the rented machine and starts its Agent. Choose the key mode to match Tailscale. The key is kept only for this Archon session.": "先在这台 Windows 主机登录 Tailscale，再输入加入密钥。EverSpark 会自动连接租到的机器并启动 Agent。请选择与 Tailscale 一致的密钥类型；密钥仅在本次 Archon 运行期间保留。",
+
     "Node Agent: {status}": "节点 Agent：{status}",
     "Not configured": "未配置",
     "Unhealthy": "不健康",

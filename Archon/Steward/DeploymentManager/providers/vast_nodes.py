@@ -24,21 +24,24 @@ class VastNodes:
         for key, reference in self.bindings.items():
             if not key.isdecimal() or int(key) < 1 or not isinstance(reference, str) or len(reference) != 64:
                 raise RuntimeError("Invalid Vast Node binding")
+        self.reusable = raw.get("reusable", False) is True
         self.configure_auth_key(auth_key)
 
     @property
     def url(self):
         return self.manager.url
 
-    def configure_auth_key(self, auth_key):
+    def configure_auth_key(self, auth_key, reusable=None):
+        if reusable is not None:
+            self.reusable = reusable
         self.agent_requested = bool(auth_key)
-        self.auth_key = auth_key if auth_key and digest(auth_key) != self.used_key_hash else None
+        self.auth_key = auth_key if auth_key and (self.reusable or digest(auth_key) != self.used_key_hash) else None
 
     def _save(self, bindings, key_hash):
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             temporary = self.path.with_name(self.path.name+".tmp")
-            temporary.write_text(json.dumps({"bindings": bindings, "used_key_hash": key_hash}))
+            temporary.write_text(json.dumps({"bindings": bindings, "used_key_hash": key_hash, "reusable": self.reusable}))
             temporary.replace(self.path)
         self.bindings, self.used_key_hash = bindings, key_hash
 
@@ -62,7 +65,8 @@ class VastNodes:
                 raise VastError("Invalid Node rental binding", 400)
             self._save({**self.bindings, str(instance_id): reference}, digest(self.auth_key))
             self.pending.remove(reference)
-            self.auth_key = None
+            if not self.reusable:
+                self.auth_key = None
 
     def discard(self, token):
         with self.lock:

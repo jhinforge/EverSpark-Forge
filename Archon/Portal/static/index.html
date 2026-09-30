@@ -278,9 +278,13 @@
           <form class="storage-panel machine-credential" id="nodeConnectionForm">
             <div><p class="section-kicker">NODE CONNECTION</p><h3>Automatic Node connection</h3>
               <p class="section-copy" id="nodeConnectionStatus">Checking Node connection…</p>
-              <p class="section-copy">Connect Tailscale on this Windows host, then enter a fresh auth key. EverSpark automatically joins the rented machine and starts its Agent. The key is used for one rental and is kept only for this Archon session.</p></div>
+              <p class="section-copy">Connect Tailscale on this Windows host, then enter a fresh auth key. EverSpark automatically joins the rented machine and starts its Agent. Choose the key mode to match Tailscale. The key is kept only for this Archon session.</p></div>
             <label for="nodeConnectionKey">Tailscale auth key</label>
             <input id="nodeConnectionKey" type="password" autocomplete="new-password" spellcheck="false" required>
+            <label for="nodeConnectionReusable">Key usage</label>
+            <select id="nodeConnectionReusable"><option value="once">Single use (one-off key)</option><option value="reusable">Long-term use (Reusable key)</option></select>
+            <p class="section-copy">Long expiry does not mean reusable. Enable Reusable in Tailscale to use this key for multiple rentals.</p>
+            <p class="section-copy" id="nodeConnectionFeedback" role="status" aria-live="polite"></p>
             <button class="primary-button" type="submit">Configure automatic connection</button>
           </form>
           <div class="section-toolbar machine-heading"><h3>Search Vast offers</h3><button class="ghost-button" id="toggleVastOffers" type="button" aria-expanded="true">Collapse</button></div>

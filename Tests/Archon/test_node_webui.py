@@ -26,7 +26,9 @@ class NodeWebUITests(unittest.TestCase):
         class Machines:
             def create(self, offer, image, node_env=None):
                 owner.rentals.append(node_env)
-                return {"instance_id": 99}
+                return {"instance_id": 98+len(owner.rentals)}
+            def destroy(self, instance_id):
+                owner.bridge.prune(owner.bridge.instance_ids() - {instance_id})
         class Offers:
             def quote(self, offer_id):
                 return {"id": offer_id, "cuda_max_good": 12.8}
@@ -84,6 +86,35 @@ class NodeWebUITests(unittest.TestCase):
         with self.assertRaises(HTTPError):
             self.call("rent", {"offer_id": 71, "require_agent": True})
         self.assertEqual(len(self.rentals), 1)
+
+    def test_reusable_key_survives_destroy_and_rerental_with_distinct_join_tokens(self):
+        key = "tskey-auth-reusable-key-12345"
+        self.nodes.url = f"http://100.64.0.9:{self.nodes.server.server_port}"
+        with patch("Archon.Steward.DeploymentManager.providers.onboarding.tailscale_ip", return_value="100.64.0.9"), patch.object(self.nodes, "listen_on"):
+            self.assertTrue(self.call("node-connection", {"key": key, "reusable": True})["ready"])
+            first = self.call("rent", {"offer_id": 71, "require_agent": True})
+            self.bridge.prune(set())  # The provider confirms that the slow first rental was destroyed.
+            self.assertTrue(self.call("node-connection")["ready"])
+            self.assertTrue(self.call("node-connection", {"key": key, "reusable": True})["ready"])
+            second = self.call("rent", {"offer_id": 71, "require_agent": True})
+        self.assertNotEqual(first["instance_id"], second["instance_id"])
+        self.assertNotEqual(self.rentals[0]["EVERSPARK_NODE_JOIN_TOKEN"], self.rentals[1]["EVERSPARK_NODE_JOIN_TOKEN"])
+        self.assertEqual(self.rentals[1]["EVERSPARK_TAILSCALE_AUTH_KEY"], key)
+        self.assertTrue(self.call("node-connection")["ready"])
+
+    def test_consumed_one_off_key_rejected_but_new_key_can_be_configured(self):
+        first, second = "tskey-auth-first-key-12345", "tskey-auth-second-key-12345"
+        self.nodes.url = f"http://100.64.0.9:{self.nodes.server.server_port}"
+        with patch("Archon.Steward.DeploymentManager.providers.onboarding.tailscale_ip", return_value="100.64.0.9"), patch.object(self.nodes, "listen_on"):
+            self.call("node-connection", {"key": first})
+            self.call("rent", {"offer_id": 71, "require_agent": True})
+            self.bridge.prune(set())
+            with self.assertRaises(HTTPError) as used:
+                self.call("node-connection", {"key": first})
+            self.assertEqual(used.exception.code, 409)
+            self.assertTrue(self.call("node-connection", {"key": second})["ready"])
+            self.call("rent", {"offer_id": 71, "require_agent": True})
+        self.assertEqual(self.rentals[1]["EVERSPARK_TAILSCALE_AUTH_KEY"], second)
 
     def test_listener_change_preserves_node_identity_and_session(self):
         old_url = self.nodes.url

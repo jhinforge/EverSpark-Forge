@@ -458,3 +458,5 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .node-resources { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 12px; }
 .node-resources th, .node-resources td { padding: 7px 3px; text-align: left; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .node-resources th { color: var(--muted); }
+
+.machine-credential .node-connection-error { color: #ff9a9a; font-weight: 600; }
