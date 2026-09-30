@@ -553,6 +553,30 @@ class NodeBridgeTests(unittest.TestCase):
                 control.server_close()
             bridge.close()
 
+    def test_image_deployment_preserves_agent_failure_details(self):
+        class FailedBridge:
+            def configured(self, instance_id):
+                return True
+
+            def execute(self, *args, **kwargs):
+                error = VastError("Node Agent execution failed")
+                error.detail, error.exit_code = "Model download connection failed", 1
+                raise error
+
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ImageDeploymentManager(Machine(), FailedBridge(),
+                state_path=Path(directory) / "image.json")
+            job = manager.start(99)
+            for _ in range(100):
+                result = manager.job(job["id"])
+                if result["status"] != "running":
+                    break
+                time.sleep(.01)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["detail"], "Model download connection failed")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["stage"], "deploy")
+
     def test_image_deployment_isolated_from_concept_deployment(self):
         class ReadyBridge:
             def __init__(self):

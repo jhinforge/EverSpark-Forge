@@ -84,4 +84,7 @@ class ImageDeploymentManager:
             with self.lock:
                 self.states[instance_id] = {"status": "deployment_failed"}
                 self._save()
-                self.jobs[job_id].update(status="failed", detail=str(exc)[-1600:])
+                self.jobs[job_id].update(status="failed",
+                    detail=str(getattr(exc, "detail", None) or str(exc))[-1600:])
+                if isinstance(getattr(exc, "exit_code", None), int):
+                    self.jobs[job_id]["exit_code"] = exc.exit_code
