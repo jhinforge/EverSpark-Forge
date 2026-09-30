@@ -1397,6 +1397,7 @@ function renderMachine(machine) {
       actions.appendChild(verifyImage);
     }
   }
+  card.appendChild(forgeNodes.render(machine));
   const destroy = document.createElement("button");
   destroy.type = "button";
   destroy.className = "ghost-button";
@@ -1425,6 +1426,16 @@ function renderMachine(machine) {
 
 const nodeConnection = window.EverSparkNodeConnection.initialize({ api, bind: uiText,
   notice: (message, kind) => showNotice(t(message), kind) });
+const forgeNodes = window.EverSparkForgeNodes.initialize({ api, bind: uiText,
+  notice: (message, kind) => showNotice(t(message), kind),
+  changed: async (selection) => {
+    await loadMachines();
+    if (selection.ready) {
+      await Promise.all([loadRuntime(), loadImagePlugins(), loadSubjects(), loadCurrentSubject(), loadModelConnections()]);
+      await loadResources();
+    }
+  },
+});
 
 async function loadVastBalance() {
   try {
@@ -1453,6 +1464,7 @@ function loadMachines(cursor = "", silent = false) {
         return;
       }
       const url = `/api/machines/vast/instances${cursor ? `?after_token=${encodeURIComponent(cursor)}` : ""}`;
+      await forgeNodes.refresh();
       renderMachinesPage(await api(url), cursor, silent);
     } catch (error) {
       if (!silent && !cursor) machineMessage(error.message);
@@ -2228,7 +2240,7 @@ async function loadRuntime() {
     );
     elements.healthDot.className = `pulse-dot ${data.ready ? "online" : "partial"}`;
     uiText(elements.healthTitle, controlOnly && data.ready ? "Archon ready" : data.ready ? "System ready" : "Setup required");
-    uiText(elements.healthDetail, controlOnly && data.ready ? "Control only · no Legate connected" : data.ready ? "All local services responding" : "Open Runtime for details");
+    uiText(elements.healthDetail, controlOnly && data.ready ? "Control only · no Legate connected" : data.ready ? (data.remote ? "Remote Forge services responding" : "All local services responding") : "Open Runtime for details");
   } catch (error) {
     elements.healthDot.className = "pulse-dot partial";
     uiText(elements.healthTitle, "Status unavailable");

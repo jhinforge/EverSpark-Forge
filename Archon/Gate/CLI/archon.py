@@ -56,6 +56,7 @@ def start() -> int:
     from Archon.Steward.DeploymentManager.providers.network import tailscale_ip
     from Archon.Steward.DeploymentManager.providers.vast_nodes import VastNodes
     from Archon.Steward.DeploymentManager.providers.migration import migrate_legacy_registry
+    from Archon.Gate.forge_bindings import ForgeBindings
     from Archon.Portal.app import LOG_DIR, LOG_FILE, WebUIServer, get_logger, load_settings
 
     logger = get_logger("webui", LOG_FILE)
@@ -67,6 +68,7 @@ def start() -> int:
     remote_worker = None
     bridge = None
     nodes = None
+    forge_bindings = None
     try:
         backend_port = int(os.environ.get("EVERSPARK_ORCHESTRATOR_PORT", "8765"))
         store = WindowsCredentialStore() if sys.platform == "win32" else None
@@ -89,7 +91,11 @@ def start() -> int:
             machines, bridge, state_path=node_state.with_name("image_deployments.json")) if machines else None
         backend = ControlServer(("127.0.0.1", backend_port), machines, offers, deployments,
                                 image_deployments=image_deployments, node_manager=nodes)
-        if os.environ.get("EVERSPARK_CONCEPT_NODE_ID") or os.environ.get("EVERSPARK_CONCEPT_INSTANCE_ID"):
+        forge_bindings = ForgeBindings(nodes, node_state.with_name("forge_bindings.json"),
+            f"http://127.0.0.1:{backend.server_port}")
+        backend.forge_bindings = forge_bindings
+        forge_bindings.restore()
+        if not forge_bindings.bindings and (os.environ.get("EVERSPARK_CONCEPT_NODE_ID") or os.environ.get("EVERSPARK_CONCEPT_INSTANCE_ID")):
             for path in ("Archon/Orchestrator", "Legate/Forge", "Legate/Forge/ConceptForge",
                          "Legate/Forge/ImageForge", "Legate/Forge/ConceptForge/Memory",
                          "Aegis/Logging"):
@@ -100,7 +106,7 @@ def start() -> int:
             remote_port = int(os.environ.get("EVERSPARK_REMOTE_ORCHESTRATOR_PORT", str(backend_port + 2)))
             remote_server = OrchestratorServer(("127.0.0.1", remote_port),
                                                Orchestrator(load_config()))
-        portal = WebUIServer(load_settings(), logger)
+        portal = WebUIServer(load_settings(), logger, forge_bindings=forge_bindings)
         worker = threading.Thread(target=backend.serve_forever, name="archon-backend", daemon=True)
         worker.start()
         if remote_server:
@@ -120,6 +126,8 @@ def start() -> int:
     finally:
         if portal is not None:
             portal.server_close()
+        if forge_bindings is not None:
+            forge_bindings.close()
         if remote_server is not None:
             if remote_worker is not None:
                 remote_server.shutdown()

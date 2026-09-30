@@ -9,6 +9,7 @@
     <script src="/static/i18n.js" defer></script>
     <script src="/static/node-card.js" defer></script>
     <script src="/static/node-connection.js" defer></script>
+    <script src="/static/forge-node-selection.js" defer></script>
     <script src="/static/app.js" defer></script>
   </head>
   <body>
@@ -275,6 +276,10 @@
               <button class="ghost-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
             </div>
           </form>
+          <div class="storage-panel machine-credential">
+            <h3>Remote Forge connections</h3>
+            <p class="section-copy" id="forgeNodeSummary" role="status" aria-live="polite">Select the ready Concept and Image machines below to connect generation.</p>
+          </div>
           <form class="storage-panel machine-credential" id="nodeConnectionForm">
             <div><p class="section-kicker">NODE CONNECTION</p><h3>Automatic Node connection</h3>
               <p class="section-copy" id="nodeConnectionStatus">Checking Node connection…</p>

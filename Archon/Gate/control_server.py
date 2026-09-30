@@ -11,6 +11,7 @@ from Archon.Vault.windows_credentials import CredentialError
 from Legate.Envoy.base_image import select_base_image
 from Archon.Steward.DeploymentManager.providers import onboarding
 from Archon.Steward.NodeManager.transport.operator import handle as handle_nodes
+from .forge_binding_routes import handle as handle_forge_bindings
 
 
 _REMOTE_FORGE_ACTIONS = {
@@ -23,7 +24,8 @@ class ControlServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, address: tuple[str, int], machines=None, offers=None, deployments=None,
-                 image_deployments=None, node_manager=None):
+                 image_deployments=None, node_manager=None, forge_bindings=None):
+        self.forge_bindings = forge_bindings
         self.node_manager = node_manager
         self.machines = machines
         self.offers = offers
@@ -36,6 +38,8 @@ class ControlHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlsplit(self.path)
         path = parsed.path
+        if handle_forge_bindings(self, self.server.forge_bindings, "GET", path):
+            return
         if handle_nodes(self, self.server.node_manager, "GET", path):
             return
         if path.startswith("/machines/"):
@@ -141,6 +145,8 @@ class ControlHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
+        if handle_forge_bindings(self, self.server.forge_bindings, "POST", path):
+            return
         if handle_nodes(self, self.server.node_manager, "POST", path):
             return
         if path.startswith("/machines/"):

@@ -1,0 +1,175 @@
+"""Two provider-free Nodes selected in WebUI drive real Orchestrator routing."""
+import base64
+import json
+import tempfile
+import threading
+import time
+import unittest
+from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+from unittest.mock import patch
+from Archon.Gate.control_server import ControlServer
+from Archon.Gate.forge_bindings import ForgeBindings
+from Archon.Gate.remote_runtime import create_runtime
+from Archon.Portal.app import Settings, WebUIServer
+from Archon.Steward.NodeManager import NodeManager
+from test_node_registration import INFO
+
+
+class RemoteCreationWebUITests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.directory.name)
+        self.nodes = NodeManager("127.0.0.1", 0, state_path=self.root / "nodes.json")
+        self.nodes.start()
+        self.gate = ControlServer(("127.0.0.1", 0), node_manager=self.nodes)
+        self.seen, self.agent_errors = [], []
+        self.stop = threading.Event()
+        self.agents, self.identities = [], {}
+        self.image_bytes = b"\x89PNG\r\n\x1a\nremote-output"
+        for role, enrollment in (("concept", "a" * 32), ("image", "b" * 32)):
+            response = self.nodes.registration.register({"join_token": self.nodes.issue_join_token(),
+                "enrollment_id": enrollment, "runtime_id": enrollment, "info": INFO})
+            self.identities[role] = response["node_id"]
+            authentication = {key: response[key] for key in ("node_id", "runtime_id", "session")}
+            worker = threading.Thread(target=self.agent, args=(role, authentication), daemon=True)
+            worker.start()
+            self.agents.append(worker)
+        def factory(bindings, control_url):
+            # Real runtime composition, with isolated data and a fixed character
+            # fixture so this test concentrates on transport and task routing.
+            def config_loader():
+                from orchestrator.config.config import load_config
+                config = load_config()
+                config["memory"]["database"] = str(self.root / "memory.db")
+                config["image_forge"]["output_directory"] = str(self.root / "outputs")
+                return config
+            runtime = create_runtime(bindings, control_url, config_loader)
+            from concept_forge.subjects import new_subject
+            document = new_subject("test-remote-character", "Test remote character")
+            runtime.server.orchestrator._refresh_session_subject = lambda *args, **kwargs: document
+            return runtime
+        self.factory = factory
+        self.bindings = ForgeBindings(self.nodes, self.root / "forge_bindings.json",
+            f"http://127.0.0.1:{self.gate.server_port}", factory=factory)
+        self.gate.forge_bindings = self.bindings
+        self.portal = WebUIServer(Settings(port=0, request_timeout=5,
+            orchestrator_url=f"http://127.0.0.1:{self.gate.server_port}",
+            control_url=f"http://127.0.0.1:{self.gate.server_port}"), forge_bindings=self.bindings)
+        self.workers = []
+        for server in (self.gate, self.portal):
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            self.workers.append(worker)
+        self.url = f"http://127.0.0.1:{self.portal.server_port}"
+
+    def tearDown(self):
+        self.stop.set()
+        for server in (self.portal, self.gate):
+            server.shutdown()
+            server.server_close()
+        self.bindings.close()
+        self.nodes.close()
+        for worker in self.workers + self.agents:
+            worker.join(2)
+        self.directory.cleanup()
+
+    def call(self, path, body=None):
+        request = Request(self.url + path, data=json.dumps(body).encode() if body is not None else None,
+                          headers={"Content-Type": "application/json"})
+        with urlopen(request, timeout=10) as response:
+            return json.load(response)
+
+    def agent(self, role, authentication):
+        resources = {"engine": "comfyui", "workflows": [{"id": "base", "name": "Base"}],
+            "checkpoints": ["model.safetensors"], "vaes": [], "loras": [],
+            "defaults": {"workflow": "base", "checkpoint": "model.safetensors"}}
+        handlers = {
+            "chat": lambda _: {"model": "illustrious", "positive_prompt": "portrait", "negative_prompt": "bad", "count": 1, "status": "over"},
+            "resources": lambda _: resources,
+            "default_negative": lambda _: {"negative_prompt": "bad"},
+            "submit": lambda _: {"prompt_id": "remote-job", "selection": {"workflow": "base", "checkpoint": "model.safetensors", "vae": "", "loras": []}},
+            "poll": lambda _: {"prompt_id": "remote-job", "status": "completed", "images": [{"filename": "render.png", "subfolder": "", "type": "output"}]},
+            "fetch": lambda _: {"size": len(self.image_bytes), "data": base64.b64encode(self.image_bytes).decode()},
+            "history": lambda _: {"images": []},
+        }
+        try:
+            while not self.stop.is_set():
+                task = self.nodes.tasks.next_task(authentication)
+                if not task:
+                    continue
+                self.seen.append((role, task["forge"], task["action"]))
+                output = json.dumps(handlers[task["action"]](json.loads(task["message"])))
+                self.nodes.tasks.finish({**authentication, "task_id": task["id"],
+                    "result": {"status": "completed", "output": output, "exit_code": 0}})
+        except Exception as exc:
+            if not self.stop.is_set():
+                self.agent_errors.append(exc)
+
+    def select_pair(self):
+        for role in ("concept", "image"):
+            self.call("/api/forge-bindings", {"forge": role, "node_id": self.identities[role]})
+
+    def test_selection_generation_result_transfer_and_persistent_restore(self):
+        with patch.dict("os.environ", {"EVERSPARK_ARCHON_ONLY": "1"}):
+            self.assertFalse(self.call("/api/forge-bindings")["ready"])
+            self.select_pair()
+            status = self.call("/api/runtime/status")
+            self.assertEqual(status["mode"], "full")
+            self.assertTrue(status["remote"])
+            self.assertTrue(status["services"]["image_forge"]["online"])
+            resources = self.call("/api/resources")
+            self.assertEqual(resources["checkpoints"], ["model.safetensors"])
+            job = self.call("/api/generate/start", {"message": "画一张肖像", "session_id": "remote-test"})["job"]
+            for _ in range(100):
+                result = self.call("/api/generate/jobs?job_id=" + job["id"])["job"]
+                if result["status"] not in {"queued", "running"}:
+                    break
+                time.sleep(.01)
+            self.assertEqual(result["status"], "completed", result)
+            self.assertEqual(result["response"]["result"]["items"][0]["prompt_id"], "remote-job")
+            poll = self.call("/api/results?prompt_id=remote-job")
+            self.assertEqual(poll["results"][0]["status"], "completed")
+            with urlopen(self.url + "/api/image/view?filename=render.png", timeout=5) as response:
+                self.assertEqual(response.read(), self.image_bytes)
+            self.assertTrue(all(role == forge for role, forge, _ in self.seen))
+            self.assertIn(("concept", "concept", "chat"), self.seen)
+            self.assertIn(("image", "image", "submit"), self.seen)
+            self.assertIn(("image", "image", "fetch"), self.seen)
+            self.bindings.close()
+            restored = ForgeBindings(self.nodes, self.root / "forge_bindings.json",
+                f"http://127.0.0.1:{self.gate.server_port}", factory=self.factory)
+            restored.restore()
+            self.bindings = restored
+            self.gate.forge_bindings = restored
+            self.portal.forge_bindings = restored
+            self.assertEqual(self.call("/api/forge-bindings")["bindings"], self.identities)
+            self.assertEqual(self.call("/api/resources")["checkpoints"], ["model.safetensors"])
+            self.assertEqual(self.agent_errors, [])
+
+    def test_binding_api_rejects_nonlocal_origin_and_extra_provider_identity(self):
+        request = Request(self.url + "/api/forge-bindings", data=b'{}', headers={
+            "Content-Type": "application/json", "Origin": "https://untrusted.invalid"})
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(request)
+        self.assertEqual(caught.exception.code, 403)
+        with self.assertRaises(HTTPError) as caught:
+            self.call("/api/forge-bindings", {"forge": "image", "node_id": self.identities["image"], "instance_id": 99})
+        self.assertEqual(caught.exception.code, 400)
+
+    def test_offline_selected_node_rejects_generation_without_queueing_a_task(self):
+        self.select_pair()
+        self.stop.set()
+        node_id = self.identities["image"]
+        with self.nodes.lock:
+            self.nodes.leases[node_id].renewed_at = time.monotonic() - 100
+            self.nodes.lifecycle.expire()
+        state = self.call("/api/forge-bindings")
+        self.assertFalse(state["ready"])
+        self.assertEqual(state["nodes"]["image"], "offline")
+        with self.assertRaises(HTTPError) as caught:
+            self.call("/api/generate/start", {"message": "portrait", "session_id": "offline-test"})
+        self.assertEqual(caught.exception.code, 503)
+        self.assertIn("offline", caught.exception.read().decode())
+        self.assertEqual(self.bindings.runtime.server.orchestrator._task_jobs, {})

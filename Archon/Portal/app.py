@@ -21,10 +21,12 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parent
 STATIC_ROOT = ROOT / "static"
 REPO_ROOT = ROOT.parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "Aegis" / "Logging"))
 
 from everspark_logging import EverSparkLogger, get_logger  # noqa: E402
 from log_manifest import ManifestError, collect_log_status  # noqa: E402
+from Archon.Portal.execution_route import execution_request
 
 
 LOG_DIR = Path(
@@ -108,19 +110,33 @@ class WebUIServer(ThreadingHTTPServer):
         self,
         settings: Settings,
         logger: EverSparkLogger | None = None,
+        forge_bindings=None,
     ):
         super().__init__((settings.host, settings.port), RequestHandler)
         self.settings = settings
         self.logger = logger
         self.archive_lock = threading.Lock()
+        self.forge_bindings = forge_bindings
+
+    @property
+    def orchestrator_url(self):
+        if self.forge_bindings and self.forge_bindings.bindings:
+            return self.forge_bindings.url or self.settings.control_url
+        return (self.forge_bindings.url if self.forge_bindings else "") or self.settings.orchestrator_url
 
 
 class RequestHandler(BaseHTTPRequestHandler):
     server: WebUIServer
 
+    @property
+    def orchestrator_url(self):
+        return getattr(self, "_execution_url", None) or self.server.orchestrator_url
+
+    @execution_request
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         routes = {
+            "/api/forge-bindings": lambda: self._proxy_control_get("/forge-bindings"),
             "/api/health": self._health,
             "/api/runtime/status": self._runtime_status,
             "/api/machines/vast/node-connection": lambda: self._proxy_control_get("/machines/vast/node-connection", parsed.query),
@@ -188,6 +204,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         else:
             self._json(404, {"ok": False, "error": "Not found"})
 
+    @execution_request
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         upstream_paths = {
@@ -205,7 +222,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/subjects/compile": "/subjects/compile",
         }
         try:
-            if path in {"/api/machines/vast/credential", "/api/machines/vast/credential/remove",
+            if path in {"/api/forge-bindings", "/api/machines/vast/credential", "/api/machines/vast/credential/remove",
                         "/api/machines/vast/destroy", "/api/machines/vast/deploy-image",
                         "/api/machines/vast/verify-image",
                         "/api/machines/vast/node-connection",
@@ -311,7 +328,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         )
 
     def _proxy_orchestrator_get(self, path: str, query: str = "") -> None:
-        url = f"{self.server.settings.orchestrator_url}{path}"
+        url = f"{self.orchestrator_url}{path}"
         if query:
             url += f"?{query}"
         try:
@@ -359,7 +376,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                       trace_id=trace_id)
         try:
             status, body = request_json(
-                f"{self.server.settings.orchestrator_url}{path}",
+                f"{self.orchestrator_url}{path}",
                 self.server.settings.request_timeout,
                 payload,
             )
@@ -384,8 +401,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             checks = {"archon_backend": f"{self.server.settings.control_url}/health"}
         else:
             checks = {
-                "orchestrator": f"{self.server.settings.orchestrator_url}/health",
-                "image_forge": f"{self.server.settings.orchestrator_url}/image/health",
+                "orchestrator": f"{self.orchestrator_url}/health",
+                "image_forge": f"{self.orchestrator_url}/image/health",
             }
         services: dict[str, dict[str, Any]] = {}
         for name, url in checks.items():
@@ -399,9 +416,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                 }
         if self._control_mode():
             services["image_forge"] = {"online": False}
+        elif self.server.forge_bindings and self.server.forge_bindings.url:
+            for role, state in self.server.forge_bindings.status()["nodes"].items():
+                services[f"{role}_node"] = {"online": state == "online"}
         return services
 
     def _control_mode(self) -> bool:
+        if self.server.forge_bindings and self.server.forge_bindings.bindings:
+            return not bool(self.server.forge_bindings.url)
+        if self.server.forge_bindings and self.server.forge_bindings.url:
+            return False
         return os.environ.get("EVERSPARK_ARCHON_ONLY") == "1"
 
     def _runtime_status(self) -> None:
@@ -423,6 +447,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "services": services,
                 "logging": logging_status,
                 "mode": "archon-only" if self._control_mode() else "full",
+                "remote": bool(self.server.forge_bindings and self.server.forge_bindings.url),
                 "ready": (services["archon_backend"]["online"] if self._control_mode()
                           else all(item["online"] for item in services.values())),
             },
@@ -461,7 +486,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             {"filename": filename, "subfolder": subfolder, "type": folder_type}
         )
         request = Request(
-            f"{self.server.settings.orchestrator_url}/image/file?{upstream_query}",
+            f"{self.orchestrator_url}/image/file?{upstream_query}",
             method="GET",
         )
         try:
@@ -486,7 +511,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _data_archive(self) -> None:
         try:
             status, response = request_json(
-                f"{self.server.settings.orchestrator_url}/data/archive",
+                f"{self.orchestrator_url}/data/archive",
                 self.server.settings.request_timeout,
                 {},
             )
@@ -541,7 +566,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     output.write(chunk)
                     remaining -= len(chunk)
             status, response = request_json(
-                f"{self.server.settings.orchestrator_url}/data/import",
+                f"{self.orchestrator_url}/data/import",
                 self.server.settings.request_timeout,
                 {"id": archive_id},
             )
