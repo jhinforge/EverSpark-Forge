@@ -101,6 +101,8 @@
     "Configure and rent": "配置并租用",
     "Deploy Concept Forge": "部署 Concept Forge",
     "Deploy Image Forge": "部署 Image Forge",
+    "Verify Image Forge": "验证 Image Forge",
+    "Verifying Image Forge": "正在验证 Image Forge",
     "Image Forge ready": "Image Forge 已就绪",
     "Image Forge deploying": "Image Forge 正在部署",
     "Image Forge deployment failed": "Image Forge 部署失败",

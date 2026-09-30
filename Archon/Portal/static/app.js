@@ -1257,8 +1257,8 @@ async function runPodAction(instanceId, action, message = "") {
   showNotice(t("Deployment in progress"));
 }
 
-async function deployImageForge(instanceId) {
-  const result = await api("/api/machines/vast/deploy-image", {
+async function deployImageForge(instanceId, action = "deploy-image") {
+  const result = await api(`/api/machines/vast/${action}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ instance_id: instanceId }),
   });
@@ -1321,6 +1321,7 @@ function renderMachine(machine) {
   if (machine.image_forge) {
     const imageForge = document.createElement("p");
     const imageLabels = {ready: "Image Forge ready", deploying: "Image Forge deploying",
+      verifying: "Verifying Image Forge",
       deployment_failed: "Image Forge deployment failed", not_deployed: "Image Forge not deployed",
       verification_required: "Image Forge needs verification",
       deployment_unknown: "Image Forge deployment outcome unknown"};
@@ -1375,13 +1376,25 @@ function renderMachine(machine) {
       deployImage.type = "button";
       deployImage.className = "ghost-button";
       uiText(deployImage, "Deploy Image Forge");
-      deployImage.disabled = machine.image_forge?.status === "deploying";
+      const imageBusy = ["deploying", "verifying"].includes(machine.image_forge?.status);
+      deployImage.disabled = imageBusy;
       deployImage.addEventListener("click", () => {
         deployImage.disabled = true;
         deployImageForge(machine.id).catch((error) => showNotice(error.message))
           .finally(() => { deployImage.disabled = false; });
       });
       actions.appendChild(deployImage);
+      const verifyImage = document.createElement("button");
+      verifyImage.type = "button";
+      verifyImage.className = "ghost-button";
+      uiText(verifyImage, "Verify Image Forge");
+      verifyImage.disabled = imageBusy;
+      verifyImage.addEventListener("click", () => {
+        verifyImage.disabled = true;
+        deployImageForge(machine.id, "verify-image").catch((error) => showNotice(error.message))
+          .finally(() => { verifyImage.disabled = false; });
+      });
+      actions.appendChild(verifyImage);
     }
   }
   const destroy = document.createElement("button");

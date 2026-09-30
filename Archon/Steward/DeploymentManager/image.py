@@ -23,7 +23,8 @@ class ImageDeploymentManager:
         if not isinstance(restored, dict):
             raise ValueError("Invalid Image Forge deployment state")
         self.states: dict[int, dict] = {int(key): (
-            {"status": "deployment_unknown"} if value.get("status") == "deploying" else value)
+            {"status": "deployment_unknown"} if value.get("status") == "deploying" else
+            {"status": "verification_required"} if value.get("status") == "verifying" else value)
             for key, value in restored.items() if isinstance(value, dict)}
         self.jobs: dict[str, dict] = {}
 
@@ -50,7 +51,9 @@ class ImageDeploymentManager:
             self.states.pop(instance_id, None)
             self._save()
 
-    def start(self, instance_id: int) -> dict:
+    def start(self, instance_id: int, action: str = "deploy") -> dict:
+        if action not in {"deploy", "verify"}:
+            raise VastError("Unsupported Image Forge deployment action", 400)
         if not self.bridge or not self.bridge.configured(instance_id):
             raise VastError("Image Forge requires a registered Node Agent", 409)
         if self.machines.one(instance_id)["actual_status"] != "running":
@@ -60,17 +63,19 @@ class ImageDeploymentManager:
                    for job in self.jobs.values()):
                 raise VastError("Image Forge deployment is already running on this Pod", 409)
             job_id = uuid.uuid4().hex
-            job = {"id": job_id, "instance_id": instance_id, "action": "deploy-image",
+            job = {"id": job_id, "instance_id": instance_id, "action": f"{action}-image",
                    "status": "running", "stage": "queued"}
             self.jobs[job_id] = job
-            self.states[instance_id] = {"status": "deploying"}
+            self.states[instance_id] = {"status": "deploying" if action == "deploy" else "verifying"}
             self._save()
-        threading.Thread(target=self._deploy, args=(job_id, instance_id), daemon=True).start()
+        threading.Thread(target=self._deploy, args=(job_id, instance_id, action), daemon=True).start()
         return job.copy()
 
-    def _deploy(self, job_id: str, instance_id: int) -> None:
+    def _deploy(self, job_id: str, instance_id: int, operation: str = "deploy") -> None:
         try:
-            for action, timeout in (("deploy", 3600), ("health", 45), ("revision", 45)):
+            steps = {"deploy": (("deploy", 3600), ("health", 45), ("revision", 45)),
+                     "verify": (("health", 45), ("revision", 45))}
+            for action, timeout in steps[operation]:
                 with self.lock:
                     self.jobs[job_id]["stage"] = action
                 output = self.bridge.execute(instance_id, action, timeout=timeout, forge="image")
@@ -82,7 +87,7 @@ class ImageDeploymentManager:
                 self.jobs[job_id].update(status="completed", stage="ready", revision=output.strip())
         except Exception as exc:
             with self.lock:
-                self.states[instance_id] = {"status": "deployment_failed"}
+                self.states[instance_id] = {"status": "deployment_failed" if operation == "deploy" else "verification_required"}
                 self._save()
                 self.jobs[job_id].update(status="failed",
                     detail=str(getattr(exc, "detail", None) or str(exc))[-1600:])

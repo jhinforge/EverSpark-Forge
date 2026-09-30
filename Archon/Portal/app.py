@@ -207,6 +207,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         try:
             if path in {"/api/machines/vast/credential", "/api/machines/vast/credential/remove",
                         "/api/machines/vast/destroy", "/api/machines/vast/deploy-image",
+                        "/api/machines/vast/verify-image",
                         "/api/machines/vast/node-connection",
                         "/api/machines/vast/offers", "/api/machines/vast/rent", "/api/machines/vast/startup-diagnostics",
                         "/api/machines/vast/deploy", "/api/machines/vast/verify", "/api/machines/vast/update-source",

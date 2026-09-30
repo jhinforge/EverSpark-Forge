@@ -234,10 +234,11 @@ class ControlHandler(BaseHTTPRequestHandler):
                     self._send(200, {"ok": True, "output": bridge.execute(
                         payload["instance_id"], payload["action"], payload["message"],
                         timeout=240, forge=payload["forge"])})
-                elif path == "/machines/vast/deploy-image":
+                elif path in {"/machines/vast/deploy-image", "/machines/vast/verify-image"}:
                     if set(payload) != {"instance_id"} or not self.server.image_deployments:
                         raise VastError("Invalid Image Forge deployment request", 400)
-                    self._send(202, {"ok": True, "job": self.server.image_deployments.start(payload["instance_id"])})
+                    action = "verify" if path.endswith("/verify-image") else "deploy"
+                    self._send(202, {"ok": True, "job": self.server.image_deployments.start(payload["instance_id"], action)})
                 elif path in {"/machines/vast/deploy", "/machines/vast/verify", "/machines/vast/update-source",
                               "/machines/vast/discuss"}:
                     if not self.server.deployments or set(payload) - {"instance_id", "message"}:

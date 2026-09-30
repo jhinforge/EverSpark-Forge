@@ -3,6 +3,7 @@ import json
 import subprocess
 from ..forge_tasks import command
 from ..settings import REPO, TASK_JOURNAL
+from .results import command_result
 
 
 def execute(action: str, message: str, forge: str = "concept") -> dict:
@@ -32,15 +33,8 @@ def execute(action: str, message: str, forge: str = "concept") -> dict:
         done = subprocess.run(args, cwd=REPO, capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=timeout,
                               stdin=subprocess.DEVNULL)
-        output = done.stdout if done.returncode == 0 else (done.stderr or done.stdout)
-        if len(output.encode("utf-8")) > 60000 and (action == "chat" or forge == "image"):
-            return {"status": "failed", "output": "Forge response exceeds node task limit",
-                    "exit_code": 1}
-        return {"status": "completed" if done.returncode == 0 else "failed",
-                "output": output if action == "chat" or forge == "image" else output[-4000:],
-                "exit_code": done.returncode}
+        return command_result(done, action)
     except subprocess.TimeoutExpired:
         return {"status": "failed", "output": "Forge task timed out", "exit_code": 124}
     except OSError as exc:
         return {"status": "failed", "output": type(exc).__name__, "exit_code": 1}
-

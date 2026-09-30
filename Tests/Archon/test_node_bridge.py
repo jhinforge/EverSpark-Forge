@@ -577,6 +577,33 @@ class NodeBridgeTests(unittest.TestCase):
             self.assertEqual(result["exit_code"], 1)
             self.assertEqual(result["stage"], "deploy")
 
+    def test_image_verification_recovers_false_deployment_failure_without_installing(self):
+        class ReadyBridge:
+            def __init__(self):
+                self.calls = []
+
+            def configured(self, instance_id):
+                return True
+
+            def execute(self, instance_id, action, **kwargs):
+                self.calls.append((action, kwargs["forge"]))
+                return "abc123" if action == "revision" else "Image Forge ready"
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "image.json"
+            state.write_text(json.dumps({"99": {"status": "deployment_failed"}}))
+            bridge = ReadyBridge()
+            manager = ImageDeploymentManager(Machine(), bridge, state_path=state)
+            job = manager.start(99, "verify")
+            for _ in range(100):
+                result = manager.job(job["id"])
+                if result["status"] != "running":
+                    break
+                time.sleep(.01)
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(bridge.calls, [("health", "image"), ("revision", "image")])
+            self.assertEqual(manager.status(99)["status"], "ready")
+
     def test_image_deployment_isolated_from_concept_deployment(self):
         class ReadyBridge:
             def __init__(self):
