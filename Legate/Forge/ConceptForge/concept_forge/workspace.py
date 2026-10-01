@@ -35,8 +35,7 @@ class ConceptWorkspace:
         self._task_lock = threading.Lock()
         self._connection_test_lock = threading.Lock()
         self._connection_test_jobs = {}
-        self.planning = ConceptPlanning(config["concept_forge"], service,
-            int(config["orchestrator"].get("max_batch_size", 20)))
+        self.planning = ConceptPlanning(config["concept_forge"], service)
 
     def busy(self):
         return self._task_lock.locked()

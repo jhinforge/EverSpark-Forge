@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from Archon.Steward.vast_instances import VastError
 from Archon.Vault.windows_credentials import CredentialError
-from Legate.Envoy.base_image import select_base_image
+from Archon.Steward.DeploymentManager.base_image import select_base_image
 from Archon.Steward.DeploymentManager.providers import onboarding
 from Archon.Steward.NodeManager.transport.operator import handle as handle_nodes
 from .forge_binding_routes import handle as handle_forge_bindings

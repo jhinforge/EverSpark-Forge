@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import io
+import ast
 import json
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -19,7 +21,7 @@ from Archon.Steward.vast_offers import VastOffers
 from Archon.Steward.DeploymentManager.manager import DeploymentManager
 from Archon.Gate.control_server import ControlServer
 from Archon.Portal.app import Settings, WebUIServer
-from Legate.Envoy.base_image import select_base_image
+from Archon.Steward.DeploymentManager.base_image import select_base_image
 
 
 class Provider:
@@ -58,6 +60,36 @@ class Identity:
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_gate_control_plane_has_no_legate_imports(self):
+        root = Path(__file__).resolve().parents[2]
+        for path in (root / "Archon/Gate").glob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            imports = [node.module or "" for node in ast.walk(tree)
+                       if isinstance(node, ast.ImportFrom)]
+            imports += [alias.name for node in ast.walk(tree)
+                        if isinstance(node, ast.Import) for alias in node.names]
+            self.assertFalse(any(name == "Legate" or name.startswith("Legate.")
+                                 for name in imports), str(path))
+        result = subprocess.run([sys.executable, "-c",
+            "import sys; import Archon.Gate.control_server; "
+            "assert not any(n == 'Legate' or n.startswith('Legate.') for n in sys.modules)"],
+            cwd=root, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_base_image_policy_is_owned_by_deployment_and_preserves_cuda_threshold(self):
+        self.assertEqual(select_base_image.__module__,
+                         "Archon.Steward.DeploymentManager.base_image")
+        expected = "nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04"
+        for cuda in (12.8, "12.8", 13.0):
+            with self.subTest(cuda=cuda):
+                self.assertEqual(select_base_image({"cuda_max_good": cuda}), expected)
+        for offer in ({}, {"cuda_max_good": None}, {"cuda_max_good": "invalid"}):
+            with self.subTest(offer=offer):
+                with self.assertRaisesRegex(ValueError, "does not report CUDA compatibility"):
+                    select_base_image(offer)
+        with self.assertRaisesRegex(ValueError, "cannot run the supported NVIDIA CUDA 12.8 image"):
+            select_base_image({"cuda_max_good": 12.7})
+
     def test_destroyed_instance_is_retired_without_touching_other_nodes(self):
         class Bridge:
             def __init__(self):

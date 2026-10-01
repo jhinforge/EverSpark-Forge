@@ -1,6 +1,7 @@
 """Ownership and cross-module regressions for the existing generation pipeline."""
 import ast
 import inspect
+import json
 import sys
 import tempfile
 import threading
@@ -25,9 +26,51 @@ from concept_forge.workspace import ConceptWorkspace
 from concept_forge.subjects import new_subject
 from concept_forge.providers.ollama import GenerationPlan
 from forge_errors import BusyError
+from concept_forge.planning import ConceptPlanning
+from Aegis.Shared.errors import TaskError
 
 
 class OwnershipTests(unittest.TestCase):
+    def test_batch_limit_configuration_is_owned_by_concept_with_legacy_file_compatibility(self):
+        default = json.loads((ROOT / "Archon/Vault/default_config.json").read_text())
+        self.assertNotIn("max_batch_size", default["orchestrator"])
+        self.assertEqual(default["concept_forge"]["max_batch_size"], 20)
+        for legacy, current, expected in ((None, None, 20), (4, None, 4),
+                                          (4, 7, 7), (None, 3, 3)):
+            with self.subTest(legacy=legacy, current=current), tempfile.TemporaryDirectory() as directory:
+                data = json.loads(json.dumps(default))
+                data["concept_forge"].pop("max_batch_size")
+                if legacy is not None:
+                    data["orchestrator"]["max_batch_size"] = legacy
+                if current is not None:
+                    data["concept_forge"]["max_batch_size"] = current
+                path = Path(directory) / "config.json"
+                path.write_text(json.dumps(data))
+                loaded = load_config(path)
+                self.assertNotIn("max_batch_size", loaded["orchestrator"])
+                self.assertEqual(loaded["concept_forge"]["max_batch_size"], expected)
+                self.assertEqual(ConceptPlanning(loaded["concept_forge"], Mock()).max_batch_size,
+                                 expected)
+        source = inspect.getsource(ConceptWorkspace)
+        self.assertNotIn('config["orchestrator"]', source)
+        for path in (ROOT / "Archon/Orchestrator").rglob("*.py"):
+            self.assertNotIn("max_batch_size", path.read_text(encoding="utf-8"), str(path))
+
+    def test_concept_batch_validation_preserves_count_and_rejects_out_of_range(self):
+        for config, maximum in (({}, 20), ({"max_batch_size": "4"}, 4)):
+            model = Mock()
+            planning = ConceptPlanning(config, model)
+            for count in (1, maximum):
+                model.generate_prompt.return_value = GenerationPlan(
+                    "illustrious", "portrait", "bad", count, "over")
+                instruction, _ = planning.plan("portrait")
+                self.assertEqual(instruction["count"], count)
+            for count in (0, maximum + 1):
+                model.generate_prompt.return_value = GenerationPlan(
+                    "illustrious", "portrait", "bad", count, "over")
+                with self.assertRaisesRegex(TaskError, f"between 1 and {maximum}"):
+                    planning.plan("portrait")
+
     def test_orchestrator_exposes_only_task_api_and_imports_no_business_owners(self):
         public = {name for name, value in vars(Orchestrator).items()
                   if callable(value) and not name.startswith("_")}
@@ -111,6 +154,30 @@ class ConceptTransactionTests(unittest.TestCase):
             def generate_prompt(self, text, history, **kwargs):
                 return GenerationPlan("illustrious", "portrait", "bad", 1, "over")
         self.concept = ConceptWorkspace(config, Model(), Mock())
+
+    def test_workspace_uses_concept_limit_without_orchestrator_configuration(self):
+        config = load_config()
+        config.pop("orchestrator")
+        config["concept_forge"]["max_batch_size"] = 2
+        config["memory"]["database"] = str(self.concept.memory.database)
+        workspace = ConceptWorkspace(config, self.concept.service, Mock())
+        image = Mock()
+        runner = TaskRunner(workspace, image)
+        with patch.object(workspace.service, "generate_prompt", return_value=
+                          GenerationPlan("illustrious", "portrait", "bad", 3, "over")):
+            with self.assertRaisesRegex(TaskError, "between 1 and 2"):
+                runner.run("portrait", "session")
+        image.generate.assert_not_called()
+        self.assertFalse(workspace.busy())
+        image.generate.return_value = {"model": "illustrious", "positive_prompt": "portrait",
+            "negative_prompt": "bad", "count": 2, "selection": {},
+            "items": [{"prompt_id": "first"}, {"prompt_id": "second"}]}
+        with patch.object(workspace.service, "generate_prompt", return_value=
+                          GenerationPlan("illustrious", "portrait", "bad", 2, "over")):
+            result = runner.run("portrait", "session")
+        self.assertEqual(image.generate.call_args.args[0]["count"], 2)
+        self.assertEqual(len(result["items"]), 2)
+        self.assertEqual(len(workspace.get_history("session")), 2)
 
     def test_image_failure_does_not_commit_subject_prompts_or_history_and_retry_is_possible(self):
         image = Mock()

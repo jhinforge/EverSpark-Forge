@@ -1,4 +1,4 @@
-"""Choose the initial NVIDIA image from a Vast offer's CUDA capability."""
+"""Deployment policy: choose the NVIDIA image from a Vast offer's CUDA capability."""
 
 from __future__ import annotations
 

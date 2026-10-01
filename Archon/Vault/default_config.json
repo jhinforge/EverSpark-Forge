@@ -2,10 +2,10 @@
   "orchestrator": {
     "host": "127.0.0.1",
     "port": 8765,
-    "request_timeout": 600,
-    "max_batch_size": 20
+    "request_timeout": 600
   },
   "concept_forge": {
+    "max_batch_size": 20,
     "provider": "ollama",
     "supported_models": ["illustrious"],
     "max_model_retries": 3,

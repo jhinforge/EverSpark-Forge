@@ -4,12 +4,12 @@ from typing import Any, Callable
 from Aegis.Shared.errors import TaskError
 
 class ConceptPlanning:
-    def __init__(self, config, service, max_batch_size=20):
+    def __init__(self, config, service):
         self.concept = service
         self.supported_models = {str(model).strip().lower() for model in
             config.get("supported_models", ["illustrious"])}
         self.max_model_retries = int(config.get("max_model_retries", 3))
-        self.max_batch_size = max_batch_size
+        self.max_batch_size = int(config.get("max_batch_size", 20))
 
     def plan(self, user_text, history=None, notify=None, subject=None, selection=None,
              saved_negative_prompt=None, previous_positive_prompt="",

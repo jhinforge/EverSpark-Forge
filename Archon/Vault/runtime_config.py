@@ -73,6 +73,10 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         if not isinstance(config.get(section), dict):
             raise ConfigError(f"Missing config section: {section}")
 
+    # Accept historical configuration files without retaining orchestration ownership.
+    legacy_batch_limit = config["orchestrator"].pop("max_batch_size", 20)
+    config["concept_forge"].setdefault("max_batch_size", legacy_batch_limit)
+
     providers = config["concept_forge"].get("providers")
     adapters = config["image_forge"].get("adapters")
     if not isinstance(providers, dict):
