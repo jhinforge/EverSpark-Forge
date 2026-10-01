@@ -1,0 +1,1 @@
+voxcpm @ git+https://github.com/OpenBMB/VoxCPM.git@f0c787f0937dc1c9a8f4f64d9a332d9c5da2e629

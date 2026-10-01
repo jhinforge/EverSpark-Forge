@@ -1,4 +1,6 @@
-"""VoxCPM 2.0.3 text-only adapter. Voice Design uses a control prefix; no reference audio or seed argument."""
+"""Pinned upstream VoxCPM2 adapter. Voice Design uses a control prefix."""
+import importlib.metadata
+import json
 import os
 import tempfile
 import uuid
@@ -6,8 +8,25 @@ from pathlib import Path
 from Aegis.Storage.output_resources import OutputResources
 
 
+def validate_source_pin():
+    """Check pip's installed VCS provenance against the installer's source pin."""
+    requirement = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text().strip()
+    source, revision = requirement.removeprefix("voxcpm @ git+").rsplit("@", 1)
+    try:
+        provenance = json.loads(importlib.metadata.distribution("voxcpm").read_text("direct_url.json") or "{}")
+        vcs = provenance.get("vcs_info", {})
+        matches = (provenance.get("url") == source and vcs.get("vcs") == "git"
+                   and vcs.get("commit_id") == revision)
+    except (importlib.metadata.PackageNotFoundError, ValueError, AttributeError, TypeError):
+        matches = False
+    if not matches:
+        raise RuntimeError(f"Audio Forge requires VoxCPM source commit {revision}; redeploy Audio Forge")
+    return revision
+
+
 def validate_runtime():
     """Load the speech SDK and its native extensions without loading a model."""
+    validate_source_pin()
     import torch
     import torchaudio
     profiles = {"2.9.1+cu126": "12.6", "2.9.1+cu128": "12.8"}

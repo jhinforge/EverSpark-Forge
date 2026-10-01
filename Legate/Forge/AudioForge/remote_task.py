@@ -1,6 +1,5 @@
 """Audio entry point for the existing Envoy task executor."""
 import contextlib
-import importlib.metadata
 import json
 import sys
 from pathlib import Path
@@ -32,8 +31,6 @@ def run(action, payload, config=None):
                           itertools.islice(files, max(1, min(payload["limit"], 100)))]}
     if action == "health":
         torch = validate_runtime()
-        if importlib.metadata.version("voxcpm") != "2.0.3":
-            raise RuntimeError("Audio Forge requires voxcpm 2.0.3")
         if not torch.cuda.is_available():
             raise RuntimeError("Audio Forge requires an NVIDIA GPU")
         if not (Path(settings["model_directory"]) / "config.json").is_file():

@@ -15,7 +15,7 @@ from Archon.Steward.NodeManager.transport.operator import task
 from Archon.Steward.NodeManager.errors import NodeError
 from Legate.Envoy.forge_tasks import command
 from Legate.Envoy.executor.tasks import execute
-from Legate.Forge.AudioForge.audio_forge.voxcpm import synthesize, validate_runtime
+from Legate.Forge.AudioForge.audio_forge.voxcpm import synthesize, validate_runtime, validate_source_pin
 from Legate.Forge.AudioForge.audio_forge.service import AudioService
 from Legate.Forge.AudioForge.remote_task import run
 from Aegis.Storage.output_resources import OutputResources
@@ -24,7 +24,23 @@ from Archon.Gate.forge_bindings import ForgeBindings
 
 
 class AudioTests(unittest.TestCase):
-    def test_runtime_validation_checks_matching_cuda_builds_without_loading_model(self):
+    def test_source_pin_accepts_exact_git_commit_and_rejects_old_or_untracked_installs(self):
+        revision = "f0c787f0937dc1c9a8f4f64d9a332d9c5da2e629"
+        provenance = {"url": "https://github.com/OpenBMB/VoxCPM.git",
+                      "vcs_info": {"vcs": "git", "commit_id": revision}}
+        distribution = Mock()
+        with patch("Legate.Forge.AudioForge.audio_forge.voxcpm.importlib.metadata.distribution", return_value=distribution):
+            distribution.read_text.return_value = json.dumps(provenance)
+            self.assertEqual(validate_source_pin(), revision)
+            for invalid in (None, "broken json", "[]", json.dumps({**provenance,
+                    "vcs_info": {"vcs": "git", "commit_id": "a" * 40}}),
+                    json.dumps({**provenance, "url": "https://github.com/other/VoxCPM.git"})):
+                distribution.read_text.return_value = invalid
+                with self.subTest(provenance=invalid), self.assertRaisesRegex(RuntimeError, "redeploy Audio Forge"):
+                    validate_source_pin()
+
+    @patch("Legate.Forge.AudioForge.audio_forge.voxcpm.validate_source_pin")
+    def test_runtime_validation_checks_matching_cuda_builds_without_loading_model(self, source_pin):
         for profile, cuda in (("cu126", "12.6"), ("cu128", "12.8")):
             torch = SimpleNamespace(__version__="2.9.1+" + profile, version=SimpleNamespace(cuda=cuda))
             sdk = SimpleNamespace(VoxCPM=Mock())

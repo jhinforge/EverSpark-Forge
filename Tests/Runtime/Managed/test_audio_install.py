@@ -14,9 +14,10 @@ class AudioInstallTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        for path in ("Legate/Crucible/System", "Legate/Warden/Hardware", "Aegis/Shared/Shell", "bin"):
+        for path in ("Legate/Crucible/System", "Legate/Forge/AudioForge", "Legate/Warden/Hardware", "Aegis/Shared/Shell", "bin"):
             (self.root / path).mkdir(parents=True)
         shutil.copyfile(ROOT / "Legate/Crucible/install_audio.sh", self.root / "Legate/Crucible/install_audio.sh")
+        shutil.copyfile(ROOT / "Legate/Forge/AudioForge/requirements.txt", self.root / "Legate/Forge/AudioForge/requirements.txt")
         shutil.copyfile(ROOT / "Aegis/Shared/Shell/common.sh", self.root / "Aegis/Shared/Shell/common.sh")
         (self.root / "Legate/Crucible/System/apt.sh").write_text("core_apt_install_missing() { :; }\n")
         (self.root / "Legate/Warden/Hardware/torch_profile.sh").write_text(
@@ -34,9 +35,10 @@ elif [[ "$*" == *"pip install"* ]] && [[ ! -f "$BOOTSTRAP_MARKER" ]]; then
   echo 'Old pip resolver used before bootstrap' >&2
   exit 2
 fi
-if [[ "$*" == *"pip install --constraint"* ]]; then
-  [[ -f "$5" ]]
-  grep -q '^torchaudio==2.9.1+cu12' "$5"
+if [[ "$*" == *"pip install --upgrade --constraint"* ]]; then
+  [[ -f "$6" && -f "$8" ]]
+  grep -q '^torchaudio==2.9.1+cu12' "$6"
+  grep -q '^voxcpm @ git+https://github.com/OpenBMB/VoxCPM.git@f0c787f0937dc1c9a8f4f64d9a332d9c5da2e629$' "$8"
 fi
 if [[ "$*" == *"validate_runtime"* && "${FAIL_RUNTIME_IMPORT:-0}" == 1 ]]; then
   echo 'OSError: libcudart.so.13 missing' >&2
@@ -76,7 +78,9 @@ fi
             self.assertIn("--index-url https://download.pytorch.org/whl/cu128", calls[start + 1])
             self.assertIn("torch==2.9.1+cu128 torchaudio==2.9.1+cu128", calls[start + 1])
             self.assertIn("--constraint", calls[start + 2])
-            self.assertIn("voxcpm==2.0.3", calls[start + 2])
+            self.assertIn("--upgrade --constraint", calls[start + 2])
+            self.assertIn("--requirement", calls[start + 2])
+            self.assertIn("Legate/Forge/AudioForge/requirements.txt", calls[start + 2])
             self.assertIn("pip check", calls[start + 3])
             self.assertIn("validate_runtime()", calls[start + 4])
             self.assertIn("Aegis/Storage/model_snapshot.py", calls[start + 5])

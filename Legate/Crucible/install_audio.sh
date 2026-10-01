@@ -5,7 +5,7 @@ source "${repo}/Aegis/Shared/Shell/common.sh"
 source "${repo}/Legate/Crucible/System/apt.sh"
 core_deploy_phase installing_system_dependencies
 if [ "${EUID:-$(id -u)}" -eq 0 ] && command -v apt-get >/dev/null 2>&1; then
-  core_apt_install_missing python3-venv python3-dev build-essential libsndfile1
+  core_apt_install_missing python3-venv python3-dev build-essential libsndfile1 git
 fi
 runtime="${repo}/Data/Runtime/audio-venv"
 python3 -c 'import sys; assert (3, 10) <= sys.version_info[:2] < (3, 13), "Audio Forge requires Python 3.10–3.12"'
@@ -24,7 +24,9 @@ printf 'torch==2.9.1+%s\ntorchaudio==2.9.1+%s\n' "$profile" "$profile" > "$const
 "${runtime}/bin/python" -m pip install --upgrade --index-url "$(core_torch_profile_index "$profile")" \
   "torch==2.9.1+${profile}" "torchaudio==2.9.1+${profile}"
 core_deploy_phase installing_python_dependencies
-"${runtime}/bin/python" -m pip install --constraint "$constraints" 'voxcpm==2.0.3' soundfile huggingface_hub
+# Pin the current upstream source by full commit, rather than following main.
+"${runtime}/bin/python" -m pip install --upgrade --constraint "$constraints" \
+  --requirement "${repo}/Legate/Forge/AudioForge/requirements.txt" soundfile huggingface_hub
 "${runtime}/bin/python" -m pip check
 # Import native extensions and the actual SDK before downloading models.
 PYTHONPATH="${repo}${PYTHONPATH:+:${PYTHONPATH}}" "${runtime}/bin/python" -c \
