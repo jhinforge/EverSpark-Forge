@@ -193,6 +193,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "/memory/history", parsed.query
             ),
             "/api/results": lambda: self._results(parse_qs(parsed.query)),
+            "/api/audio/history": lambda: self._proxy_orchestrator_get("/audio/history", parsed.query),
             "/api/history": lambda: self._history(parse_qs(parsed.query)),
             "/api/image/view": lambda: self._proxy_image(parse_qs(parsed.query)),
             "/api/outputs/archive": self._output_archive,

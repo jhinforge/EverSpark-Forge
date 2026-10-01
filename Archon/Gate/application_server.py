@@ -113,6 +113,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send(400, {"ok": False, "error": "Invalid history limit"})
             except Exception as exc:
                 self._send(502, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/audio/history":
+            try:
+                limit = int(parse_qs(parsed.query).get("limit", ["24"])[0])
+                self._send(200, {"ok": True, "audio": self.server.application.audio_history(limit)})
+            except ValueError:
+                self._send(400, {"ok": False, "error": "Invalid history limit"})
+            except Exception as exc:
+                self._send(502, {"ok": False, "error": str(exc)})
         elif parsed.path == "/audio/file":
             query = parse_qs(parsed.query)
             try:

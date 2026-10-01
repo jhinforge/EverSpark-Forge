@@ -21,6 +21,15 @@ def run(action, payload, config=None):
             raise ValueError("Invalid audio fetch request")
         return OutputResources(settings["output_directory"], {".wav"}).chunk(
             payload["filename"], "", payload["offset"])
+    if action == "history":
+        if set(payload) != {"limit"} or isinstance(payload["limit"], bool) or not isinstance(payload["limit"], int):
+            raise ValueError("Invalid audio history request")
+        outputs = OutputResources(settings["output_directory"], {".wav"})
+        # Speech outputs live directly in the output directory, not in model/cache folders.
+        files = (path for path in outputs.files() if path.parent == outputs.directory)
+        import itertools
+        return {"audio": [{"filename": path.name} for path in
+                          itertools.islice(files, max(1, min(payload["limit"], 100)))]}
     if action == "health":
         import torch
         if importlib.metadata.version("voxcpm") != "2.0.3":

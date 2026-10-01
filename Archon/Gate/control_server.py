@@ -17,7 +17,7 @@ from .forge_binding_routes import handle as handle_forge_bindings
 _REMOTE_FORGE_ACTIONS = {
     "concept": frozenset({"chat"}),
     "image": frozenset({"resources", "default_negative", "submit", "poll", "history", "fetch"}),
-    "audio": frozenset({"health", "synthesize", "fetch"}),
+    "audio": frozenset({"health", "synthesize", "fetch", "history"}),
 }
 
 

@@ -33,6 +33,14 @@ class AgentResultTests(unittest.TestCase):
         payload = json.dumps({"resources": ["model" * 2000]})
         self.assertEqual(self.command("resources", payload)["output"], payload)
 
+    def test_audio_synthesis_json_is_not_truncated(self):
+        payload = json.dumps({"status": "completed", "audio": [{"text": "こんにちは" * 1000,
+                             "filename": "speech.wav"}]}, ensure_ascii=False)
+        result = self.command("synthesize", payload, forge="audio")
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(json.loads(result["output"]), json.loads(payload))
+        self.assertEqual(self.command("synthesize", "x" * 60001, forge="audio")["status"], "failed")
+
     def test_oversized_image_data_and_concept_chat_still_fail(self):
         for forge, action in (("image", "resources"), ("concept", "chat")):
             with self.subTest(forge=forge):

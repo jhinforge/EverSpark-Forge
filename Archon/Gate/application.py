@@ -23,6 +23,9 @@ class GateApplication:
         self.storage = StorageService(config)
         self.orchestrator = Orchestrator(TaskRunner(self.concept, self.image, self.audio), logger)
 
+    def audio_history(self, limit=24):
+        return self.audio.history(limit) if self.audio is not None else []
+
     def audio_path(self, filename):
         if self.audio is None:
             raise ValueError("Select an Audio Forge Node first")

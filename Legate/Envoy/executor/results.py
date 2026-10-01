@@ -1,7 +1,7 @@
 """Keep structured responses intact and bound human-readable task diagnostics."""
 
 STRUCTURED_ACTIONS = frozenset({"chat", "resources", "default_negative", "submit",
-                                "poll", "history", "fetch"})
+                                "poll", "history", "fetch", "synthesize"})
 RESPONSE_LIMIT = 60000
 DIAGNOSTIC_TAIL = 4000
 

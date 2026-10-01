@@ -54,7 +54,9 @@ def handle(handler, manager, method, path):
             raise NodeError("Not found", 404)
         handler._send(200, {"ok": True, **value})
     except NodeError as exc:
-        handler._send(exc.status, {"ok": False, "error": str(exc)})
+        handler._send(exc.status, {"ok": False, "error": str(exc),
+            **{name: getattr(exc, name) for name in ("stage", "detail", "exit_code")
+               if hasattr(exc, name)}})
     except (ValueError, TypeError, KeyError, UnicodeError):
         handler._send(400, {"ok": False, "error": "Invalid Node request"})
     except (OSError, RuntimeError):

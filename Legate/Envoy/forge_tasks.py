@@ -49,7 +49,7 @@ def command(forge: str, action: str, message: str) -> tuple[list[str], int] | No
     if forge == "audio":
         if action == "deploy":
             return ["bash", str(REPO / "Legate/Forge/AudioForge/Scripts/deploy.sh")], 3600
-        if action in {"health", "synthesize", "fetch"} and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
+        if action in {"health", "synthesize", "fetch", "history"} and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
             try:
                 if isinstance(json.loads(message or "{}"), dict):
                     return [str(REPO / "Data/Runtime/audio-venv/bin/python"),

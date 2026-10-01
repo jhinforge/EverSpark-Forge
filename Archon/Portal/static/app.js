@@ -2089,6 +2089,7 @@ function scheduleResultPoll(items, delay = 1800) {
 
 async function waitForGeneration(jobId) {
   let failedChecks = 0;
+  let renderedResults = "";
   while (true) {
     await new Promise((resolve) => setTimeout(resolve, 1800));
     let data;
@@ -2103,6 +2104,13 @@ async function waitForGeneration(jobId) {
       throw error;
     }
     if (data.job.status === "completed") return data.job.response;
+    if (data.job.tasks?.some((task) => task.status === "completed")) {
+      const completed = JSON.stringify(data.job.tasks.filter((task) => task.status === "completed"));
+      if (completed !== renderedResults) {
+        renderCreation({tasks: data.job.tasks});
+        renderedResults = completed;
+      }
+    }
     if (data.job.status === "failed") throw new Error(data.job.error || t("Generation failed"));
     const active = data.job.tasks?.find((task) => ["preparing", "running"].includes(task.status));
     if (active) setGenerationState(active.status === "preparing" ? "Concept Forge 正在生成任务输入"
@@ -2190,25 +2198,51 @@ function renderCreation(result) {
       }
     }
   }
-  for (const resource of result.audio || []) {
-    const card = document.createElement("div");
-    card.className = "storage-panel";
-    const text = document.createElement("p");
-    text.textContent = resource.text || "";
-    const audio = document.createElement("audio");
-    audio.controls = true;
-    audio.src = `/api/audio/file?filename=${encodeURIComponent(resource.filename)}`;
-    const download = document.createElement("a");
-    download.href = audio.src;
-    download.download = resource.filename;
-    download.textContent = "下载 WAV";
-    card.append(text, audio, download);
-    grid.appendChild(card);
-  }
+  const resources = result.audio || result.tasks.flatMap((task) => task.result?.audio || []);
+  for (const resource of resources) grid.appendChild(audioCard(resource));
   elements.resultStage.appendChild(grid);
 }
 
+function audioCard(resource) {
+  const card = document.createElement("div");
+  card.className = "storage-panel";
+  const text = document.createElement("p");
+  text.textContent = resource.text || resource.filename;
+  const audio = document.createElement("audio");
+  audio.controls = true;
+  audio.preload = "none";
+  audio.src = `/api/audio/file?filename=${encodeURIComponent(resource.filename)}`;
+  const download = document.createElement("a");
+  download.href = audio.src;
+  download.download = resource.filename;
+  download.textContent = "下载 WAV";
+  card.append(text, audio, download);
+  return card;
+}
+
+async function loadAudioHistory() {
+  const grid = $("#audioHistoryGrid");
+  grid.replaceChildren();
+  const message = document.createElement("div");
+  message.className = "empty-collection";
+  message.textContent = "正在读取音频结果…";
+  grid.appendChild(message);
+  try {
+    const data = await api("/api/audio/history?limit=36");
+    grid.replaceChildren();
+    if (!data.audio?.length) {
+      message.textContent = "暂无音频结果；请先选择 Audio Forge 节点并生成音频。";
+      grid.appendChild(message);
+    }
+    for (const resource of data.audio || []) grid.appendChild(audioCard(resource));
+  } catch (error) {
+    message.textContent = error.message;
+    grid.replaceChildren(message);
+  }
+}
+
 async function loadHistory() {
+  const audioHistory = loadAudioHistory();
   elements.galleryGrid.replaceChildren();
   const loading = document.createElement("div");
   loading.className = "empty-collection";
@@ -2231,6 +2265,8 @@ async function loadHistory() {
     empty.className = "empty-collection";
     empty.textContent = error.message;
     elements.galleryGrid.appendChild(empty);
+  } finally {
+    await audioHistory;
   }
 }
 

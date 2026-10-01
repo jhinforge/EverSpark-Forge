@@ -1,6 +1,8 @@
 """Audio uses the existing deployment/task/output boundaries, without a GPU in CI."""
 import ast
 import json
+import io
+from urllib.error import HTTPError
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,6 +24,32 @@ from Archon.Gate.forge_bindings import ForgeBindings
 
 
 class AudioTests(unittest.TestCase):
+    def test_remote_failure_includes_action_http_status_exit_code_and_stderr(self):
+        config = load_config()
+        config["remote_nodes"]["audio_node_id"] = "a" * 32
+        service = AudioService(config)
+        failure = HTTPError(service.url, 503, "Service Unavailable", {}, io.BytesIO(json.dumps({
+            "error": "Node Agent execution failed", "detail": "RuntimeError: real backend failure",
+            "exit_code": 7, "stage": "agent_execution"}).encode()))
+        with patch("Legate.Forge.AudioForge.audio_forge.service.urlopen", side_effect=failure):
+            with self.assertRaisesRegex(RuntimeError, "synthesize failed.*HTTP 503, exit code 7.*real backend failure"):
+                service.execute({"text": "hello"})
+
+    def test_audio_history_lists_only_final_outputs_without_loading_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "speech.wav").write_bytes(b"RIFF")
+            (root / "unfinished.part").write_bytes(b"part")
+            (root / "nested").mkdir()
+            (root / "nested" / "other.wav").write_bytes(b"RIFF")
+            (root / "link.wav").symlink_to(root / "speech.wav")
+            config = {"audio_forge": {"output_directory": directory}}
+            with patch("Legate.Forge.AudioForge.remote_task.synthesize", side_effect=AssertionError("model")):
+                self.assertEqual(run("history", {"limit": 36}, config), {"audio": [{"filename": "speech.wav"}]})
+                with self.assertRaises(ValueError):
+                    run("history", {"limit": True}, config)
+            self.assertIsNotNone(command("audio", "history", '{"limit":36}'))
+
     def test_audio_journal_and_recovery_use_audio_identity_without_redeployment(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"

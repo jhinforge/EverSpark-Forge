@@ -96,7 +96,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
             "fetch": lambda p: self.output_chunk(role, p),
             "synthesize": lambda p: {"status": "completed", "audio": [{
                 "filename": "speech.wav", "sample_rate": 48000, "text": p["text"]}]},
-            "history": lambda _: {"images": []},
+            "history": lambda _: {"audio": [{"filename": "speech.wav"}]} if role == "audio" else {"images": []},
         }
         try:
             while not self.stop.is_set():
@@ -104,7 +104,19 @@ class RemoteCreationWebUITests(unittest.TestCase):
                 if not task:
                     continue
                 self.seen.append((role, task["forge"], task["action"]))
-                output = json.dumps(handlers[task["action"]](json.loads(task["message"])))
+                if role == "audio" and task["action"] == "synthesize" and getattr(self, "audio_failure", False):
+                    self.nodes.tasks.finish({**authentication, "task_id": task["id"],
+                        "result": {"status": "failed", "output": "RuntimeError: audio inference failed",
+                                   "exit_code": 7}})
+                    continue
+                payload = json.loads(task["message"])
+                if task["action"] == "fetch":
+                    value = self.output_chunk(task["forge"], payload)
+                elif task["action"] == "history" and task["forge"] == "audio":
+                    value = {"audio": [{"filename": "speech.wav"}]}
+                else:
+                    value = handlers[task["action"]](payload)
+                output = json.dumps(value)
                 self.nodes.tasks.finish({**authentication, "task_id": task["id"],
                     "result": {"status": "completed", "output": output, "exit_code": 0}})
         except Exception as exc:
@@ -131,7 +143,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
         offset = payload.get("offset", 0)
         return {"size": len(data), "data": base64.b64encode(data[offset:offset+24576]).decode()}
 
-    def test_two_stage_creation_reaches_audio_node_and_returns_playable_wav(self):
+    def select_audio(self):
         import io
         import wave
         buffer = io.BytesIO()
@@ -152,6 +164,9 @@ class RemoteCreationWebUITests(unittest.TestCase):
         self.select_pair()
         self.assertIsNone(self.bindings.runtime.server.application.audio)
         self.call("/api/forge-bindings", {"forge": "audio", "node_id": self.identities["audio"]})
+
+    def test_two_stage_creation_reaches_audio_node_and_returns_playable_wav(self):
+        self.select_audio()
         request = {"message": "portrait with Japanese narration", "session_id": "creation",
                    "selection": {"creation_mode": "plan"}, "request_id": "d" * 32}
         job = self.call("/api/generate/start", request)["job"]
@@ -171,9 +186,52 @@ class RemoteCreationWebUITests(unittest.TestCase):
         with urlopen(self.url + "/api/audio/file?filename=speech.wav", timeout=5) as response:
             self.assertEqual(response.headers["Content-Type"], "audio/wav")
             self.assertEqual(response.read(), self.audio_bytes)
+        history = self.call("/api/audio/history?limit=36")
+        self.assertEqual(history["audio"], [{"filename": "speech.wav"}])
         self.call("/api/generate/start", request)
         self.assertEqual(self.seen.count(("audio", "audio", "synthesize")), 1)
         self.assertTrue(all(role == forge for role, forge, _ in self.seen))
+        self.assertEqual(self.agent_errors, [])
+
+    def test_image_and_audio_can_share_one_registered_node(self):
+        self.select_audio()
+        self.call("/api/forge-bindings", {"forge": "audio", "node_id": self.identities["image"]})
+        job = self.call("/api/generate/start", {"message": "portrait with narration", "session_id": "shared-node",
+                       "selection": {"creation_mode": "plan"}})["job"]
+        for _ in range(200):
+            state = self.call("/api/generate/jobs?job_id=" + job["id"])["job"]
+            if state["status"] not in {"queued", "running"}:
+                break
+            time.sleep(.01)
+        self.assertEqual(state["status"], "completed", state)
+        self.assertIn(("image", "image", "submit"), self.seen)
+        self.assertIn(("image", "audio", "synthesize"), self.seen)
+        self.assertNotIn(("audio", "audio", "synthesize"), self.seen)
+        with urlopen(self.url + "/api/audio/file?filename=speech.wav") as response:
+            self.assertEqual(response.read(), self.audio_bytes)
+        self.assertEqual(self.agent_errors, [])
+
+    def test_audio_failure_reports_node_stderr_and_preserves_completed_image(self):
+        self.audio_failure = True
+        self.select_audio()
+        request = {"message": "portrait with narration", "session_id": "failed-audio",
+                   "selection": {"creation_mode": "plan"}, "request_id": "f" * 32}
+        job = self.call("/api/generate/start", request)["job"]
+        for _ in range(200):
+            state = self.call("/api/generate/jobs?job_id=" + job["id"])["job"]
+            if state["status"] not in {"queued", "running"}:
+                break
+            time.sleep(.01)
+        self.assertEqual(state["status"], "failed", state)
+        self.assertIn("HTTP 503, exit code 7", state["error"])
+        self.assertIn("audio inference failed", state["error"])
+        self.assertEqual([t["status"] for t in state["tasks"]], ["completed", "failed"])
+        image = state["tasks"][0]["result"]["outputs"][0]["images"][0]
+        self.assertEqual(image["filename"], "render.png")
+        with urlopen(self.url + "/api/image/view?filename=render.png") as response:
+            self.assertEqual(response.read(), self.image_bytes)
+        self.call("/api/generate/start", request)
+        self.assertEqual(self.seen.count(("audio", "audio", "synthesize")), 1)
         self.assertEqual(self.agent_errors, [])
 
     def test_complete_concept_business_and_ledger_survive_two_node_generation(self):
