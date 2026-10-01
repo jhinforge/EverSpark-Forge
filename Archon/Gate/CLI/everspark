@@ -38,7 +38,7 @@ Usage:
 Modules:
   image         Image Forge execution through adapters such as ComfyUI
   concept       Concept Forge intent and prompt services such as Ollama
-  orchestrator  Session coordination and task execution
+  orchestrator  Inter-Forge task coordination
   webui         User-facing local interface
   logs          Managed log status, rotation, and retention
   archon        Local control-only Portal and backend (no Forge)

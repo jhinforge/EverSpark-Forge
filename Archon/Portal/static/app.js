@@ -2247,7 +2247,7 @@ async function loadRuntime() {
     elements.runtimeGrid.replaceChildren(
       controlOnly
         ? runtimeCard("Archon Backend", archonBackend, archonBackend ? "Archon control backend is online." : "Archon control backend is unavailable.")
-        : runtimeCard("Orchestrator", orchestrator, orchestrator ? "Task routing and subject APIs are online." : "Start with ./everspark orchestrator start"),
+        : runtimeCard("Orchestrator", orchestrator, orchestrator ? "Inter-Forge task orchestration is online." : "Start with ./everspark orchestrator start"),
       runtimeCard("Image Forge", imageForge, controlOnly ? "No Legate is connected; Forge execution is unavailable." : imageForge ? "The configured image adapter is responding." : "Start or configure the image execution adapter."),
       runtimeCard("Runtime logs", logging, logging ? "{present}/{configured} managed logs are present." : "The runtime log manifest is unavailable.",
         { present: data.logging?.present, configured: data.logging?.configured }),

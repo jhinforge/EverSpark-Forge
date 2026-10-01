@@ -40,7 +40,7 @@ the user does not request a change. For a new subject, infer sensible reusable v
 details when the conversation leaves them open instead of asking the user to configure
 schema fields. Do not add scene, pose, camera, or background details to the persistent
 character identity. Use concise image-generation terms where useful. Protected document
-metadata is owned by Orchestrator and will be applied after your response.
+metadata is owned by Concept Forge and will be applied after your response.
 """
 
 DISCUSSION_SYSTEM_PROMPT = """You are the conversational Concept Forge component of EverSpark Forge.

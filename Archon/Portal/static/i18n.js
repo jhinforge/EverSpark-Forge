@@ -467,7 +467,7 @@
     "Open Runtime for details": "打开运行状态查看详情",
     "Status unavailable": "无法获取状态",
     "WebUI could not complete checks": "WebUI 未能完成检查",
-    "Task routing and subject APIs are online.": "任务调度和角色 API 已就绪。",
+    "Inter-Forge task orchestration is online.": "Forge 间任务编排已就绪。",
     "Start with ./everspark orchestrator start": "请先运行 ./everspark orchestrator start",
     "The configured image adapter is responding.": "已配置的图像适配器有响应。",
     "Start or configure the image execution adapter.": "请启动或配置图像执行适配器。",
