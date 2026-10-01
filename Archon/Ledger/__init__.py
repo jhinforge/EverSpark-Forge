@@ -1,1 +1,2 @@
-"""System control state boundary; implementation follows in a later phase."""
+"""Long-term persistence; business interpretation belongs to each Forge."""
+from .store import SQLiteLedgerStore, SubjectRevisionConflictError

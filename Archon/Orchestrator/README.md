@@ -1,84 +1,46 @@
 # Orchestrator
 
-Central routing, session coordination, task state, and execution control.
+Orchestrator coordinates tasks between Forges. It receives generation requests,
+maintains task admission and status, passes Concept Forge's instruction to Image
+Forge, and returns task result references. Its public API is `submit`,
+`start_task`, and `task_job`. `TaskRunner.run` implements the existing serial
+Concept → Image pipeline through injected Forge interfaces.
 
-This migration preserves the verified v0.1 behavior from
-`feature/everspark-webui-v1@606640c`:
+Concept Forge owns conversations, Memory, Subjects, prompt planning, provider
+selection, and connection tests. Image Forge owns its engines, workflows,
+checkpoints, VAE, LoRA, plugins, health and generated history. Aegis/Storage owns
+resource downloads, output-file transfers, archives, backups and restores.
+Ledger provides long-term persistence; Vault stores private configuration.
 
-- one active generation request at a time;
-- batch submission with an independent seed for every image;
-- Unicode surrogate-pair repair;
-- bounded conversation history supplied to Concept Forge;
-- successful task persistence through the Memory module;
-- local HTTP API and interactive console.
+## Existing entry points
 
-## Run
+`./everspark orchestrator start` still starts the existing HTTP service, and
+`./everspark orchestrator console` still opens its console. The HTTP implementation
+is now `Archon/Gate/application_server.py`; the old Python server module is a
+launcher compatibility import. Gate's `GateApplication` composes the modules and
+forwards the existing routes to their owners. HTTP URLs and WebUI response shapes
+are preserved, including `/tasks`, `/tasks/start`, `/tasks/jobs`, `/conversation`,
+`/subjects/*`, `/memory/*`, `/concept/connections/*`, `/image/*`, `/storage/*`,
+`/downloads/*`, `/backup/*` and `/data/*`.
 
-Start the local service:
+The shared runtime configuration loader and default JSON now belong to
+`Archon/Vault/runtime_config.py` and `Archon/Vault/default_config.json`.
+`EVERSPARK_ORCHESTRATOR_CONFIG` and the old loader import remain supported for
+existing installations. Generation options from the existing UI are forwarded
+unchanged by Orchestrator and interpreted only inside the responsible Forge.
 
-```bash
-./everspark orchestrator start
-```
+## Distributed execution
 
-Open the console in another terminal:
+Gate retains explicit Concept and Image Node bindings. The corresponding Forge
+adapters retain the existing Archon NodeManager / Envoy task channel. Selecting
+a Forge Node locates an execution target; selecting its internal resources is
+owned by that Forge. Orchestrator owns neither Node registration nor runtime
+lifecycle state.
 
-```bash
-./everspark orchestrator console
-```
-
-The service binds to `127.0.0.1:8765` by default and exposes:
-
-- `GET /health`
-- `GET /resources`
-- `POST /tasks`
-- `POST /tasks/start` (returns a job ID immediately; `request_id` prevents duplicate submissions)
-- `GET /tasks/jobs?job_id=...` (poll planning and image submission)
-- `POST /conversation`
-- `GET /memory/history?session_id=...`
-- `POST /memory/clear`
-- `GET /subjects`
-- `GET /subjects/current?session_id=...`
-- `GET /subjects?subject_id=...`
-- `GET /subjects/revisions?subject_id=...`
-- `POST /subjects`
-- `POST /subjects/generate`
-- `POST /subjects/update`
-- `POST /subjects/compile`
-
-Every conversation automatically owns one current subject. Orchestrator asks
-Concept Forge to extract that internal JSON document from the bounded user and
-assistant context, validates it, and stores a revision only when its content
-changes. Generation compiles the current subject automatically and merges its
-stable traits with the request-level scene prompt before sending an image
-request to the selected Image Forge plugin. Clients do not select or configure
-a subject ID.
-
-The explicit subject write endpoints remain available as developer/debugging
-interfaces; they are not part of the normal WebUI workflow.
-
-## Configuration
-
-The component runtime defaults are in
-`orchestrator/config/default_config.json`. Environment variables can override
-the Orchestrator address, provider/adapter endpoints, Memory database, and
-workflow template without modifying tracked files.
-
-The bundled Image Forge workflow is a minimal 1024 x 1536 Illustrious workflow
-made entirely from standard ComfyUI nodes. It contains no LoRAs, personal
-paths, or custom-node dependencies.
-
-When the replacement API Format workflow contains a
-`CheckpointLoaderSimple` node, Orchestrator asks Image Forge for the currently
-available checkpoints. It keeps the workflow's requested name when present,
-otherwise selects the managed Illustrious default, then falls back to the
-first compatible checkpoint in stable alphabetical order. Every fallback is
-reported to the caller.
-
-`GET /resources` exposes selectable image plugins, workflows, Checkpoints,
-VAEs, LoRAs, and Concept Forge connections and models. The WebUI can manage
-OpenAI Compatible connections through the `/concept/connections/*` endpoints
-and install or select drawing plugins through `/image/plugins/*`. `POST /tasks`
-and `POST /conversation` accept an optional `selection` object. For ComfyUI,
-workflow mutations are performed on an isolated task copy: explicit Checkpoint
-selection is validated against ComfyUI, and selected LoRAs are inserted as a
-standard `LoraLoader` chain. Diffusers follows its own SDXL execution path.
+One generation request remains active at a time. A generation job's `completed`
+status means Concept planning and Image submission completed; image rendering
+status and gallery history are queried from Image Forge. Task result references
+remain in Orchestrator's existing in-memory job map. This responsibility migration
+does not add durable workflow scheduling, automatic generation replay, or parallel
+execution. See [the migration inventory](../../Docs/Orchestrator-Boundaries.zh-CN.md)
+for module responsibilities, public APIs, changed files and validation.

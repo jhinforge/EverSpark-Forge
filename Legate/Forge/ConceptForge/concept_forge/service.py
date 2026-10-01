@@ -171,7 +171,7 @@ class ConceptService:
         if not isinstance(document, dict):
             raise ConceptError("Concept Forge model returned a non-object subject JSON response")
 
-        # Identity and version sequencing are Orchestrator state, not model output.
+        # Identity and version sequencing are Concept Forge state, not model output.
         # Small local models can echo an earlier revision from conversation context;
         # always stamp the protected envelope before validating the editable content.
         for protected_key in (

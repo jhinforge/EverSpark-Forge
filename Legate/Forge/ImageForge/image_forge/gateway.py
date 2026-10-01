@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+from Aegis.Storage.output_resources import OutputResources
 from .port import ImageEngine, ImageRequest
 
 
@@ -26,6 +27,7 @@ class ImageGateway:
         self.database = database
         Path(database).parent.mkdir(parents=True, exist_ok=True)
         self.output_directory = Path(output_directory).resolve()
+        self.outputs = OutputResources(self.output_directory, {".png", ".jpg", ".jpeg", ".webp"})
         self._lock = threading.RLock()
         with self._connect() as connection:
             connection.execute("""CREATE TABLE IF NOT EXISTS image_jobs (
@@ -127,10 +129,7 @@ class ImageGateway:
                 images.append({**image, "prompt_id": row["id"]})
         # Include existing ComfyUI outputs created before the image job catalog.
         known = {(image["subfolder"], image["filename"]) for image in images}
-        legacy = sorted((path for path in self.output_directory.rglob("*")
-                         if path.is_file() and not path.is_symlink() and
-                         path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}),
-                        key=lambda path: path.stat().st_mtime, reverse=True)
+        legacy = self.outputs.files()
         for path in legacy:
             if path.is_symlink():
                 continue
@@ -144,11 +143,6 @@ class ImageGateway:
         return images[:limit]
 
     def image_path(self, filename: str, subfolder: str = "", kind: str = "output") -> Path:
-        if kind != "output" or not filename or not self.output_directory.is_dir():
+        if kind != "output":
             raise ValueError("Image is unavailable")
-        path = (self.output_directory / subfolder / filename).resolve()
-        if path == self.output_directory or self.output_directory not in path.parents:
-            raise ValueError("Invalid image path")
-        if path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"} or not path.is_file():
-            raise ValueError("Image is unavailable")
-        return path
+        return self.outputs.path(filename, subfolder)

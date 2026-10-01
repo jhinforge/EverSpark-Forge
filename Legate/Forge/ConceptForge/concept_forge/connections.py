@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
-import os
 import threading
 import uuid
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from Archon.Vault.concept_configuration import ConceptConfigurationVault
 from .adapters import create_adapters
 from .adapters.openai_compatible import OpenAICompatibleAdapter
 from .gateway import ConceptGateway
@@ -24,8 +23,9 @@ class ConceptConnections:
         self.lock = threading.RLock()
         self.configured = config
         self.logger = logger
-        if path.is_file():
-            data = json.loads(path.read_text(encoding="utf-8"))
+        self.vault = ConceptConfigurationVault(path)
+        data = self.vault.read()
+        if data is not None:
             self.connections = data["connections"]
             self.default = data.get("default", config.get("provider", "ollama"))
         else:
@@ -46,16 +46,7 @@ class ConceptConnections:
         self.gateway.default = gateway.default
 
     def _write(self) -> None:
-        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        temporary = self.path.with_name(f".{self.path.name}.{uuid.uuid4().hex}.tmp")
-        try:
-            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8") as output:
-                json.dump({"default": self.default, "connections": self.connections}, output, ensure_ascii=False)
-            os.replace(temporary, self.path)
-            os.chmod(self.path, 0o600)
-        finally:
-            temporary.unlink(missing_ok=True)
+        self.vault.write({"default": self.default, "connections": self.connections})
 
     def public(self) -> dict[str, Any]:
         with self.lock:

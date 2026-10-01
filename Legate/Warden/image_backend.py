@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def _config(values: dict[str, str]) -> dict:
     configured = values.get("EVERSPARK_ORCHESTRATOR_CONFIG", "").strip()
     path = Path(configured).expanduser() if configured else (
-        ROOT / "Archon/Orchestrator/orchestrator/config/default_config.json")
+        ROOT / "Archon/Vault/default_config.json")
     if not path.is_absolute():
         path = ROOT / path
     return json.loads(path.read_text(encoding="utf-8"))

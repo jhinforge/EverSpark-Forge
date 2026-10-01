@@ -17,7 +17,7 @@ class RemoteRuntime:
         with orchestrator._task_jobs_lock:
             queued = any(job["status"] in {"queued", "running"}
                          for job in orchestrator._task_jobs.values())
-        return queued or orchestrator._task_lock.locked()
+        return queued or orchestrator._task_lock.locked() or self.server.application.concept.busy()
 
     def close(self):
         self.server.shutdown()
@@ -34,11 +34,11 @@ def create_runtime(bindings, control_url, config_loader=None):
         path = str(root / relative)
         if path not in sys.path:
             sys.path.insert(0, path)
-    from orchestrator.config.config import load_config
-    from orchestrator.core.orchestrator import Orchestrator
+    from Archon.Vault.runtime_config import load_config
+    from Archon.Gate.application import GateApplication
     from orchestrator.core.server import OrchestratorServer
     config = (config_loader or load_config)()
     config["remote_nodes"] = {f"{forge}_node_id": node_id for forge, node_id in bindings.items()}
     config["remote_nodes"]["control_url"] = control_url
     config["concept_forge"]["provider"] = "ollama"
-    return RemoteRuntime(OrchestratorServer(("127.0.0.1", 0), Orchestrator(config)))
+    return RemoteRuntime(OrchestratorServer(("127.0.0.1", 0), GateApplication(config)))

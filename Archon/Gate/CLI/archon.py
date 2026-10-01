@@ -100,12 +100,12 @@ def start() -> int:
                          "Legate/Forge/ImageForge", "Legate/Forge/ConceptForge/Memory",
                          "Aegis/Logging"):
                 sys.path.insert(0, str(REPO_ROOT / path))
-            from orchestrator.config.config import load_config
-            from orchestrator.core.orchestrator import Orchestrator
+            from Archon.Vault.runtime_config import load_config
+            from Archon.Gate.application import GateApplication
             from orchestrator.core.server import OrchestratorServer
             remote_port = int(os.environ.get("EVERSPARK_REMOTE_ORCHESTRATOR_PORT", str(backend_port + 2)))
             remote_server = OrchestratorServer(("127.0.0.1", remote_port),
-                                               Orchestrator(load_config()))
+                                               GateApplication(load_config()))
         portal = WebUIServer(load_settings(), logger, forge_bindings=forge_bindings)
         worker = threading.Thread(target=backend.serve_forever, name="archon-backend", daemon=True)
         worker.start()

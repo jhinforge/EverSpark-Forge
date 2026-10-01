@@ -38,11 +38,33 @@ from image_forge.models.resolver import (  # noqa: E402
     resolve_checkpoint,
 )
 from orchestrator.config.config import load_config  # noqa: E402
-from orchestrator.core.orchestrator import Orchestrator  # noqa: E402
+from Archon.Gate.application import GateApplication as Orchestrator
+from orchestrator.core.orchestrator import Orchestrator as TaskOrchestrator  # noqa: E402
 from orchestrator.core.server import OrchestratorServer  # noqa: E402
-from orchestrator.core.task_runner import TaskRunner  # noqa: E402
+from concept_forge.planning import ConceptPlanning
+from concept_forge.workspace import ConceptWorkspace
+from image_forge.management import ImageManagement
+from types import SimpleNamespace  # noqa: E402
 from everspark_logging import LogConfig, get_logger  # noqa: E402
 
+
+
+class PipelineFixture:
+    """Compose real Forge operations around the historical test doubles."""
+    def run(self, user_text, history=None, notify=None, subject=None, selection=None,
+            saved_negative_prompt=None, previous_positive_prompt="", change_negative_prompt=False):
+        planning = ConceptPlanning.__new__(ConceptPlanning)
+        planning.concept = self.concept
+        planning.supported_models = self.supported_models
+        planning.max_model_retries = self.max_model_retries
+        planning.max_batch_size = self.max_batch_size
+        instruction, model_selection = planning.plan(user_text, history, notify, subject,
+            selection, saved_negative_prompt, previous_positive_prompt, change_negative_prompt)
+        image = ImageManagement(self.gateway, None)
+        result = image.generate(instruction, selection, notify)
+        result["selection"].update(model_selection)
+        result["subject"] = {"subject_id": subject.subject_id, "revision": subject.revision} if subject else None
+        return result
 
 class FakeGateway:
     """Capture normalized image requests without starting a model runtime."""
@@ -81,7 +103,7 @@ class UnicodeTests(unittest.TestCase):
 
 class ConfigurationTests(unittest.TestCase):
     def test_existing_config_can_select_diffusers_without_new_adapter_section(self) -> None:
-        config_path = REPO_ROOT / "Archon/Orchestrator/orchestrator/config/default_config.json"
+        config_path = REPO_ROOT / "Archon/Vault/default_config.json"
         data = json.loads(config_path.read_text(encoding="utf-8"))
         data["image_forge"]["adapters"].pop("diffusers")
         with tempfile.TemporaryDirectory() as directory:
@@ -256,14 +278,16 @@ class BatchTests(unittest.TestCase):
                 self.requests = []
 
             def select(self, name=""):
-                return DiffusersAdapter({}) if name == "diffusers" else None
+                adapter = DiffusersAdapter({})
+                adapter.health = lambda: True
+                return adapter if name == "diffusers" else None
 
             def submit(self, request, notify=None, engine=""):
                 self.requests.append((engine, request))
                 return "job", {"workflow": "diffusers-sdxl", "checkpoint": "test.safetensors",
                                "vae": "", "loras": []}
 
-        runner = TaskRunner.__new__(TaskRunner)
+        runner = PipelineFixture()
         runner.concept = Concept()
         runner.gateway = Gateway()
         runner.supported_models = {"illustrious"}
@@ -310,7 +334,7 @@ class BatchTests(unittest.TestCase):
                 self.workflows.append(workflow)
                 return f"prompt-{len(self.workflows)}"
 
-        runner = TaskRunner.__new__(TaskRunner)
+        runner = PipelineFixture()
         runner.concept = FakeConceptForge()
         runner.workflow = FakeWorkflow()
         runner.image = FakeImageForge()
@@ -373,7 +397,7 @@ class BatchTests(unittest.TestCase):
                 return "prompt-selected"
 
         config = load_config()
-        runner = TaskRunner.__new__(TaskRunner)
+        runner = PipelineFixture()
         runner.concept = FakeConceptForge()
         runner.workflow = WorkflowManager(config["workflow"])
         runner.image = FakeImageForge()
@@ -446,7 +470,7 @@ class SubjectIntegrationTests(unittest.TestCase):
             orchestrator.save_subject(subject)
             orchestrator.save_subject(new_subject("other-character", "Other Character"))
             orchestrator.select_session_subject("old-session", "old-character")
-            orchestrator.memory.record_conversation("new-session", "hello", "hi")
+            orchestrator.concept.memory.record_conversation("new-session", "hello", "hi")
             orchestrator.select_session_subject("new-session", "old-character")
             self.assertEqual(orchestrator.get_history("new-session")[0]["content"], "hello")
             self.assertEqual(orchestrator.get_session_subject("old-session")["subject_id"], "old-character")
@@ -458,10 +482,10 @@ class SubjectIntegrationTests(unittest.TestCase):
             self.assertEqual(orchestrator.get_session_subject("new-session")["subject_id"], "old-character")
 
             concept = Concept()
-            orchestrator.runner.concept = concept
-            orchestrator.runner.workflow = Workflow()
-            orchestrator.runner.image = Image()
-            orchestrator.runner.gateway = FakeGateway(orchestrator.runner)
+            orchestrator.concept.service = orchestrator.concept.planning.concept = concept
+            orchestrator.image.workflow = Workflow()
+            orchestrator.image.backend = Image()
+            orchestrator.image.gateway = FakeGateway(SimpleNamespace(workflow=orchestrator.image.workflow, image=orchestrator.image.backend))
             result = orchestrator.submit("Place her on a rooftop", "new-session")["result"]
             self.assertTrue(concept.assert_existing)
             self.assertEqual(result["subject"]["subject_id"], "old-character")
@@ -486,7 +510,7 @@ class SubjectIntegrationTests(unittest.TestCase):
             config = load_config()
             config["memory"]["database"] = str(Path(directory) / "memory.db")
             orchestrator = Orchestrator(config)
-            orchestrator.runner.concept = FakeConcept()
+            orchestrator.concept.service = orchestrator.concept.planning.concept = FakeConcept()
             initial = new_subject("subject-a", "Subject A")
             orchestrator.save_subject(initial)
             metadata = orchestrator.revise_subject_group("subject-a", "metadata", "add a note")
@@ -538,16 +562,16 @@ class SubjectIntegrationTests(unittest.TestCase):
             config = load_config()
             config["memory"]["database"] = str(Path(directory) / "memory.db")
             orchestrator = Orchestrator(config)
-            orchestrator.runner.concept = Concept()
-            orchestrator.runner.workflow = Workflow()
-            orchestrator.runner.image = Image()
+            orchestrator.concept.service = orchestrator.concept.planning.concept = Concept()
+            orchestrator.image.workflow = Workflow()
+            orchestrator.image.backend = Image()
             class DefaultGateway(FakeGateway):
                 def select(self, name=""):
                     engine = super().select(name)
-                    engine.default_negative_prompt = orchestrator.runner.workflow.default_negative_prompt
+                    engine.default_negative_prompt = orchestrator.image.workflow.default_negative_prompt
                     return engine
 
-            orchestrator.runner.gateway = DefaultGateway(orchestrator.runner)
+            orchestrator.image.gateway = DefaultGateway(SimpleNamespace(workflow=orchestrator.image.workflow, image=orchestrator.image.backend))
             first = orchestrator.submit("画一个角色", "session")["result"]
             second = orchestrator.submit("改变背景", "session")["result"]
             third = orchestrator.submit("修改负面提示词", "session")["result"]
@@ -556,8 +580,8 @@ class SubjectIntegrationTests(unittest.TestCase):
             self.assertEqual(third["negative_prompt"], "bad anatomy, negative-3")
             explicit_first = orchestrator.submit("修改负面提示词", "new-session")["result"]
             self.assertEqual(explicit_first["negative_prompt"], "bad anatomy, negative-4")
-            self.assertIn("portrait", orchestrator.runner.concept.histories[1][-1]["content"])
-            self.assertEqual(orchestrator.memory.get_subject_prompt(
+            self.assertIn("portrait", orchestrator.concept.service.histories[1][-1]["content"])
+            self.assertEqual(orchestrator.concept.memory.get_subject_prompt(
                 orchestrator.get_session_subject("session")["subject_id"]
             )["negative_prompt"], "bad anatomy, negative-3")
 
@@ -596,10 +620,10 @@ class SubjectIntegrationTests(unittest.TestCase):
             config = load_config()
             config["memory"]["database"] = str(Path(directory) / "memory.db")
             orchestrator = Orchestrator(config)
-            orchestrator.runner.concept = FakeConceptForge()
-            orchestrator.runner.workflow = FakeWorkflow()
-            orchestrator.runner.image = FakeImageForge()
-            orchestrator.runner.gateway = FakeGateway(orchestrator.runner)
+            orchestrator.concept.service = orchestrator.concept.planning.concept = FakeConceptForge()
+            orchestrator.image.workflow = FakeWorkflow()
+            orchestrator.image.backend = FakeImageForge()
+            orchestrator.image.gateway = FakeGateway(SimpleNamespace(workflow=orchestrator.image.workflow, image=orchestrator.image.backend))
 
             response = orchestrator.submit("Put her on a rooftop", "session-a")
             result = response["result"]
@@ -635,7 +659,7 @@ class SubjectIntegrationTests(unittest.TestCase):
             config["memory"]["database"] = str(Path(directory) / "memory.db")
             orchestrator = Orchestrator(config)
             concept = FakeConceptForge()
-            orchestrator.runner.concept = concept
+            orchestrator.concept.service = orchestrator.concept.planning.concept = concept
 
             first = orchestrator.discuss("She has silver hair", "session-a")
             second = orchestrator.discuss("Keep that design", "session-a")
@@ -696,12 +720,12 @@ class APITests(unittest.TestCase):
             self._connection_test_jobs = {}
             self.connection_gate = None
 
-        start_task = Orchestrator.start_task
-        task_job = Orchestrator.task_job
-        _execute_task = Orchestrator._execute_task
-        start_concept_connection_test = Orchestrator.start_concept_connection_test
-        _run_concept_connection_test = Orchestrator._run_concept_connection_test
-        concept_connection_test_job = Orchestrator.concept_connection_test_job
+        start_task = TaskOrchestrator.start_task
+        task_job = TaskOrchestrator.task_job
+        _execute_task = TaskOrchestrator._execute_task
+        start_concept_connection_test = ConceptWorkspace.start_concept_connection_test
+        _run_concept_connection_test = ConceptWorkspace._run_concept_connection_test
+        concept_connection_test_job = ConceptWorkspace.concept_connection_test_job
 
         def get_history(self, session_id):
             return [{"role": "user", "content": session_id}]

@@ -48,7 +48,8 @@ class RemoteCreationWebUITests(unittest.TestCase):
             runtime = create_runtime(bindings, control_url, config_loader)
             from concept_forge.subjects import new_subject
             document = new_subject("test-remote-character", "Test remote character")
-            runtime.server.orchestrator._refresh_session_subject = lambda *args, **kwargs: document
+            if not getattr(self, "real_subject", False):
+                runtime.server.application.concept._refresh_session_subject = lambda *args, **kwargs: document
             return runtime
         self.factory = factory
         self.bindings = ForgeBindings(self.nodes, self.root / "forge_bindings.json",
@@ -86,7 +87,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
             "checkpoints": ["model.safetensors"], "vaes": [], "loras": [],
             "defaults": {"workflow": "base", "checkpoint": "model.safetensors"}}
         handlers = {
-            "chat": lambda _: {"model": "illustrious", "positive_prompt": "portrait", "negative_prompt": "bad", "count": 1, "status": "over"},
+            "chat": self.concept_response,
             "resources": lambda _: resources,
             "default_negative": lambda _: {"negative_prompt": "bad"},
             "submit": lambda _: {"prompt_id": "remote-job", "selection": {"workflow": "base", "checkpoint": "model.safetensors", "vae": "", "loras": []}},
@@ -106,6 +107,44 @@ class RemoteCreationWebUITests(unittest.TestCase):
         except Exception as exc:
             if not self.stop.is_set():
                 self.agent_errors.append(exc)
+
+    def concept_response(self, payload):
+        delimiter = "The required output template/current document is:\n"
+        system = payload["messages"][0]["content"]
+        if delimiter in system:
+            document = json.loads(system.split(delimiter, 1)[1])
+            document["identity"]["display_name"] = "Remote character"
+            return document
+        return {"model": "illustrious", "positive_prompt": "portrait",
+                "negative_prompt": "bad", "count": 1, "status": "over"}
+
+    def test_complete_concept_business_and_ledger_survive_two_node_generation(self):
+        self.real_subject = True
+        self.select_pair()
+        job = self.call("/api/generate/start", {"message": "portrait", "session_id": "owned-by-concept"})["job"]
+        for _ in range(100):
+            result = self.call("/api/generate/jobs?job_id=" + job["id"])["job"]
+            if result["status"] not in {"queued", "running"}:
+                break
+            time.sleep(.01)
+        self.assertEqual(result["status"], "completed", result)
+        current = self.call("/api/subjects/current?session_id=owned-by-concept")["document"]
+        self.assertEqual(current["identity"]["display_name"], "Remote character")
+        self.assertEqual(current["subject_id"], result["response"]["result"]["subject"]["subject_id"])
+        self.assertEqual(len(self.call("/api/conversation/history?session_id=owned-by-concept")["messages"]), 2)
+        self.assertEqual(self.seen.count(("concept", "concept", "chat")), 2)
+        self.assertEqual(self.seen.count(("image", "image", "submit")), 1)
+        orchestrator = self.bindings.runtime.server.orchestrator
+        self.assertFalse(hasattr(orchestrator, "memory"))
+        self.assertFalse(hasattr(orchestrator, "image_history"))
+        from everspark_memory import SQLiteMemoryStore
+        ledger_backed_memory = SQLiteMemoryStore(str(self.root / "memory.db"))
+        self.assertEqual(ledger_backed_memory.get_subject(current["subject_id"]), current)
+        poll = self.call("/api/results?prompt_id=remote-job")
+        self.assertEqual(poll["results"][0]["status"], "completed")
+        with urlopen(self.url + "/api/image/view?filename=render.png", timeout=5) as response:
+            self.assertEqual(response.read(), self.image_bytes)
+        self.assertEqual(self.agent_errors, [])
 
     def select_pair(self):
         for role in ("concept", "image"):

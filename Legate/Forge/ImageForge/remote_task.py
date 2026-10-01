@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-for module_path in ("Archon/Orchestrator", "Legate/Forge/ImageForge", "Legate/Forge"):
+for module_path in ("", "Legate/Forge/ImageForge", "Legate/Forge"):
     sys.path.insert(0, str(ROOT / module_path))
 
-from orchestrator.config.config import load_config
+from Archon.Vault.runtime_config import load_config
 from image_forge.adapters import create_engines, discover_plugins
 from image_forge.gateway import ImageGateway
 from image_forge.port import ImageRequest
@@ -44,17 +43,9 @@ def run(action: str, payload: dict) -> dict:
         filename = str(payload.get("filename", ""))
         subfolder = str(payload.get("subfolder", ""))
         kind = str(payload.get("type", "output"))
-        offset = payload.get("offset")
-        if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
-            raise ValueError("Invalid image offset")
-        path = gateway.image_path(filename, subfolder, kind)
-        size = path.stat().st_size
-        if size > 100 * 1024 * 1024:
-            raise ValueError("Image exceeds transfer limit")
-        with path.open("rb") as stream:
-            stream.seek(offset)
-            chunk = stream.read(24576)
-        return {"size": size, "data": base64.b64encode(chunk).decode("ascii")}
+        if kind != "output":
+            raise ValueError("Invalid image path")
+        return gateway.outputs.chunk(filename, subfolder, payload.get("offset"))
     raise ValueError("Unsupported image task")
 
 

@@ -35,7 +35,7 @@ for module_path in ("Archon/Orchestrator", "Legate/Forge", "Legate/Forge/Concept
     sys.path.insert(0, str(ROOT / module_path))
 
 from orchestrator.config.config import load_config
-from orchestrator.core.orchestrator import Orchestrator
+from Archon.Gate.application import GateApplication as Orchestrator
 from orchestrator.core.remote_image import RemoteImageGateway
 from image_forge.port import ImageRequest
 from concept_forge.subjects import new_subject
@@ -469,7 +469,7 @@ class NodeBridgeTests(unittest.TestCase):
                 config["remote_nodes"] = {("concept_node_id" if node_target else "concept_instance_id"): bridge.node_id(99) if node_target else 99,
                                           "control_url": f"http://127.0.0.1:{control.server_port}"}
                 orchestrator = Orchestrator(config)
-                orchestrator._refresh_session_subject = lambda *args, **kwargs: {"subject_id": "test"}
+                orchestrator.concept._refresh_session_subject = lambda *args, **kwargs: {"subject_id": "test"}
                 tasks = []
                 def agent():
                     task = post(bridge.url, "/node/next", {"instance_id": 99, "session": session})
@@ -685,7 +685,7 @@ class NodeBridgeTests(unittest.TestCase):
                     "control_url": f"http://127.0.0.1:{control.server_port}"}
                 orchestrator = Orchestrator(config)
                 document = new_subject("remote-character", "Remote character")
-                orchestrator._refresh_session_subject = lambda *args, **kwargs: document
+                orchestrator.concept._refresh_session_subject = lambda *args, **kwargs: document
                 concept_worker = threading.Thread(target=agent, args=(99, 1), daemon=True)
                 image_worker = threading.Thread(target=agent, args=(101, 3), daemon=True)
                 concept_worker.start()
