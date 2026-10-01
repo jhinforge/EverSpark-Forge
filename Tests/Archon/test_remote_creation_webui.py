@@ -97,7 +97,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
             "synthesize": lambda p: {"status": "completed", "audio": [{
                 "filename": "speech.wav", "sample_rate": 48000, "text": p["text"],
                 **({"voice_description": p["voice_description"]} if p.get("voice_description") else {})}]},
-            "history": lambda _: {"audio": [{"filename": "speech.wav"}]} if role == "audio" else {"images": []},
+            "history": lambda _: {"audio": [{"filename": "speech.wav"}]} if role == "audio" else {"images": getattr(self, "history_images", [])},
         }
         try:
             while not self.stop.is_set():
@@ -292,6 +292,18 @@ class RemoteCreationWebUITests(unittest.TestCase):
     def select_pair(self):
         for role in ("concept", "image"):
             self.call("/api/forge-bindings", {"forge": role, "node_id": self.identities[role]})
+
+    def test_gallery_lists_remote_outputs_before_transferring_any_image(self):
+        self.history_images = [{"filename": "render.png", "subfolder": "", "type": "output",
+                                "url": "/api/image/view?filename=render.png"}]
+        self.select_pair()
+        history = self.call("/api/history?limit=36")
+        self.assertEqual(history["images"], self.history_images)
+        self.assertNotIn(("image", "image", "fetch"), self.seen)
+        with urlopen(self.url + history["images"][0]["url"], timeout=5) as response:
+            self.assertEqual(response.read(), self.image_bytes)
+        self.assertEqual(self.seen.count(("image", "image", "fetch")), 1)
+        self.assertEqual(self.agent_errors, [])
 
     def test_selection_generation_result_transfer_and_persistent_restore(self):
         with patch.dict("os.environ", {"EVERSPARK_ARCHON_ONLY": "1"}):

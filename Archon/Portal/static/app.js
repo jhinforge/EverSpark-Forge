@@ -2246,8 +2246,12 @@ async function loadAudioHistory() {
   }
 }
 
-async function loadHistory() {
-  const audioHistory = loadAudioHistory();
+function loadHistory() {
+  void loadAudioHistory();
+  return loadImageHistory();
+}
+
+async function loadImageHistory() {
   elements.galleryGrid.replaceChildren();
   const loading = document.createElement("div");
   loading.className = "empty-collection";
@@ -2270,8 +2274,6 @@ async function loadHistory() {
     empty.className = "empty-collection";
     empty.textContent = error.message;
     elements.galleryGrid.appendChild(empty);
-  } finally {
-    await audioHistory;
   }
 }
 

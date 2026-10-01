@@ -7,15 +7,15 @@ function element(tag) {
   return {tag, children: [], append(...items) {this.children.push(...items);},
     appendChild(item) {this.children.push(item);}, replaceChildren(...items) {this.children = items;}};
 }
-const stage = element('stage'), audioHistory = element('history');
+const stage = element('stage'), audioHistory = element('history'), gallery = element('gallery');
 const completedImage = {forge: 'image', status: 'completed', result: {outputs: [{images: [{filename: 'ready.png'}]}]}};
-const context = {document: {createElement: element}, elements: {resultStage: stage},
+const context = {document: {createElement: element}, elements: {resultStage: stage, galleryGrid: gallery}, uiText: (el, value) => {el.textContent = value;},
   URLSearchParams, encodeURIComponent, t: x => x, setGenerationState() {},
   transientApiError: () => false, setTimeout: fn => fn(),
   imageButton: image => ({tag: 'image', ...image}), $: () => audioHistory};
 vm.createContext(context);
 vm.runInContext(extract('async function waitForGeneration(', 'async function generate(')
-  + extract('function renderCreation(', 'async function loadHistory('), context);
+  + extract('function renderCreation(', 'function downloadOutputsArchive('), context);
 (async () => {
   context.api = async () => ({job: {status: 'failed', error: 'Audio Forge synthesize failed: backend detail',
     tasks: [completedImage, {forge: 'audio', status: 'failed'}]}});
@@ -36,5 +36,20 @@ vm.runInContext(extract('async function waitForGeneration(', 'async function gen
   context.api = async () => {throw new Error('Selected Audio node offline');};
   await context.loadAudioHistory();
   assert.equal(audioHistory.children[0].textContent, 'Selected Audio node offline');
-  console.log('Audio results and partial generation: passed');
+  let releaseAudio;
+  context.api = path => path.startsWith('/api/audio/')
+    ? new Promise(resolve => {releaseAudio = resolve;})
+    : Promise.resolve({images: [{filename: 'gallery.png'}]});
+  await Promise.race([context.loadHistory(), new Promise((_, reject) => setTimeout(() => reject(new Error('Image history waited for audio')), 100))]);
+  assert.equal(gallery.children[0].filename, 'gallery.png');
+  releaseAudio({audio: []});
+  await new Promise(resolve => setImmediate(resolve));
+  context.api = async path => {
+    if (path.startsWith('/api/audio/')) return {audio: [{filename: 'independent.wav'}]};
+    throw new Error('Image Forge offline');
+  };
+  await context.loadHistory();
+  assert.equal(gallery.children[0].textContent, 'Image Forge offline');
+  assert.equal(audioHistory.children[0].children[1].src, '/api/audio/file?filename=independent.wav');
+  console.log('Audio results, partial generation and independent histories: passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

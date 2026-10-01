@@ -87,8 +87,14 @@ class RemoteImageGateway:
 
     def history(self, limit: int = 24) -> list[dict]:
         images = self._call("history", {"limit": limit})["images"]
+        if not isinstance(images, list):
+            raise RuntimeError("Remote Image Forge returned invalid history")
+        # Return descriptors immediately; the file endpoint fills the cache on demand.
+        # Fetching every full image here blocks the gallery behind the Node task queue.
         for image in images:
-            self.image_path(image["filename"], image.get("subfolder", ""), image.get("type", "output"))
+            if image.get("type", "output") != "output":
+                raise ValueError("Invalid image path")
+            self.outputs.path(image["filename"], image.get("subfolder", ""), require_file=False)
         return images
 
     def image_path(self, filename: str, subfolder: str = "", kind: str = "output") -> Path:
