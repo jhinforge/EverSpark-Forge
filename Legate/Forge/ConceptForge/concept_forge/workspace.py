@@ -398,7 +398,10 @@ class ConceptWorkspace:
         return PreparedGeneration(self, session, text, document, instruction, model_selection)
 
     def resources(self):
-        llms = self.service.list_models()
+        try:
+            llms = self.service.list_models()
+        except (OSError, RuntimeError):
+            llms = []
         default_llm = self.planning._resolve_model(self.service.model, llms)
         providers = self.connections.public()["connections"]
         models = {self.service.gateway.default: llms}

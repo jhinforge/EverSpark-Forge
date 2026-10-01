@@ -25,6 +25,9 @@ def run(action: str, payload: dict) -> dict:
                            config["image_forge"]["adapter"])
     if action == "resources":
         return gateway.resources(str(payload.get("engine", "")))
+    if action == "plugins":
+        from image_forge.plugins import PluginManager
+        return PluginManager(manifests, gateway).plugins()
     if action == "default_negative":
         selected = gateway.select(str(payload.get("engine", "")))
         return {"negative_prompt": selected.default_negative_prompt(str(payload.get("workflow", "")))}

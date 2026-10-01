@@ -372,6 +372,11 @@ class DirectDownloadManager:
             errors = [line for line in lines if line.startswith("Error:")]
             detail = errors[-1] if errors else next((line for line in reversed(lines) if line), "unknown error")
             raise DownloadError(f"Ollama model registration failed: {detail}")
+        # Share the registration marker with cloud-library inventory checks.
+        marker = self.settings.modelfile_root / f"{model_path.name}.registered.json"
+        temporary = marker.with_name(marker.name + ".tmp")
+        temporary.write_text(json.dumps({"size": model_path.stat().st_size, "runtime_name": name}), encoding="utf-8")
+        temporary.replace(marker)
 
     def _normalize_request(
         self, kind: str, url: str, filename: str, runtime_name: str

@@ -89,6 +89,11 @@ class RemoteCreationWebUITests(unittest.TestCase):
             "defaults": {"workflow": "base", "checkpoint": "model.safetensors"}}
         handlers = {
             "chat": self.concept_response,
+            "models": lambda _: ["everspark-concept", "downloaded-llm:latest"],
+            "plugins": lambda _: {"default": "comfyui", "plugins": [{"id": "comfyui", "name": "ComfyUI", "installed": True, "online": True}]},
+            "models_download_start": lambda p: {"job_id": "f" * 32, "kind": p["kind"], "status": "queued"},
+            "models_download_job": lambda p: {"job_id": p["job_id"], "kind": "checkpoint", "status": "completed"},
+            "models_download_cancel": lambda p: {"job_id": p["job_id"], "kind": "checkpoint", "status": "cancelled"},
             "resources": lambda _: resources,
             "default_negative": lambda _: {"negative_prompt": "bad"},
             "submit": lambda _: {"prompt_id": "remote-job", "selection": {"workflow": "base", "checkpoint": "model.safetensors", "vae": "", "loras": []}},
@@ -193,6 +198,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
         self.assertEqual(self.seen.count(("concept", "concept", "chat")), 3)
         self.assertEqual(self.seen.count(("audio", "audio", "synthesize")), 1)
         self.assertEqual(self.seen.count(("audio", "audio", "fetch")), 2)
+
         with urlopen(self.url + "/api/audio/file?filename=speech.wav", timeout=5) as response:
             self.assertEqual(response.headers["Content-Type"], "audio/wav")
             self.assertEqual(response.read(), self.audio_bytes)
@@ -202,6 +208,56 @@ class RemoteCreationWebUITests(unittest.TestCase):
         self.assertEqual(self.seen.count(("audio", "audio", "synthesize")), 1)
         self.assertTrue(all(role == forge for role, forge, _ in self.seen))
         self.assertEqual(self.agent_errors, [])
+
+
+    def test_model_downloads_follow_forge_nodes_and_job_queries_keep_original_target(self):
+        self.select_pair()
+        for kind in ("checkpoint", "lora", "vae", "concept_model"):
+            job = self.call("/api/downloads", {"kind": kind, "url": "https://models.example/model"})["job"]
+            forge = "concept" if kind == "concept_model" else "image"
+            self.assertEqual(job["target_node_id"], self.identities[forge])
+            self.assertIn((forge, forge, "models_download_start"), self.seen)
+        job_id = self.identities["image"] + ":image:" + "f" * 32
+        # Rebinding to the other ready node must not retarget the original job.
+        self.call("/api/forge-bindings", {"forge": "image", "node_id": self.identities["concept"]})
+        self.call("/api/downloads/jobs?job_id=" + job_id)
+        self.call("/api/downloads/cancel", {"job_id": job_id})
+        self.assertIn(("image", "image", "models_download_job"), self.seen)
+        self.assertIn(("image", "image", "models_download_cancel"), self.seen)
+
+    def test_image_only_node_uses_third_party_api_and_preserves_default_after_recomposition(self):
+        from Archon.Vault.concept_configuration import ConceptConfigurationVault
+        from concept_forge.port import ChatResponse
+        vault_path = self.root / "api-connections.json"
+        with patch("concept_forge.connections.ConceptConfigurationVault", side_effect=lambda _: ConceptConfigurationVault(vault_path)):
+            self.call("/api/forge-bindings", {"forge": "image", "node_id": self.identities["image"]})
+            saved = self.call("/api/concept/connections/save", {"name": "Third party", "model": "fixture-model",
+                "base_url": "https://api.example/v1", "api_key": "private-fixture"})
+            identifier = next(entry["id"] for entry in saved["connections"] if not entry["builtin"])
+            self.call("/api/concept/connections/default", {"id": identifier})
+            with patch("concept_forge.adapters.openai_compatible.OpenAICompatibleAdapter.chat", side_effect=lambda request:
+                    ChatResponse(json.dumps(self.concept_response({"messages": request.messages})))) as chat:
+                result = self.call("/api/generate", {"message": "portrait", "session_id": "api-only",
+                    "selection": {"concept_provider": identifier, "llm": "fixture-model"}})
+                self.assertTrue(result["ok"], result)
+                self.assertGreater(chat.call_count, 0)
+                resources = self.call("/api/resources")
+                self.assertEqual(resources["defaults"]["concept_provider"], identifier)
+                self.assertEqual(resources["concept_models"][identifier], ["fixture-model"])
+            self.assertNotIn(("concept", "concept", "chat"), self.seen)
+            self.call("/api/forge-bindings", {"forge": "concept", "node_id": self.identities["concept"]})
+            self.assertEqual(self.bindings.runtime.server.application.concept.connections.gateway.default, identifier)
+            plugins = self.call("/api/image/plugins")
+            self.assertTrue(plugins["plugins"][0]["online"])
+            self.assertTrue(plugins["plugins"][0]["remote"])
+            self.nodes.remove(self.identities["concept"])
+            self.assertTrue(self.bindings.url)
+            self.assertTrue(self.bindings.status()["ready"])
+            # An unavailable optional Ollama node must not block explicit API use.
+            with patch("concept_forge.adapters.openai_compatible.OpenAICompatibleAdapter.chat",
+                    side_effect=lambda request: ChatResponse(json.dumps(self.concept_response({"messages": request.messages})))):
+                self.assertTrue(self.call("/api/generate", {"message": "another portrait", "session_id": "api-only",
+                    "selection": {"concept_provider": identifier, "llm": "fixture-model"}})["ok"])
 
     def test_character_voice_without_dialogue_routes_original_chinese_line_to_audio(self):
         self.chinese_dialogue = True

@@ -6,11 +6,28 @@ from .plugins import PluginManager
 from .remote import RemoteImageGateway, RemoteImagePlugins
 
 
+class UnavailableImage:
+    def resources(self, engine=""):
+        return {"workflows": [], "checkpoints": [], "vaes": [], "loras": [], "defaults": {}}
+    def image_plugins(self):
+        return {"plugins": [], "default": ""}
+    def image_health(self):
+        return {"ok": False}
+    def image_history(self, limit=24):
+        return []
+    def __getattr__(self, name):
+        def unavailable(*args, **kwargs):
+            raise ValueError("Select an Image Forge node first")
+        return unavailable
+
+
 def create_management(config):
     from .management import ImageManagement
     settings = config["image_forge"]
     remote = config.get("remote_nodes", {})
     identity = remote.get("image_node_id") or int(remote.get("image_instance_id", 0))
+    if remote.get("remote_only") and not identity:
+        return UnavailableImage()
     output = settings.get("output_directory", str(
         Path(config["memory"]["database"]).parents[1] / "Outputs"))
     manifests = discover_plugins()

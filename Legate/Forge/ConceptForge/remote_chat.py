@@ -13,6 +13,10 @@ from concept_forge.port import ChatRequest
 
 
 def main() -> int:
+    if sys.argv[1:] == ["--models"]:
+        adapter = OllamaAdapter({"base_url": "http://127.0.0.1:11434", "model": "everspark-concept"})
+        print(json.dumps(adapter.list_models()))
+        return 0
     if len(sys.argv) != 2 or len(sys.argv[1]) > 60000:
         return 2
     request = json.loads(sys.argv[1])

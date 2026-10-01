@@ -9,12 +9,14 @@
     let selection = { bindings: {}, ready: false };
     let submitting = false;
     const summary = document.querySelector("#forgeNodeSummary");
+    const downloadTargets = document.querySelector("#modelDownloadTargets");
     function show() {
       const bindings = selection.bindings || {};
+      if (downloadTargets) bind(downloadTargets, `模型下载目标：Image Forge → ${bindings.image?.slice(0, 8) || "未选择"}；GGUF → Concept Forge ${bindings.concept?.slice(0, 8) || "未选择"}。第三方 API 无需下载 GGUF。`);
       const missing = roles.filter((role) => role.id !== "audio" && !bindings[role.id]);
       const message = selection.error || (selection.ready ? "Remote Concept and Image Nodes are connected. Open Create to generate."
         : missing.length === 2 ? "Select the ready Concept and Image machines below to connect generation."
-        : missing[0]?.id === "concept" ? "Select a ready Concept machine to complete the generation connection."
+        : missing[0]?.id === "concept" ? "Select a ready Concept machine or choose an OpenAI Compatible service in Create."
         : missing[0]?.id === "image" ? "Select a ready Image machine to complete the generation connection."
         : "Selected Nodes are unavailable. Check their connection or select replacements.");
       bind(summary, message);

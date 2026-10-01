@@ -23,10 +23,13 @@ class RemoteConceptAdapter:
     def chat(self, request: ChatRequest) -> ChatResponse:
         message = json.dumps({"messages": request.messages, "model": request.model or self.model,
                               "json_mode": request.json_mode}, ensure_ascii=False)
+        return ChatResponse(self._request("chat", message))
+
+    def _request(self, action, message):
         if len(message.encode("utf-8")) > 60000:
             raise ConceptError("Concept request exceeds the node task limit")
         body = json.dumps({**self.target_identity, "forge": "concept",
-                           "action": "chat", "message": message}, ensure_ascii=False).encode("utf-8")
+                           "action": action, "message": message}, ensure_ascii=False).encode("utf-8")
         call = Request(self.url, data=body, headers={"Content-Type": "application/json",
                        "Host": self.url.split("/")[2]}, method="POST")
         try:
@@ -39,10 +42,23 @@ class RemoteConceptAdapter:
         content = result.get("output") if isinstance(result, dict) else None
         if not isinstance(content, str):
             raise ConceptError("Remote Concept Forge returned invalid output")
-        return ChatResponse(content)
+        return content
 
     def list_models(self) -> list[str]:
-        return [self.model]
+        try:
+            if "node_id" in self.target_identity:
+                parts = urlsplit(self.url)
+                with urlopen(Request(f"{parts.scheme}://{parts.netloc}/nodes"), timeout=5) as response:
+                    nodes = json.load(response)["nodes"]
+                if not any(node.get("node_id") == self.target_identity["node_id"]
+                           and node.get("status") == "online" for node in nodes):
+                    return []
+            names = json.loads(self._request("models", "{}"))
+            if not isinstance(names, list) or any(not isinstance(name, str) for name in names):
+                raise ValueError("Invalid model list")
+            return names
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            raise ConceptError("Remote Concept Forge returned invalid models") from exc
 
 
 class RemoteConceptConnections(ConceptConnections):
@@ -50,8 +66,6 @@ class RemoteConceptConnections(ConceptConnections):
         self.remote_instance_id = instance_id
         self.remote_control_url = control_url
         super().__init__(config, logger=logger)
-        self.default = "ollama"
-        self.gateway.default = "ollama"
         self._apply_remote()
 
     def _apply_remote(self) -> None:

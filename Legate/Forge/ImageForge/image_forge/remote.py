@@ -110,9 +110,10 @@ class RemoteImagePlugins:
         self.gateway = gateway
 
     def plugins(self) -> dict:
-        return {"default": self.gateway.default_engine,
-                "plugins": [{"id": name, "name": name, "remote": True}
-                            for name in self.gateway.engines]}
+        result = self.gateway._call("plugins", {})
+        for plugin in result["plugins"]:
+            plugin["remote"] = True
+        return result
 
     def job(self, _job_id: str) -> dict:
         raise ValueError("Image runtime management belongs to the remote node")

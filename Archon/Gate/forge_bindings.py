@@ -8,7 +8,6 @@ from Archon.Steward.NodeManager.identity import validate_id
 from .remote_runtime import create_runtime
 
 ROLES = frozenset({"concept", "image", "audio"})
-REQUIRED_ROLES = frozenset({"concept", "image"})
 
 
 class ForgeBindings:
@@ -30,22 +29,27 @@ class ForgeBindings:
     @property
     def url(self):
         with self.lock:
-            valid = all(self.nodes.configured(node_id) for node_id in self.bindings.values())
+            has_api = bool(self.runtime and getattr(self.runtime, "has_api", lambda: False)())
+            valid = all(self.nodes.configured(node_id) for role, node_id in self.bindings.items()
+                        if role != "audio" and (role != "concept" or not has_api))
             return self.runtime.url if self.runtime and valid else ""
 
     def status(self):
         with self.lock:
             states = {role: self.nodes.status(node_id).get("status", "offline")
                       for role, node_id in self.bindings.items()}
-            return {"bindings": dict(self.bindings), "nodes": states,
-                    "ready": bool(self.url) and all(state == "online" for state in states.values()),
+            has_api = bool(self.runtime and getattr(self.runtime, "has_api", lambda: False)())
+            return {"bindings": dict(self.bindings), "nodes": states, "connected": bool(self.url),
+                    "ready": bool(self.url) and states.get("image") == "online"
+                        and (states.get("concept") == "online" or has_api),
                     "error": self.error}
 
     def restore(self):
         with self.lock:
-            if REQUIRED_ROLES <= set(self.bindings) and all(self.nodes.configured(n) for n in self.bindings.values()):
+            available = {role: node for role, node in self.bindings.items() if self.nodes.configured(node)}
+            if available:
                 try:
-                    self.runtime = self.factory(dict(self.bindings), self.control_url)
+                    self.runtime = self.factory(available, self.control_url)
                 except Exception as exc:
                     self.error = str(exc)[-500:]
 
@@ -68,7 +72,7 @@ class ForgeBindings:
                 raise NodeError("Wait for the current task before changing Forge Nodes", 409)
             replacement = None
             try:
-                if REQUIRED_ROLES <= set(candidate):
+                if candidate:
                     if not all(self.nodes.configured(n) for n in candidate.values()):
                         raise NodeError("Selected Forge Node was removed; select its replacement", 409)
                     replacement = self.factory(candidate, self.control_url)

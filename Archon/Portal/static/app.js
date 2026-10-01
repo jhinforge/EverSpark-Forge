@@ -347,11 +347,11 @@ function renderImagePlugin() {
   elements.imageEngineStatus.textContent = plugin.job_id ? t("Installing tool") :
     !plugin.installed ? t(plugin.online ? "Repair required" : "Not installed") :
     plugin.online ? t("Ready") : t("Offline");
-  elements.imageEngineAction.hidden = (plugin.online && plugin.installed) || Boolean(plugin.job_id);
+  elements.imageEngineAction.hidden = plugin.remote || (plugin.online && plugin.installed) || Boolean(plugin.job_id);
   elements.imageEngineAction.textContent = t(plugin.installed ? "Enable tool" :
     plugin.online ? "Repair tool" : "Install tool");
   elements.imageEngineAction.disabled = !plugin.installed && !plugin.installable;
-  elements.imageEngineDefault.hidden = plugin.id === state.defaultImagePlugin || !plugin.installed;
+  elements.imageEngineDefault.hidden = plugin.remote || plugin.id === state.defaultImagePlugin || !plugin.installed;
 }
 
 async function loadImagePlugins() {
@@ -405,7 +405,8 @@ function updateConceptModels() {
   const models = state.resources.conceptModels?.[provider] || [];
   const preferred = provider === state.resources.defaults.concept_provider
     ? state.resources.defaults.llm : state.resources.conceptProviders?.find((item) => item.id === provider)?.model;
-  fillSelect(elements.llmSelect, models, (item) => item, (item) => item, preferred);
+  const current = elements.llmSelect.value;
+  fillSelect(elements.llmSelect, models, (item) => item, (item) => item, models.includes(current) ? current : preferred);
   elements.llmSelect.disabled = !models.length;
 }
 
@@ -420,10 +421,10 @@ async function loadResources() {
         select.disabled = true;
       }
       elements.addLoraButton.disabled = true;
-      return;
     }
     const data = await api(`/api/resources?engine=${encodeURIComponent(engine)}`);
     if (engine !== elements.imageEngineSelect.value) return;
+    if (data.image_error) showNotice(data.image_error);
     state.resources = {
       workflows: data.workflows || [],
       checkpoints: data.checkpoints || [],
@@ -433,17 +434,23 @@ async function loadResources() {
       defaults: data.defaults || {},
       loraStrengthMode: data.lora_strength_mode || "independent",
     };
+    const availableLoras = new Set(state.resources.loras);
+    state.selectedLoras = state.selectedLoras.filter((item) => availableLoras.has(item.name));
+    renderSelectedLoras();
     if (state.resources.loraStrengthMode === "shared") {
       state.selectedLoras.forEach((item) => { item.strength_clip = item.strength_model; });
       renderSelectedLoras();
     }
-    fillSelect(elements.workflowSelect, state.resources.workflows, (item) => item.id, (item) => item.name, state.resources.defaults.workflow);
-    fillSelect(elements.checkpointSelect, state.resources.checkpoints, (item) => item, (item) => item, state.resources.defaults.checkpoint);
-    fillSelect(elements.vaeSelect, ["", ...state.resources.vaes], (item) => item, (item) => item || t("Checkpoint VAE"));
+    fillSelect(elements.workflowSelect, state.resources.workflows, (item) => item.id, (item) => item.name,
+      state.resources.workflows.some(item => item.id === elements.workflowSelect.value) ? elements.workflowSelect.value : state.resources.defaults.workflow);
+    fillSelect(elements.checkpointSelect, state.resources.checkpoints, (item) => item, (item) => item,
+      state.resources.checkpoints.includes(elements.checkpointSelect.value) ? elements.checkpointSelect.value : state.resources.defaults.checkpoint);
+    fillSelect(elements.vaeSelect, ["", ...state.resources.vaes], (item) => item, (item) => item || t("Checkpoint VAE"), elements.vaeSelect.value);
     state.resources.conceptProviders = data.concept_providers || [];
     state.resources.conceptModels = data.concept_models || {};
     fillSelect(elements.conceptProviderSelect, state.resources.conceptProviders,
-      (item) => item.id, (item) => item.name, state.resources.defaults.concept_provider);
+      (item) => item.id, (item) => item.name, state.resources.conceptProviders.some(item => item.id === elements.conceptProviderSelect.value)
+        ? elements.conceptProviderSelect.value : state.resources.defaults.concept_provider);
     updateConceptModels();
     fillSelect(elements.loraSelect, state.resources.loras, (item) => item, (item) => item);
     elements.workflowSelect.disabled = !state.resources.workflows.length;
@@ -498,7 +505,9 @@ function updateStorageButtons() {
   $$(".storage-pull-button").forEach((button) => {
     const selected = storageSelect(button.dataset.kind)?.selectedOptions?.[0];
     const installed = selected?.dataset.installed === "true";
-    button.disabled = !state.remoteStorage?.enabled || !selected?.value || installed;
+    const targets = state.remoteStorage?.targets;
+    const missingTarget = targets && !targets[button.dataset.kind === "concept_model" ? "concept" : "image"];
+    button.disabled = !state.remoteStorage?.enabled || !selected?.value || installed || missingTarget;
     uiText(button, installed ? "Installed" : "Download");
   });
 }
@@ -760,6 +769,7 @@ function renderStorageJob(job) {
   if (eta && ["queued", "running"].includes(job.status)) parts.push(t("ETA {time}", { time: formatDuration(eta) }));
   if (progress.total) parts.push(t("{count} files", { count: `${progress.completed || 0}/${progress.total}` }));
   elements.storageProgressDetail.textContent = parts.join(" · ");
+  if (job.target_node_id) elements.storageProgressDetail.textContent += ` · ${job.target_forge} · ${job.target_node_id.slice(0, 8)}`;
 }
 
 async function pollStorageJob(jobId) {
@@ -772,7 +782,7 @@ async function pollStorageJob(jobId) {
       renderStorageJob(job);
       if (job.status === "completed") {
         state.storagePollJobId = null;
-        await Promise.all([loadRemoteStorage(), loadResources()]);
+        await Promise.all([loadRemoteStorage(true), loadResources()]);
         return;
       }
       if (job.status === "failed") throw new Error(job.error || t("Remote download failed"));
@@ -832,6 +842,7 @@ function renderDirectDownloadJob(job) {
   uiText(elements.directDownloadStatus, "{name}: {status}{progress}",
     { name: job.name, status: t(job.status), progress: total ? ` · ${percent.toFixed(1)}%` : "" });
   const parts = [];
+  if (job.target_node_id) parts.push(`${job.target_forge} · ${job.target_node_id.slice(0, 8)}`);
   if (total) parts.push(`${formatBytes(completed)} / ${formatBytes(total)}`);
   else if (completed) parts.push(formatBytes(completed));
   if (speed && running) parts.push(`${formatBytes(speed)}/s`);
@@ -1478,9 +1489,12 @@ const forgeNodes = window.EverSparkForgeNodes.initialize({ api, bind: uiText,
   notice: (message, kind) => showNotice(t(message), kind),
   changed: async (selection) => {
     await loadMachines();
-    if (selection.ready) {
+    state.selectedLoras = [];
+    renderSelectedLoras();
+    if (selection.connected) {
       await Promise.all([loadRuntime(), loadImagePlugins(), loadSubjects(), loadCurrentSubject(), loadModelConnections()]);
       await loadResources();
+      if (state.remoteStorage) await loadRemoteStorage(true);
     }
   },
 });

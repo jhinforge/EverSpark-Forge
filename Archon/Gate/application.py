@@ -18,7 +18,7 @@ class GateApplication:
         remote = config.get("remote_nodes", {})
         # Remote-only hosts must never fall back to local GPU execution.
         remote_concept = remote.get("concept_node_id") or remote.get("concept_instance_id")
-        self.audio = AudioService(config) if (not remote_concept
+        self.audio = AudioService(config) if (not remote.get("remote_only") and not remote_concept
             or remote.get("audio_node_id") or remote.get("audio_instance_id")) else None
         self.storage = StorageService(config)
         self.orchestrator = Orchestrator(TaskRunner(self.concept, self.image, self.audio), logger)
@@ -33,7 +33,11 @@ class GateApplication:
 
     def resources(self, engine=""):
         # Combine independently owned resource catalogs only at the HTTP boundary.
-        image = self.image.resources(engine)
+        try:
+            image = self.image.resources(engine)
+        except (OSError, RuntimeError, ValueError) as exc:
+            image = {"workflows": [], "checkpoints": [], "vaes": [], "loras": [],
+                     "defaults": {}, "image_error": str(exc)}
         concept = self.concept.resources()
         image["defaults"].update(concept.pop("defaults"))
         return {**image, **concept}

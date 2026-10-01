@@ -19,6 +19,10 @@ class RemoteRuntime:
                          for job in orchestrator._task_jobs.values())
         return queued or orchestrator._task_lock.locked() or self.server.application.concept.busy()
 
+    def has_api(self):
+        return any(entry.get("type") == "openai_compatible" for entry in
+                   self.server.application.concept.concept_connections()["connections"])
+
     def close(self):
         self.server.shutdown()
         self.thread.join(5)
@@ -40,5 +44,5 @@ def create_runtime(bindings, control_url, config_loader=None):
     config = (config_loader or load_config)()
     config["remote_nodes"] = {f"{forge}_node_id": node_id for forge, node_id in bindings.items()}
     config["remote_nodes"]["control_url"] = control_url
-    config["concept_forge"]["provider"] = "ollama"
+    config["remote_nodes"]["remote_only"] = True
     return RemoteRuntime(OrchestratorServer(("127.0.0.1", 0), GateApplication(config)))

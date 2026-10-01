@@ -49,7 +49,8 @@ class ForgeBindingsTests(unittest.TestCase):
     def test_lazy_remote_runtime_and_durable_node_ids_restore(self):
         state = self.bindings.select({"forge": "concept", "node_id": "a" * 32})
         self.assertFalse(state["ready"])
-        self.assertEqual(self.created, [])
+        self.assertEqual(len(self.created), 1)
+        self.assertTrue(state["connected"])
         self.bindings.select({"forge": "image", "node_id": "b" * 32})
         self.assertTrue(self.bindings.status()["ready"])
         self.assertEqual(json.loads(self.path.read_text()), {"concept": "a" * 32, "image": "b" * 32})
@@ -116,7 +117,7 @@ class ForgeBindingsTests(unittest.TestCase):
         state = restored.select({"forge": "concept", "node_id": "c" * 32})
         self.assertEqual(state["bindings"], {"concept": "c" * 32})
         self.assertFalse(state["ready"])
-        self.assertIsNone(restored.runtime)
+        self.assertIsNotNone(restored.runtime)
         state = restored.select({"forge": "image", "node_id": "d" * 32})
         self.assertTrue(state["ready"])
         self.assertEqual(state["bindings"], {"concept": "c" * 32, "image": "d" * 32})

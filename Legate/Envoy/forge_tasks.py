@@ -16,7 +16,18 @@ def command(forge: str, action: str, message: str) -> tuple[list[str], int] | No
         return ["bash", str(REPO / "Legate/Envoy/update_source.sh")], 1800
     if action == "revision":
         return ["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], 30
+    if forge in {"concept", "image"} and action in {
+            "models_download_start", "models_download_job", "models_download_cancel",
+            "models_download_retry", "models_pull_start", "models_pull_job", "models_installed"}:
+        try:
+            if isinstance(message, str) and len(message.encode()) <= 60000 and isinstance(json.loads(message), dict):
+                return ["python3", str(REPO / "Legate/Warden/model_storage.py"), forge, action, message], 120
+        except ValueError:
+            pass
+        return None
     if forge == "concept":
+        if action == "models":
+            return ["python3", str(REPO / "Legate/Forge/ConceptForge/remote_chat.py"), "--models"], 30
         if action == "chat" and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
             try:
                 payload = json.loads(message)
@@ -34,7 +45,7 @@ def command(forge: str, action: str, message: str) -> tuple[list[str], int] | No
         if action == "discuss" and isinstance(message, str) and 1 <= len(message.strip()) <= 500:
             return ["python3", str(REPO / "Legate/Forge/ConceptForge/verify.py"), message.strip()], 240
     if forge == "image":
-        if action in {"resources", "default_negative", "submit", "poll", "history", "fetch"} and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
+        if action in {"resources", "plugins", "default_negative", "submit", "poll", "history", "fetch"} and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
             try:
                 if isinstance(json.loads(message), dict):
                     return ["python3", str(REPO / "Legate/Forge/ImageForge/remote_task.py"),

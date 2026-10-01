@@ -680,6 +680,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _read_json(self) -> dict[str, Any]:
+        if getattr(self, "_execution_payload", None) is not None:
+            return self._execution_payload
         length = int(self.headers.get("Content-Length", "0"))
         if length < 1 or length > 1_000_000:
             raise ValueError("Request body size is invalid")

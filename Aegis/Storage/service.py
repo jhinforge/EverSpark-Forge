@@ -13,6 +13,13 @@ class StorageService:
     def __init__(self, config):
         self.storage = R2StorageManager(config)
         self.downloads = DirectDownloadManager(config)
+        self.remote = None
+        if config.get("remote_nodes", {}).get("remote_only") or any(
+                config.get("remote_nodes", {}).get(f"{role}_node_id") for role in ("image", "concept")):
+            from .remote_models import RemoteModels
+            self.remote = RemoteModels(config, self.storage)
+            local_resources = self.storage.resources
+            self.storage.resources = lambda: self.remote.annotate(local_resources())
         self.backups = BackupManager(config)
         self.data_archive = LocalDataArchive(self.backups.memory_path,
             self.backups.subject_root, Path(__file__).resolve().parents[2])
@@ -53,9 +60,13 @@ class StorageService:
         return self.backups.job(job_id)
 
     def start_storage_pull(self, kind: str, name: str) -> dict[str, Any]:
+        if self.remote:
+            return self.remote.start("pull", kind, name=name)
         return self.storage.start_pull(kind, name)
 
     def storage_job(self, job_id: str = "") -> dict[str, Any] | None:
+        if self.remote:
+            return self.remote.job("pull", job_id)
         return self.storage.job(job_id)
 
     def start_download(
@@ -65,13 +76,21 @@ class StorageService:
         filename: str = "",
         runtime_name: str = "",
     ) -> dict[str, Any]:
+        if self.remote:
+            return self.remote.start("download", kind, url=url, filename=filename, runtime_name=runtime_name)
         return self.downloads.start(kind, url, filename, runtime_name)
 
     def download_job(self, job_id: str = "") -> dict[str, Any] | None:
+        if self.remote:
+            return self.remote.job("download", job_id)
         return self.downloads.job(job_id)
 
     def cancel_download(self, job_id: str) -> dict[str, Any]:
+        if self.remote:
+            return self.remote.job("download", job_id, "cancel")
         return self.downloads.cancel(job_id)
 
     def retry_download(self, job_id: str) -> dict[str, Any]:
+        if self.remote:
+            return self.remote.job("download", job_id, "retry")
         return self.downloads.retry(job_id)
