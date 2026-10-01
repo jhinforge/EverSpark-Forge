@@ -85,7 +85,7 @@ class CreationTests(unittest.TestCase):
 
     def test_voice_without_dialogue_receives_creative_context_without_image_prompt(self):
         text = "生成一张女孩的肖像，并给她配上年轻女孩的声音"
-        speech = {"text": "你好呀，今天也一起度过愉快的一天吧。"}
+        speech = {"text": "你好呀，今天也一起度过愉快的一天吧。", "voice_description": "young female voice"}
         self.concept.service.generate_speech = Mock(return_value=speech)
         self.audio.execute.side_effect = lambda instruction, *args: {"status": "completed", "audio": [
             {"filename": "speech.wav", "text": instruction["text"]}]}
@@ -194,6 +194,20 @@ class ConceptStageTests(unittest.TestCase):
         self.assertIn("Never read or translate an image prompt", call.messages[0]["content"])
         self.assertIn("language of that request", call.messages[0]["content"])
         self.assertEqual(result, {"text": "你好呀，今天也一起度过愉快的一天吧。"})
+
+    def test_concept_keeps_voice_description_separate_from_spoken_text(self):
+        expected = {"text": "你好呀。", "voice_description": "young female voice"}
+        service = self.service(json.dumps(expected, ensure_ascii=False))
+        result = service.generate_speech("年轻女孩", {"request": "给她配上年轻女孩的声音"})
+        self.assertEqual(result, expected)
+        prompt = service.gateway.chat.call_args.args[0].messages[0]["content"]
+        self.assertIn("voice_description", prompt)
+        self.assertIn("Never put the voice description into text", prompt)
+        for value in ({"text": "hello", "voice_description": None},
+                      {"text": "hello", "voice_description": "x" * 1001},
+                      {"voice_description": "female"}):
+            with self.subTest(value=value), self.assertRaises(ConceptError):
+                self.service(json.dumps(value)).generate_speech("voice", {})
 
     def test_explicit_dialogue_is_returned_verbatim_without_voice_instructions(self):
         spoken = "こんにちは！今日は一緒に出かけよう。"

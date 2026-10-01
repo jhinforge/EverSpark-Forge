@@ -6,6 +6,7 @@ from urllib.request import Request, urlopen
 from Aegis.Storage.output_resources import OutputResources
 from Archon.Gate.remote_target import target
 from Legate.Warden.audio_backend import run
+from .voxcpm import validate_instruction
 
 
 class AudioService:
@@ -55,10 +56,7 @@ class AudioService:
             raise RuntimeError("Remote Audio Forge returned invalid output") from exc
 
     def execute(self, instruction, selection=None, notify=None):
-        if (not isinstance(instruction, dict) or set(instruction) != {"text"}
-                or not isinstance(instruction["text"], str) or not instruction["text"].strip()
-                or len(instruction["text"]) > self.config["audio_forge"]["max_text_chars"]):
-            raise ValueError("Audio Forge requires non-empty bounded speech text")
+        validate_instruction(instruction, self.config["audio_forge"]["max_text_chars"])
         if notify:
             notify("Audio Forge: synthesizing speech")
         result = self._call("synthesize", instruction)

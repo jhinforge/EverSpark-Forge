@@ -75,7 +75,8 @@ Do not generate final image prompts or speech text yet: that is the second stage
 """
 
 SPEECH_SYSTEM_PROMPT = """You are EverSpark Concept Forge's speech-writing stage.
-Return exactly {"text":"the complete text to synthesize"} as JSON, no commentary.
+Return exactly {"text":"the complete spoken text","voice_description":"natural-language voice description"}
+as JSON, no commentary. Keep the two fields separate.
 Preserve explicitly supplied dialogue verbatim, including its language and punctuation.
 If no dialogue is supplied, create one short, natural line spoken by the character
 that fits the character and scene. For an explicitly requested narration or longer
@@ -84,7 +85,13 @@ Use the original user's request to determine the spoken language: an explicit la
 request wins; otherwise use the language of that request, not the language of a brief
 or image context. For example, a Chinese request for a girl's portrait and a youthful
 female voice without dialogue needs an original Chinese character line.
-Treat visual descriptions and voice characteristics only as creative context.
+Treat visual descriptions as creative context. Preserve the user's requested voice
+characteristics in voice_description: gender, age, timbre, tone, emotion, and pace
+when specified. Write a concise English description, up to 1000 characters, without
+parentheses or technical settings. For example, 年轻女孩的声音 becomes "young female voice".
+Do not invent extra voice characteristics; return an empty voice_description when
+none are requested. The voice description's language does not change the spoken language.
+Never put the voice description into text or omit it because dialogue is unspecified.
 Never read or translate an image prompt, rendering tags, or technical/voice descriptions
 as dialogue unless the user explicitly requests those exact words to be spoken.
 The text field contains only words to be spoken: no speaker labels, stage directions,
@@ -154,9 +161,12 @@ class ConceptService:
         ], model, json_mode=True, provider=provider)
         try:
             value = json.loads(response)
-            if (not isinstance(value, dict) or set(value) != {"text"}
+            if (not isinstance(value, dict) or "text" not in value
+                    or set(value) - {"text", "voice_description"}
                     or not isinstance(value["text"], str) or not value["text"].strip()
-                    or len(value["text"]) > 12000):
+                    or len(value["text"]) > 12000
+                    or not isinstance(value.get("voice_description", ""), str)
+                    or len(value.get("voice_description", "")) > 1000):
                 raise ValueError("Invalid speech text")
             return value
         except (ValueError, TypeError) as exc:

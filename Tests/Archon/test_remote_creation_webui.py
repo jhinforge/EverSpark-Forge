@@ -95,7 +95,8 @@ class RemoteCreationWebUITests(unittest.TestCase):
             "poll": lambda _: {"prompt_id": "remote-job", "status": "completed", "images": [{"filename": "render.png", "subfolder": "", "type": "output"}]},
             "fetch": lambda p: self.output_chunk(role, p),
             "synthesize": lambda p: {"status": "completed", "audio": [{
-                "filename": "speech.wav", "sample_rate": 48000, "text": p["text"]}]},
+                "filename": "speech.wav", "sample_rate": 48000, "text": p["text"],
+                **({"voice_description": p["voice_description"]} if p.get("voice_description") else {})}]},
             "history": lambda _: {"audio": [{"filename": "speech.wav"}]} if role == "audio" else {"images": []},
         }
         try:
@@ -138,7 +139,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
                 for result in context["dependencies"]:
                     self.assertNotIn("positive_prompt", result)
                     self.assertNotIn("selection", result)
-                return {"text": "你好呀，今天也一起度过愉快的一天吧。"}
+                return {"text": "你好呀，今天也一起度过愉快的一天吧。", "voice_description": "young female voice"}
             return {"text": "こんにちは。"}
         if delimiter in system:
             document = json.loads(system.split(delimiter, 1)[1])
@@ -213,7 +214,9 @@ class RemoteCreationWebUITests(unittest.TestCase):
                 break
             time.sleep(.01)
         self.assertEqual(state["status"], "completed", state)
-        self.assertEqual(self.speech_inputs, [{"text": "你好呀，今天也一起度过愉快的一天吧。"}])
+        self.assertEqual(self.speech_inputs, [{"text": "你好呀，今天也一起度过愉快的一天吧。",
+                                               "voice_description": "young female voice"}])
+        self.assertEqual(state["response"]["result"]["audio"][0]["voice_description"], "young female voice")
         self.assertEqual(state["response"]["result"]["audio"][0]["text"], self.speech_inputs[0]["text"])
         self.assertEqual(self.agent_errors, [])
 

@@ -21,11 +21,12 @@ vm.runInContext(extract('async function waitForGeneration(', 'async function gen
     tasks: [completedImage, {forge: 'audio', status: 'failed'}]}});
   await assert.rejects(context.waitForGeneration('job'), /backend detail/);
   assert.equal(stage.children[0].children[0].filename, 'ready.png');
-  context.renderCreation({tasks: [{forge: 'audio', status: 'completed', result: {audio: [{filename: 'speech.wav', text: '<hello>'}]}}]});
+  context.renderCreation({tasks: [{forge: 'audio', status: 'completed', result: {audio: [{filename: 'speech.wav', text: '<hello>', voice_description: 'young female voice'}]}}]});
   const card = stage.children[0].children[0];
   assert.equal(card.children[0].textContent, '<hello>');
   assert.equal(card.children[1].controls, true);
   assert.equal(card.children[2].download, 'speech.wav');
+  assert.equal(card.children[3].textContent, '声音要求：young female voice');
   context.api = async path => {
     assert.equal(path, '/api/audio/history?limit=36');
     return {audio: [{filename: 'past.wav'}]};

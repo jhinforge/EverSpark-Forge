@@ -127,10 +127,32 @@ class AudioTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 run("fetch", {"filename": "../secret.wav", "offset": 0}, {"audio_forge": settings})
 
+    def test_voice_design_prefix_is_built_only_in_audio_and_result_keeps_pure_dialogue(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text("{}")
+            settings = {"model_directory": directory, "output_directory": str(root / "out"), "max_text_chars": 12000}
+            model = Mock()
+            model.tts_model.sample_rate = 48000
+            model.generate.return_value = [0.0]
+            sdk = SimpleNamespace(VoxCPM=Mock())
+            sdk.VoxCPM.from_pretrained.return_value = model
+            def write(path, *args, **kwargs):
+                Path(path).write_bytes(b"RIFF")
+            instruction = {"text": "你好呀。（这是原文）", "voice_description": "(young female voice)\n gentle（clear）"}
+            with patch.dict("sys.modules", {"voxcpm": sdk, "soundfile": SimpleNamespace(write=write)}):
+                result = synthesize(instruction, settings)
+            model.generate.assert_called_once_with(text="(young female voice gentleclear)你好呀。（这是原文）",
+                                                   cfg_value=2.0, inference_timesteps=10)
+            self.assertEqual(result["audio"][0]["text"], instruction["text"])
+            self.assertEqual(result["audio"][0]["voice_description"], "young female voice gentleclear")
+
     def test_audio_rejects_reference_audio_and_seed_before_loading_backend(self):
         settings = {"max_text_chars": 10}
         for payload in ({"text": ""}, {"text": "long" * 10}, {"text": "hello", "seed": 1},
-                        {"text": "hello", "reference_wav_path": "/tmp/a.wav"}):
+                        {"text": "hello", "reference_wav_path": "/tmp/a.wav"},
+                        {"text": "hello", "voice_description": []},
+                        {"text": "hello", "voice_description": "x" * 1001}):
             with self.subTest(payload=payload), self.assertRaises(ValueError):
                 synthesize(payload, settings)
 
@@ -172,11 +194,12 @@ class AudioTests(unittest.TestCase):
             service = AudioService(config)
             def call(action, payload):
                 if action == "synthesize":
+                    self.assertEqual(payload, {"text": "hello", "voice_description": "young female voice"})
                     return {"status": "completed", "audio": [{"filename": "speech.wav"}]}
                 return source.chunk(payload["filename"], "", payload["offset"])
             with patch.object(service, "_call", side_effect=call), patch(
                     "Legate.Forge.AudioForge.audio_forge.service.run", side_effect=AssertionError("local execution")):
-                result = service.execute({"text": "hello"})
+                result = service.execute({"text": "hello", "voice_description": "young female voice"})
                 self.assertEqual(service.audio_path(result["audio"][0]["filename"]).read_bytes(),
                                  (source.directory / "speech.wav").read_bytes())
 

@@ -2217,6 +2217,11 @@ function audioCard(resource) {
   download.download = resource.filename;
   download.textContent = "下载 WAV";
   card.append(text, audio, download);
+  if (resource.voice_description) {
+    const voice = document.createElement("p");
+    voice.textContent = `声音要求：${resource.voice_description}`;
+    card.appendChild(voice);
+  }
   return card;
 }
 

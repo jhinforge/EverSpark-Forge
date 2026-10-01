@@ -1,4 +1,4 @@
-"""VoxCPM 2.0.3 text-only adapter. No reference audio or unsupported seed argument."""
+"""VoxCPM 2.0.3 text-only adapter. Voice Design uses a control prefix; no reference audio or seed argument."""
 import os
 import tempfile
 import uuid
@@ -18,18 +18,29 @@ def validate_runtime():
     return torch
 
 
-def synthesize(payload, settings):
-    if (not isinstance(payload, dict) or set(payload) != {"text"}
+def validate_instruction(payload, max_text_chars):
+    if (not isinstance(payload, dict) or "text" not in payload
+            or set(payload) - {"text", "voice_description"}
             or not isinstance(payload["text"], str) or not payload["text"].strip()
-            or len(payload["text"]) > settings["max_text_chars"]):
-        raise ValueError("Invalid VoxCPM2 speech text")
+            or len(payload["text"]) > max_text_chars
+            or not isinstance(payload.get("voice_description", ""), str)
+            or len(payload.get("voice_description", "")) > 1000):
+        raise ValueError("Audio Forge requires bounded speech text and an optional voice description")
+
+
+def synthesize(payload, settings):
+    validate_instruction(payload, settings["max_text_chars"])
     model_path = Path(settings["model_directory"])
     if not (model_path / "config.json").is_file():
         raise RuntimeError("Deploy Audio Forge before synthesizing speech")
     from voxcpm import VoxCPM
     import soundfile as sf
     model = VoxCPM.from_pretrained(str(model_path), load_denoiser=False)
-    wav = model.generate(text=payload["text"], cfg_value=2.0, inference_timesteps=10)
+    # VoxCPM2 Voice Design expects (control)text. This SDK format stays in Audio.
+    control = payload.get("voice_description", "").translate(str.maketrans("", "", "()（）"))
+    control = " ".join(control.split())
+    model_text = f"({control}){payload['text']}" if control else payload["text"]
+    wav = model.generate(text=model_text, cfg_value=2.0, inference_timesteps=10)
     outputs = OutputResources(settings["output_directory"], {".wav"})
     outputs.directory.mkdir(parents=True, exist_ok=True)
     filename = uuid.uuid4().hex + ".wav"
@@ -46,4 +57,5 @@ def synthesize(payload, settings):
     finally:
         temporary.unlink(missing_ok=True)
     return {"status": "completed", "audio": [{"filename": filename,
-        "sample_rate": rate, "text": payload["text"]}]}
+        "sample_rate": rate, "text": payload["text"],
+        **({"voice_description": control} if control else {})}]}
