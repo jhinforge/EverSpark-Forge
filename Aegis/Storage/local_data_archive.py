@@ -7,6 +7,8 @@ import json
 import os
 import re
 import shutil
+from contextlib import closing
+from Archon.Ledger.coordination import coordinator_for, maintenance_operation
 import sqlite3
 import tempfile
 import uuid
@@ -39,6 +41,7 @@ def _hash(path: Path) -> str:
 class LocalDataArchive:
     def __init__(self, database: Path, subjects: Path, root: Path = REPO_ROOT):
         self.database = Path(database).resolve()
+        self.coordination = coordinator_for(self.database)
         self.subjects = Path(subjects).resolve()
         self.imports = root / "Data/Imports"
         self.archives = root / "Data/Runtime/Archives"
@@ -54,6 +57,7 @@ class LocalDataArchive:
             raise DataArchiveError("Invalid import identifier")
         return self.imports / f"{archive_id}.zip"
 
+    @maintenance_operation
     def _snapshot(self, stage: Path) -> dict:
         if not self.database.is_file():
             raise DataArchiveError("Memory database is not available")
@@ -61,8 +65,8 @@ class LocalDataArchive:
         snapshot.parent.mkdir(parents=True)
         for _ in range(3):
             shutil.rmtree(stage / "subjects", ignore_errors=True)
-            with sqlite3.connect(f"file:{self.database}?mode=ro", uri=True) as source:
-                with sqlite3.connect(snapshot) as destination:
+            with closing(sqlite3.connect(f"file:{self.database}?mode=ro", uri=True)) as source:
+                with closing(sqlite3.connect(snapshot)) as destination:
                     source.backup(destination)
             if self.subjects.is_dir():
                 for folder in self.subjects.iterdir():
@@ -165,7 +169,7 @@ class LocalDataArchive:
     @staticmethod
     def _verify_database(stage: Path) -> int:
         database = stage / "memory/everspark.db"
-        with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+        with closing(sqlite3.connect(f"file:{database}?mode=ro", uri=True)) as connection:
             if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise DataArchiveError("SQLite integrity check failed")
             rows = connection.execute("SELECT subject_id, revision, document FROM subjects").fetchall()
@@ -215,37 +219,38 @@ class LocalDataArchive:
                 shutil.copy2(stage / "memory/everspark.db", staged_db)
                 (stage / "subjects").mkdir(exist_ok=True)
                 shutil.copytree(stage / "subjects", staged_subjects)
-                recovery.mkdir(parents=True, exist_ok=False)
-                old_db = recovery / "everspark.db"
-                old_subjects = recovery / "Subjects"
-                installed_db = installed_subjects = False
-                try:
-                    if self.database.exists():
-                        os.replace(self.database, old_db)
-                    for suffix in ("-wal", "-shm"):
-                        sidecar = Path(str(self.database) + suffix)
-                        if sidecar.exists():
-                            os.replace(sidecar, recovery / ("everspark.db" + suffix))
-                    if self.subjects.exists():
-                        os.replace(self.subjects, old_subjects)
-                    os.replace(staged_db, self.database)
-                    installed_db = True
-                    os.replace(staged_subjects, self.subjects)
-                    installed_subjects = True
-                except Exception:
-                    if installed_db:
-                        self.database.unlink(missing_ok=True)
-                    if old_db.exists():
-                        os.replace(old_db, self.database)
-                    for suffix in ("-wal", "-shm"):
-                        previous = recovery / ("everspark.db" + suffix)
-                        if previous.exists():
-                            os.replace(previous, Path(str(self.database) + suffix))
-                    if installed_subjects:
-                        shutil.rmtree(self.subjects)
-                    if old_subjects.exists():
-                        os.replace(old_subjects, self.subjects)
-                    raise
+                with self.coordination.maintenance():
+                    recovery.mkdir(parents=True, exist_ok=False)
+                    old_db = recovery / "everspark.db"
+                    old_subjects = recovery / "Subjects"
+                    installed_db = installed_subjects = False
+                    try:
+                        if self.database.exists():
+                            os.replace(self.database, old_db)
+                        for suffix in ("-wal", "-shm"):
+                            sidecar = Path(str(self.database) + suffix)
+                            if sidecar.exists():
+                                os.replace(sidecar, recovery / ("everspark.db" + suffix))
+                        if self.subjects.exists():
+                            os.replace(self.subjects, old_subjects)
+                        os.replace(staged_db, self.database)
+                        installed_db = True
+                        os.replace(staged_subjects, self.subjects)
+                        installed_subjects = True
+                    except Exception:
+                        if installed_db:
+                            self.database.unlink(missing_ok=True)
+                        if old_db.exists():
+                            os.replace(old_db, self.database)
+                        for suffix in ("-wal", "-shm"):
+                            previous = recovery / ("everspark.db" + suffix)
+                            if previous.exists():
+                                os.replace(previous, Path(str(self.database) + suffix))
+                        if installed_subjects:
+                            shutil.rmtree(self.subjects)
+                        if old_subjects.exists():
+                            os.replace(old_subjects, self.subjects)
+                        raise
             finally:
                 staged_db.unlink(missing_ok=True)
                 if staged_subjects.exists():

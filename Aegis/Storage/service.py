@@ -2,7 +2,6 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Any
-from Aegis.Shared.errors import BusyError
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r2_manager import R2StorageManager
@@ -11,36 +10,22 @@ from backup_manager import BackupManager
 from local_data_archive import LocalDataArchive
 
 class StorageService:
-    def __init__(self, config, maintenance_lock, persistence_lock):
+    def __init__(self, config):
         self.storage = R2StorageManager(config)
         self.downloads = DirectDownloadManager(config)
         self.backups = BackupManager(config)
         self.data_archive = LocalDataArchive(self.backups.memory_path,
             self.backups.subject_root, Path(__file__).resolve().parents[2])
-        self._task_lock = maintenance_lock
-        self._persistence_lock = persistence_lock
 
     def storage_resources(self) -> dict[str, Any]:
         return self.storage.resources()
 
     def export_data_archive(self) -> str:
-        if not self._task_lock.acquire(blocking=False):
-            raise BusyError("A task is running; try again after it completes")
-        try:
-            with self._persistence_lock:
-                archive_id, _ = self.data_archive.export()
-            return archive_id
-        finally:
-            self._task_lock.release()
+        archive_id, _ = self.data_archive.export()
+        return archive_id
 
     def restore_data_archive(self, archive_id: str) -> dict[str, Any]:
-        if not self._task_lock.acquire(blocking=False):
-            raise BusyError("A task is running; try again after it completes")
-        try:
-            with self._persistence_lock:
-                return self.data_archive.restore(archive_id)
-        finally:
-            self._task_lock.release()
+        return self.data_archive.restore(archive_id)
 
     def storage_scan(self) -> dict[str, Any]:
         return self.storage.scan_status()
@@ -55,7 +40,7 @@ class StorageService:
         return self.backups.restore_points()
 
     def start_restore(self, batch_id: str) -> dict[str, Any]:
-        return self.backups.start_restore(batch_id, self._task_lock, self._persistence_lock)
+        return self.backups.start_restore(batch_id)
 
     def save_storage_paths(self, mapping: dict[str, Any]) -> dict[str, Any]:
         return self.storage.save_paths(mapping)

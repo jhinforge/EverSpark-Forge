@@ -20,6 +20,7 @@ from Archon.Vault.runtime_config import load_config
 from Archon.Vault.concept_configuration import ConceptConfigurationVault
 from Archon.Ledger.store import SQLiteLedgerStore
 from Aegis.Storage.service import StorageService
+from local_data_archive import LocalDataArchive
 from concept_forge.workspace import ConceptWorkspace
 from concept_forge.subjects import new_subject
 from concept_forge.providers.ollama import GenerationPlan
@@ -135,14 +136,20 @@ class ConceptTransactionTests(unittest.TestCase):
             self.concept.discuss("hello", "session", [])
         self.assertFalse(self.concept._task_lock.locked())
 
-    def test_storage_maintenance_and_concept_generation_share_exclusion_without_orchestrator_state(self):
-        storage = StorageService.__new__(StorageService)
-        storage._task_lock = self.concept._task_lock
-        storage._persistence_lock = self.concept.memory._subject_lock
-        storage.data_archive = Mock()
-        with self.concept.prepare_generation("portrait", "session", {}, lambda _: None):
-            with self.assertRaises(BusyError):
-                storage.export_data_archive()
-        storage.data_archive.export.return_value = ("archive-id", None)
-        self.assertEqual(storage.export_data_archive(), "archive-id")
-        self.assertFalse(self.concept._task_lock.locked())
+    def test_storage_resolves_ledger_independently_of_concept_private_state(self):
+        config = load_config()
+        config["memory"]["database"] = str(self.concept.memory.database)
+        storage = StorageService(config)
+        self.assertIs(storage.data_archive.coordination, self.concept.memory.coordination)
+        self.assertIs(storage.backups.coordination, self.concept.memory.coordination)
+        self.assertFalse(hasattr(storage, "_task_lock"))
+        self.assertFalse(hasattr(storage, "_persistence_lock"))
+        with self.concept._task_lock:
+            # Busy execution alone does not prevent persistence maintenance.
+            storage.data_archive = LocalDataArchive(self.concept.memory.database,
+                self.concept.memory.subject_root, Path(self.directory.name))
+            archive_id = storage.export_data_archive()
+            self.assertTrue(storage.data_archive.archive_path(archive_id).is_file())
+        source = inspect.getsource(StorageService)
+        self.assertNotIn("self.concept", source)
+        self.assertNotIn("_subject_lock", source)

@@ -14,8 +14,7 @@ class GateApplication:
         service, connections = create_service(config, concept_logger)
         self.concept = ConceptWorkspace(config, service, connections, concept_logger or logger)
         self.image = create_management(config)
-        self.storage = StorageService(config, self.concept._task_lock,
-            self.concept.memory._subject_lock)
+        self.storage = StorageService(config)
         self.orchestrator = Orchestrator(TaskRunner(self.concept, self.image), logger)
 
     def resources(self, engine=""):

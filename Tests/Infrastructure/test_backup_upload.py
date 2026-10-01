@@ -186,7 +186,7 @@ class BackupUploadTests(unittest.TestCase):
                 subject.write_text('{"revision":99}', encoding="utf-8")
                 with sqlite3.connect(database) as connection:
                     connection.execute("UPDATE message SET value='changed'")
-                restore = manager.start_restore(job["job_id"], threading.Lock(), threading.RLock())
+                restore = manager.start_restore(job["job_id"])
                 for _ in range(200):
                     restored = manager.job(restore["job_id"])
                     if restored["status"] in {"completed", "failed"}:
@@ -198,7 +198,7 @@ class BackupUploadTests(unittest.TestCase):
                     self.assertEqual(connection.execute("SELECT value FROM message").fetchone()[0], "saved")
                 bad = f"r:backup/data_sets/{job['job_id']}/subjects/subject-1/subject.json"
                 fake.remote[bad] = b"changed"  # Same batch can no longer be trusted.
-                failed = manager.start_restore(job["job_id"], threading.Lock(), threading.RLock())
+                failed = manager.start_restore(job["job_id"])
                 for _ in range(200):
                     stopped = manager.job(failed["job_id"])
                     if stopped["status"] in {"completed", "failed"}:

@@ -6,6 +6,8 @@ import json
 import os
 import re
 import shutil
+from contextlib import closing
+from Archon.Ledger.coordination import coordinator_for
 import sqlite3
 import subprocess
 import tempfile
@@ -43,6 +45,7 @@ class BackupManager:
         self.client = RcloneClient(self.settings, run=run)
         self.paths = RemotePathMap(self.settings)
         self.memory_path = Path(config["memory"]["database"]).resolve()
+        self.coordination = coordinator_for(self.memory_path)
         self.subject_root = (self.memory_path.parent.parent if self.memory_path.parent.name == "Memory" else self.memory_path.parent) / "Subjects"
         self._lock = threading.Lock()
         self._roots_cache: tuple[float, int, dict[str, list[str]]] | None = None
@@ -219,26 +222,21 @@ class BackupManager:
                 "bytes": sum(record["bytes"] for record in files.values()),
                 "replaces": [str(self.subject_root), str(self.memory_path)]}
 
-    def start_restore(self, batch_id: str, task_lock: threading.Lock,
-                      subject_lock: threading.RLock) -> dict[str, Any]:
+    def start_restore(self, batch_id: str) -> dict[str, Any]:
         preview = self.restore_preview(batch_id)
         data_remote = self.paths.backup_root()
-        if not task_lock.acquire(blocking=False):
-            raise StorageError("Wait for the current generation to finish before restoring")
         with self._lock:
             if self._active and self._jobs[self._active]["status"] in {"queued", "running"}:
-                task_lock.release()
                 raise StorageError("Wait for the current backup job to finish")
             job_id = uuid.uuid4().hex
             self._jobs[job_id] = {"job_id": job_id, "status": "queued", "kind": "restore",
                                   "current": "", "error": "", "progress": {"percent": 0, "completed": 0,
                                   "total": preview["files"], "bytes_completed": 0, "bytes_total": preview["bytes"]}}
             self._active = job_id
-        threading.Thread(target=self._restore, args=(job_id, batch_id, data_remote, task_lock, subject_lock), daemon=True).start()
+        threading.Thread(target=self._restore, args=(job_id, batch_id, data_remote), daemon=True).start()
         return self.job(job_id)
 
-    def _restore(self, job_id: str, batch_id: str, data_remote: str, task_lock: threading.Lock,
-                 subject_lock: threading.RLock) -> None:
+    def _restore(self, job_id: str, batch_id: str, data_remote: str) -> None:
         try:
             with self._lock:
                 self._jobs[job_id]["status"] = "running"
@@ -261,7 +259,7 @@ class BackupManager:
                         progress["bytes_completed"] += record["bytes"]
                         progress["percent"] = round(95 * progress["completed"] / progress["total"], 1)
                 db = stage / "memory/everspark.db"
-                with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as connection:
+                with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as connection:
                     if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                         raise StorageError("Restored SQLite database did not pass integrity check")
                     rows = connection.execute("SELECT subject_id, revision, document FROM subjects").fetchall()
@@ -292,7 +290,7 @@ class BackupManager:
                     shutil.copy2(db, staged_db)
                     (stage / "subjects").mkdir(exist_ok=True)
                     shutil.copytree(stage / "subjects", staged_subjects)
-                    with subject_lock:
+                    with self.coordination.maintenance():
                         recovery.mkdir(parents=True, exist_ok=False)
                         old_db = recovery / "everspark.db"
                         old_subjects = recovery / "Subjects"
@@ -337,8 +335,6 @@ class BackupManager:
             with self._lock:
                 self._jobs[job_id]["status"] = "failed"
                 self._jobs[job_id]["error"] = str(exc)
-        finally:
-            task_lock.release()
 
     def _upload(self, job_id: str, files: list[tuple[str, Path]], memory: bool,
                 destinations: dict[str, str], data_remote: str) -> None:
@@ -411,60 +407,61 @@ class BackupManager:
                 pass
 
     def _upload_data_set(self, job_id: str, data_remote: str) -> int:
-        if not self.memory_path.is_file():
-            raise StorageError("Memory database was not found")
         with tempfile.TemporaryDirectory(prefix="everspark-data-set-") as temp:
             stage = Path(temp)
             manifest: dict[str, Any] = {"version": 1,
                                         "created_at": datetime.now(timezone.utc).isoformat(), "files": {}}
-            # Verify the subject files against the SQLite snapshot. A concurrent
-            # subject edit causes a retry rather than producing a mixed set.
-            for attempt in range(3):
-                shutil.rmtree(stage / "subjects", ignore_errors=True)
-                snapshot = stage / "memory/everspark.db"
-                snapshot.parent.mkdir(parents=True, exist_ok=True)
-                with sqlite3.connect(f"file:{self.memory_path}?mode=ro", uri=True) as source:
-                    with sqlite3.connect(snapshot) as destination:
-                        source.backup(destination)
-                if self.subject_root.is_dir():
-                    for folder in self.subject_root.iterdir():
-                        if (folder.is_dir() and not folder.is_symlink() and
-                                re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", folder.name)):
-                            target = stage / "subjects" / folder.name
-                            target.mkdir(parents=True, exist_ok=True)
-                            for name in ("subject.json", "metadata.json", "positive_prompt.json", "negative_prompt.json"):
-                                path = folder / name
-                                if path.is_file() and not path.is_symlink():
-                                    shutil.copy2(path, target / name)
-                with sqlite3.connect(snapshot) as connection:
-                    rows = connection.execute("SELECT subject_id, revision, document FROM subjects").fetchall()
-                    try:
-                        prompts = dict(connection.execute(
-                            "SELECT subject_id, document FROM subject_prompt_revisions "
-                            "WHERE id IN (SELECT MAX(id) FROM subject_prompt_revisions GROUP BY subject_id)"
-                        ).fetchall())
-                    except sqlite3.OperationalError:
-                        prompts = {}
-                folders = list((stage / "subjects").iterdir()) if (stage / "subjects").is_dir() else []
-                consistent = len(folders) == len(rows)
-                for subject_id, revision, raw in rows:
-                    folder = stage / "subjects" / subject_id
-                    try:
-                        subject = json.loads((folder / "subject.json").read_text())
-                        subject["metadata"] = json.loads((folder / "metadata.json").read_text())
-                        positive = json.loads((folder / "positive_prompt.json").read_text())
-                        negative = json.loads((folder / "negative_prompt.json").read_text())
-                        latest = json.loads(prompts[subject_id]) if subject_id in prompts else None
-                        consistent &= (subject["revision"] == revision and
-                                       all(subject.get(key) == value for key, value in json.loads(raw).items()) and
-                                       (latest is None or latest == {"positive_prompt": positive["positive_prompt"],
-                                                                      "negative_prompt": negative["negative_prompt"]}))
-                    except (OSError, ValueError, KeyError, TypeError):
-                        consistent = False
-                if consistent:
-                    break
-            else:
-                raise StorageError("Subjects changed during snapshot; retry the backup")
+            with self.coordination.maintenance():
+                if not self.memory_path.is_file():
+                    raise StorageError("Memory database was not found")
+                # Copy SQLite and document files within one persistence scope.
+                # Keep validation for pre-existing or externally modified data.
+                for attempt in range(3):
+                    shutil.rmtree(stage / "subjects", ignore_errors=True)
+                    snapshot = stage / "memory/everspark.db"
+                    snapshot.parent.mkdir(parents=True, exist_ok=True)
+                    with closing(sqlite3.connect(f"file:{self.memory_path}?mode=ro", uri=True)) as source:
+                        with closing(sqlite3.connect(snapshot)) as destination:
+                            source.backup(destination)
+                    if self.subject_root.is_dir():
+                        for folder in self.subject_root.iterdir():
+                            if (folder.is_dir() and not folder.is_symlink() and
+                                    re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", folder.name)):
+                                target = stage / "subjects" / folder.name
+                                target.mkdir(parents=True, exist_ok=True)
+                                for name in ("subject.json", "metadata.json", "positive_prompt.json", "negative_prompt.json"):
+                                    path = folder / name
+                                    if path.is_file() and not path.is_symlink():
+                                        shutil.copy2(path, target / name)
+                    with closing(sqlite3.connect(snapshot)) as connection:
+                        rows = connection.execute("SELECT subject_id, revision, document FROM subjects").fetchall()
+                        try:
+                            prompts = dict(connection.execute(
+                                "SELECT subject_id, document FROM subject_prompt_revisions "
+                                "WHERE id IN (SELECT MAX(id) FROM subject_prompt_revisions GROUP BY subject_id)"
+                            ).fetchall())
+                        except sqlite3.OperationalError:
+                            prompts = {}
+                    folders = list((stage / "subjects").iterdir()) if (stage / "subjects").is_dir() else []
+                    consistent = len(folders) == len(rows)
+                    for subject_id, revision, raw in rows:
+                        folder = stage / "subjects" / subject_id
+                        try:
+                            subject = json.loads((folder / "subject.json").read_text())
+                            subject["metadata"] = json.loads((folder / "metadata.json").read_text())
+                            positive = json.loads((folder / "positive_prompt.json").read_text())
+                            negative = json.loads((folder / "negative_prompt.json").read_text())
+                            latest = json.loads(prompts[subject_id]) if subject_id in prompts else None
+                            consistent &= (subject["revision"] == revision and
+                                           all(subject.get(key) == value for key, value in json.loads(raw).items()) and
+                                           (latest is None or latest == {"positive_prompt": positive["positive_prompt"],
+                                                                          "negative_prompt": negative["negative_prompt"]}))
+                        except (OSError, ValueError, KeyError, TypeError):
+                            consistent = False
+                    if consistent:
+                        break
+                else:
+                    raise StorageError("Subjects changed during snapshot; retry the backup")
             paths = [path for path in sorted(stage.rglob("*")) if path.is_file()]
             batch_bytes = sum(path.stat().st_size for path in paths)
             with self._lock:

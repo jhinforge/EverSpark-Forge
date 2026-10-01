@@ -61,23 +61,24 @@ class ConceptWorkspace:
         llm_model = str(selected.get("llm", ""))
         concept_provider = str(selected.get("concept_provider", ""))
         try:
-            history = self.memory.get_history(session)
-            kwargs = {}
-            if llm_model:
-                kwargs["model"] = llm_model
-            if concept_provider:
-                kwargs["provider"] = concept_provider
-            reply = self.service.discuss(text, history, **kwargs)
-            document = self._refresh_session_subject(
-                session,
-                text,
-                history,
-                assistant_reply=reply,
-                llm_model=llm_model,
-                concept_provider=concept_provider,
-            )
-            self.memory.record_conversation(session, text, reply)
-            return {"ok": True, "reply": reply, "subject": document}
+            with self.memory.operation():
+                history = self.memory.get_history(session)
+                kwargs = {}
+                if llm_model:
+                    kwargs["model"] = llm_model
+                if concept_provider:
+                    kwargs["provider"] = concept_provider
+                reply = self.service.discuss(text, history, **kwargs)
+                document = self._refresh_session_subject(
+                    session,
+                    text,
+                    history,
+                    assistant_reply=reply,
+                    llm_model=llm_model,
+                    concept_provider=concept_provider,
+                )
+                self.memory.record_conversation(session, text, reply)
+                return {"ok": True, "reply": reply, "subject": document}
         finally:
             self._task_lock.release()
 
@@ -108,11 +109,12 @@ class ConceptWorkspace:
         return self.memory.save_subject(document) if persist else document
 
     def get_session_subject(self, session_id: str) -> dict[str, Any] | None:
-        session = normalize_unicode(session_id).strip()
-        if not session:
-            raise ValueError("session_id cannot be empty")
-        subject_id = self.memory.get_session_subject_id(session)
-        return None if subject_id is None else self.memory.get_subject(subject_id)
+        with self.memory.operation():
+            session = normalize_unicode(session_id).strip()
+            if not session:
+                raise ValueError("session_id cannot be empty")
+            subject_id = self.memory.get_session_subject_id(session)
+            return None if subject_id is None else self.memory.get_subject(subject_id)
 
     def select_session_subject(self, session_id: str, subject_id: str) -> dict[str, Any]:
         session = normalize_unicode(session_id).strip()
@@ -121,9 +123,10 @@ class ConceptWorkspace:
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("Wait for the current task before switching characters")
         try:
-            subject = self.get_subject(normalize_unicode(subject_id).strip())
-            self.memory.select_session_subject(session, subject["subject_id"])
-            return subject
+            with self.memory.operation():
+                subject = self.get_subject(normalize_unicode(subject_id).strip())
+                self.memory.select_session_subject(session, subject["subject_id"])
+                return subject
         finally:
             self._task_lock.release()
 
@@ -137,7 +140,8 @@ class ConceptWorkspace:
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("Concept Forge is busy")
         try:
-            self.memory.clear_session(session)
+            with self.memory.operation():
+                self.memory.clear_session(session)
         finally:
             self._task_lock.release()
 
@@ -145,7 +149,8 @@ class ConceptWorkspace:
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("Concept Forge is busy")
         try:
-            return self.memory.save_subject(validate_subject(document))
+            with self.memory.operation():
+                return self.memory.save_subject(validate_subject(document))
         finally:
             self._task_lock.release()
 
@@ -159,9 +164,10 @@ class ConceptWorkspace:
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("Concept Forge is busy")
         try:
-            existing = self.memory.get_subject(normalized)
-            document = self.service.generate_subject(text, normalized, existing)
-            return self.memory.save_subject(document)
+            with self.memory.operation():
+                existing = self.memory.get_subject(normalized)
+                document = self.service.generate_subject(text, normalized, existing)
+                return self.memory.save_subject(document)
         finally:
             self._task_lock.release()
 
@@ -171,9 +177,10 @@ class ConceptWorkspace:
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("Concept Forge is busy")
         try:
-            current = self.get_subject(subject_id)
-            updated = update_subject(current, changes)
-            return self.memory.save_subject(updated)
+            with self.memory.operation():
+                current = self.get_subject(subject_id)
+                updated = update_subject(current, changes)
+                return self.memory.save_subject(updated)
         finally:
             self._task_lock.release()
 
@@ -187,15 +194,16 @@ class ConceptWorkspace:
         return document
 
     def subject_bundle(self, subject_id: str) -> dict[str, Any]:
-        document = self.get_subject(subject_id)
-        prompts = self.memory.get_subject_prompt(document["subject_id"]) or {}
-        return {
-            "subject_id": document["subject_id"],
-            "subject": {key: value for key, value in document.items() if key != "metadata"},
-            "metadata": document["metadata"],
-            "positive_prompt": {"positive_prompt": prompts.get("positive_prompt", "")},
-            "negative_prompt": {"negative_prompt": prompts.get("negative_prompt", "")},
-        }
+        with self.memory.operation():
+            document = self.get_subject(subject_id)
+            prompts = self.memory.get_subject_prompt(document["subject_id"]) or {}
+            return {
+                "subject_id": document["subject_id"],
+                "subject": {key: value for key, value in document.items() if key != "metadata"},
+                "metadata": document["metadata"],
+                "positive_prompt": {"positive_prompt": prompts.get("positive_prompt", "")},
+                "negative_prompt": {"negative_prompt": prompts.get("negative_prompt", "")},
+            }
 
     def revise_subject_group(self, subject_id: str, group: str, instruction: str) -> dict[str, Any]:
         text = normalize_unicode(instruction).strip()
@@ -206,20 +214,21 @@ class ConceptWorkspace:
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("Concept Forge is already running one task")
         try:
-            current = self.get_subject(subject_id)
-            if group in {"positive_prompt", "negative_prompt"}:
-                prompts = self.memory.get_subject_prompt(subject_id) or {}
-                value = self.service.revise_prompt(text, group, prompts.get(group, ""))
-                self.memory.save_subject_prompt(
-                    subject_id,
-                    value if group == "positive_prompt" else prompts.get("positive_prompt", ""),
-                    value if group == "negative_prompt" else prompts.get("negative_prompt", ""),
-                )
-            else:
-                generated = self.service.revise_subject_section(text, group, current)
-                if {**current, "revision": generated["revision"]} != generated:
-                    self.memory.save_subject(validate_subject(generated))
-            return self.subject_bundle(subject_id)
+            with self.memory.operation():
+                current = self.get_subject(subject_id)
+                if group in {"positive_prompt", "negative_prompt"}:
+                    prompts = self.memory.get_subject_prompt(subject_id) or {}
+                    value = self.service.revise_prompt(text, group, prompts.get(group, ""))
+                    self.memory.save_subject_prompt(
+                        subject_id,
+                        value if group == "positive_prompt" else prompts.get("positive_prompt", ""),
+                        value if group == "negative_prompt" else prompts.get("negative_prompt", ""),
+                    )
+                else:
+                    generated = self.service.revise_subject_section(text, group, current)
+                    if {**current, "revision": generated["revision"]} != generated:
+                        self.memory.save_subject(validate_subject(generated))
+                return self.subject_bundle(subject_id)
         finally:
             self._task_lock.release()
 
@@ -227,20 +236,22 @@ class ConceptWorkspace:
         return self.memory.list_subjects()
 
     def get_subject_revisions(self, subject_id: str) -> list[dict[str, Any]]:
-        normalized = normalize_unicode(subject_id).strip()
-        self.get_subject(normalized)
-        return self.memory.get_subject_revisions(normalized)
+        with self.memory.operation():
+            normalized = normalize_unicode(subject_id).strip()
+            self.get_subject(normalized)
+            return self.memory.get_subject_revisions(normalized)
 
     def compile_subject(self, subject_id: str) -> dict[str, Any]:
-        subject = self.get_subject(subject_id)
-        prompts = self.memory.get_subject_prompt(subject_id)
-        compiled = compile_subject(subject)
-        return {
-            "subject_id": compiled.subject_id,
-            "revision": compiled.revision,
-            "positive_prompt": prompts["positive_prompt"] if prompts and prompts["positive_prompt"] else compiled.positive_prompt,
-            "negative_prompt": prompts["negative_prompt"] if prompts else "",
-        }
+        with self.memory.operation():
+            subject = self.get_subject(subject_id)
+            prompts = self.memory.get_subject_prompt(subject_id)
+            compiled = compile_subject(subject)
+            return {
+                "subject_id": compiled.subject_id,
+                "revision": compiled.revision,
+                "positive_prompt": prompts["positive_prompt"] if prompts and prompts["positive_prompt"] else compiled.positive_prompt,
+                "negative_prompt": prompts["negative_prompt"] if prompts else "",
+            }
 
     def concept_connections(self) -> dict[str, Any]:
         return self.connections.public()
@@ -338,7 +349,8 @@ class ConceptWorkspace:
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("Concept Forge is busy")
         try:
-            yield self._prepare_generation(text, session, selection, notify)
+            with self.memory.operation():
+                yield self._prepare_generation(text, session, selection, notify)
         finally:
             self._task_lock.release()
 

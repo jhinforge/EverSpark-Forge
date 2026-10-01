@@ -6,10 +6,10 @@ import re
 import shutil
 import sqlite3
 import tempfile
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from .coordination import coordinator_for, persistence_operation
 
 
 class SubjectRevisionConflictError(RuntimeError):
@@ -22,14 +22,17 @@ class SQLiteLedgerStore:
         self.max_history_messages = max(0, int(max_history_messages))
         self.database.parent.mkdir(parents=True, exist_ok=True)
         self.subject_root = ((self.database.parent.parent if self.database.parent.name == "Memory" else self.database.parent) / "Subjects")
-        self._subject_lock = threading.RLock()
+        self.coordination = coordinator_for(self.database)
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database, timeout=5)
-        connection.execute("PRAGMA busy_timeout = 5000")
-        return connection
+    def operation(self):
+        """Public scope for a compound persistence read/modify/write unit."""
+        return self.coordination.operation()
 
+    def _connect(self):
+        return self.coordination.connection()
+
+    @persistence_operation
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.executescript(
@@ -197,8 +200,9 @@ class SQLiteLedgerStore:
                 os.replace(previous, folder)
             raise
 
+    @persistence_operation
     def get_subject_prompt(self, subject_id: str) -> dict[str, str] | None:
-        with self._subject_lock:
+        with self.operation():
             folder = self._subject_dir(subject_id)
             if folder.is_dir():
                 return self._read_folder(folder)[1]
@@ -208,9 +212,10 @@ class SQLiteLedgerStore:
                 ).fetchone()
             return json.loads(row[0]) if row else None
 
+    @persistence_operation
     def save_subject_prompt(self, subject_id: str, positive: str, negative: str) -> dict[str, str]:
         document = {"positive_prompt": positive, "negative_prompt": negative}
-        with self._subject_lock:
+        with self.operation():
             subject = self.get_subject(subject_id)
             if subject is None:
                 raise ValueError(f"Subject not found: {subject_id}")
@@ -230,6 +235,7 @@ class SQLiteLedgerStore:
                 shutil.rmtree(previous)
         return document
 
+    @persistence_operation
     def get_history(self, session_id: str) -> list[dict[str, str]]:
         if self.max_history_messages == 0:
             return []
@@ -250,6 +256,7 @@ class SQLiteLedgerStore:
             ).fetchall()
         return [{"role": role, "content": content} for role, content in rows]
 
+    @persistence_operation
     def get_or_create_session_subject_id(self, session_id: str, subject_id: str) -> str:
         if not session_id:
             raise ValueError("session_id cannot be empty")
@@ -270,6 +277,7 @@ class SQLiteLedgerStore:
             )
         return subject_id
 
+    @persistence_operation
     def get_session_subject_id(self, session_id: str) -> str | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -278,6 +286,7 @@ class SQLiteLedgerStore:
             ).fetchone()
         return None if row is None else str(row[0])
 
+    @persistence_operation
     def select_session_subject(self, session_id: str, subject_id: str) -> None:
         if not session_id:
             raise ValueError("session_id cannot be empty")
@@ -293,6 +302,7 @@ class SQLiteLedgerStore:
                     updated_at = excluded.updated_at
             """, (session_id, subject_id, now, now))
 
+    @persistence_operation
     def record_conversation(
         self, session_id: str, user_text: str, assistant_text: str
     ) -> None:
@@ -317,6 +327,7 @@ class SQLiteLedgerStore:
                 ],
             )
 
+    @persistence_operation
     def clear_session(self, session_id: str) -> None:
         with self._connect() as connection:
             connection.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
@@ -326,6 +337,7 @@ class SQLiteLedgerStore:
                 "DELETE FROM session_subjects WHERE session_id = ?", (session_id,)
             )
 
+    @persistence_operation
     def save_subject(self, document: dict[str, Any], prompts: dict[str, str] | None = None) -> dict[str, Any]:
         if not isinstance(document, dict):
             raise ValueError("Subject document must be an object")
@@ -340,7 +352,7 @@ class SQLiteLedgerStore:
             document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
         now = datetime.now(timezone.utc).isoformat()
-        with self._subject_lock:
+        with self.operation():
             folder = self._subject_dir(subject_id)
             previous: Path | None = None
             had_folder = folder.exists()
@@ -394,8 +406,9 @@ class SQLiteLedgerStore:
                 shutil.rmtree(previous)
         return document
 
+    @persistence_operation
     def get_subject(self, subject_id: str) -> dict[str, Any] | None:
-        with self._subject_lock:
+        with self.operation():
             with self._connect() as connection:
                 row = connection.execute(
                     "SELECT document FROM subjects WHERE subject_id = ?", (subject_id,)
@@ -407,6 +420,7 @@ class SQLiteLedgerStore:
                 return self._read_folder(folder)[0]
             return json.loads(row[0])
 
+    @persistence_operation
     def get_subject_revisions(self, subject_id: str) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(
@@ -431,6 +445,7 @@ class SQLiteLedgerStore:
         """Extension hook; Ledger does not interpret legacy Concept records."""
         pass
 
+    @persistence_operation
     def record_generation(self, session_id, user_text, assistant_content, result):
         """Atomically persist a caller-supplied record and its conversation pair."""
         now = datetime.now(timezone.utc).isoformat()
@@ -473,6 +488,7 @@ class SQLiteLedgerStore:
                 ),
             )
 
+    @persistence_operation
     def subject_records(self):
         """Read stored catalog rows without interpreting identity fields."""
         with self._connect() as connection:
