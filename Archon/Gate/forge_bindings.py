@@ -56,6 +56,11 @@ class ForgeBindings:
             raise NodeError("Select an online Node", 409)
         with self.lock:
             candidate = {**self.bindings, body["forge"]: node_id}
+            # A removed endpoint must not prevent replacing the other role first.
+            # Keep valid (including temporarily offline) choices, but require an
+            # explicit selection for every removed role before composing a runtime.
+            candidate = {role: selected for role, selected in candidate.items()
+                         if role == body["forge"] or self.nodes.configured(selected)}
             if candidate == self.bindings and self.runtime:
                 return self.status()
             if self.active_requests or (self.runtime and self.runtime.busy()):

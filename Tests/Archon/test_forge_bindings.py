@@ -105,3 +105,26 @@ class ForgeBindingsTests(unittest.TestCase):
         self.assertEqual(self.bindings.url, "")
         self.assertFalse(self.bindings.status()["ready"])
         self.assertEqual(self.bindings.bindings["image"], "b" * 32)
+
+    def test_two_removed_saved_nodes_can_be_replaced_one_role_at_a_time(self):
+        self.select_pair()
+        self.nodes.states.update({"a" * 32: "removed", "b" * 32: "removed", "d" * 32: "online"})
+        restored = ForgeBindings(self.nodes, self.path, "http://127.0.0.1:8765", factory=self.factory)
+        self.addCleanup(restored.close)
+        restored.restore()
+        self.assertIsNone(restored.runtime)
+        state = restored.select({"forge": "concept", "node_id": "c" * 32})
+        self.assertEqual(state["bindings"], {"concept": "c" * 32})
+        self.assertFalse(state["ready"])
+        self.assertIsNone(restored.runtime)
+        state = restored.select({"forge": "image", "node_id": "d" * 32})
+        self.assertTrue(state["ready"])
+        self.assertEqual(state["bindings"], {"concept": "c" * 32, "image": "d" * 32})
+        self.assertEqual(json.loads(self.path.read_text()), state["bindings"])
+
+    def test_replacing_removed_role_preserves_valid_offline_other_role(self):
+        self.select_pair()
+        self.nodes.states.update({"a" * 32: "offline", "b" * 32: "removed"})
+        state = self.bindings.select({"forge": "image", "node_id": "c" * 32})
+        self.assertEqual(state["bindings"], {"concept": "a" * 32, "image": "c" * 32})
+        self.assertFalse(state["ready"])
