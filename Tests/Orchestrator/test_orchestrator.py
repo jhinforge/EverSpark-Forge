@@ -766,7 +766,7 @@ class APITests(unittest.TestCase):
             self.selected = (session_id, subject_id)
             return self.document
 
-        def submit(self, text, session_id, selection=None):
+        def submit(self, text, session_id, selection=None, *, _progress=None):
             self.submit_calls += 1
             if self.task_gate is not None:
                 self.task_gate.wait(2)

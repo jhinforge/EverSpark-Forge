@@ -1,6 +1,7 @@
 """Image Forge owns its engines, resources, generated history and plugins."""
 from __future__ import annotations
 import secrets
+import time
 from pathlib import Path
 from typing import Any
 from Aegis.Shared.errors import TaskError
@@ -91,6 +92,21 @@ class ImageManagement:
                 "loras": selected_loras},
             "items": items,
         }
+
+    def execute(self, instruction, selection=None, notify=None):
+        result = self.generate(instruction, selection, notify)
+        deadline = time.monotonic() + 600
+        identities = [item["prompt_id"] for item in result["items"]]
+        while time.monotonic() < deadline:
+            outputs = self.image_results(identities)
+            failed = next((item for item in outputs if item.get("status") == "failed"), None)
+            if failed:
+                raise TaskError(failed.get("error") or "Image Forge generation failed")
+            if len(outputs) == len(identities) and all(item.get("status") == "completed" for item in outputs):
+                result.update(status="completed", outputs=outputs)
+                return result
+            time.sleep(1)
+        raise TaskError("Image Forge generation timed out")
 
     @staticmethod
     def _merge_unique_terms(*prompts: str) -> str:

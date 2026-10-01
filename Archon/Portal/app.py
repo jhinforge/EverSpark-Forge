@@ -136,6 +136,9 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         routes = {
+            "/api/audio/file": lambda: self._proxy_audio(parse_qs(parsed.query)),
+            "/api/machines/vast/audio-deployment-job": lambda: self._proxy_control_get(
+                "/machines/vast/audio-deployment-job", parsed.query),
             "/api/forge-bindings": lambda: self._proxy_control_get("/forge-bindings"),
             "/api/health": self._health,
             "/api/runtime/status": self._runtime_status,
@@ -225,6 +228,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             if path in {"/api/forge-bindings", "/api/machines/vast/credential", "/api/machines/vast/credential/remove",
                         "/api/machines/vast/destroy", "/api/machines/vast/deploy-image",
                         "/api/machines/vast/verify-image",
+                        "/api/machines/vast/deploy-audio", "/api/machines/vast/verify-audio",
                         "/api/machines/vast/node-connection",
                         "/api/machines/vast/offers", "/api/machines/vast/rent", "/api/machines/vast/startup-diagnostics",
                         "/api/machines/vast/deploy", "/api/machines/vast/verify", "/api/machines/vast/update-source",
@@ -468,6 +472,21 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(400, {"ok": False, "error": "limit must be an integer"})
             return
         self._proxy_orchestrator_get("/image/history", urlencode({"limit": limit}))
+
+    def _proxy_audio(self, query):
+        filename = query.get("filename", [""])[0]
+        if not filename or "/" in filename or "\\" in filename or ".." in filename or not filename.endswith(".wav"):
+            self._json(400, {"ok": False, "error": "Invalid audio filename"})
+            return
+        request = Request(f"{self.orchestrator_url}/audio/file?{urlencode({'filename': filename})}")
+        with urlopen(request, timeout=self.server.settings.request_timeout) as response:
+            self.send_response(response.status)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", response.headers["Content-Length"])
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            while chunk := response.read(1024 * 1024):
+                self.wfile.write(chunk)
 
     def _proxy_image(self, query: dict[str, list[str]]) -> None:
         filename = query.get("filename", [""])[0]

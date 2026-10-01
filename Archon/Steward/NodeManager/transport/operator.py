@@ -27,10 +27,13 @@ def remove(manager, body):
 
 
 def task(manager, body):
-    if set(body)-{"node_id", "forge", "action", "message", "task_id"} or not {"node_id", "action"} <= set(body):
+    if set(body)-{"node_id", "forge", "action", "message", "task_id", "timeout"} or not {"node_id", "action"} <= set(body):
         raise NodeError("Invalid task request", 400)
+    timeout = body.get("timeout", 240)
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= 3700:
+        raise NodeError("Invalid task timeout", 400)
     return {"output": manager.execute(validate_id(body["node_id"]), body["action"], body.get("message", ""),
-                                      forge=body.get("forge", "concept"), task_id=body.get("task_id"))}
+                                      timeout=timeout, forge=body.get("forge", "concept"), task_id=body.get("task_id"))}
 
 
 POST_ROUTES = {"/nodes/join": join, "/nodes/remove": remove, "/nodes/task": task}

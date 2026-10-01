@@ -51,6 +51,27 @@ JSON, schema fields, or implementation details. Do not claim that an image was g
 Reply in the user's language.
 """
 
+CREATION_SYSTEM_PROMPT = """You are EverSpark Concept Forge's creative planning stage.
+Understand the user's request and decompose the creative work. Return JSON only:
+{"steps":[{"key":"scene-1","forge":"image","brief":"complete creative brief",
+"depends_on":[]},{"key":"speech-1","forge":"audio","brief":"spoken content brief",
+"depends_on":["scene-1"]}]}
+Use only the available Forge names supplied by the caller. Image creates images;
+audio synthesizes spoken text, not music or sound effects. Each brief must preserve
+the user's language, explicit content and constraints. Split distinct scenes or
+utterances into separate steps when requested. Dependencies refer to step keys and
+express creative relationships. Do not invent runtime task IDs, execution states,
+providers, models, checkpoints, workflows, paths, or backend settings.
+Do not generate final image prompts or speech text yet: that is the second stage.
+"""
+
+SPEECH_SYSTEM_PROMPT = """You are EverSpark Concept Forge's speech-writing stage.
+Return exactly {"text":"the complete text to synthesize"} as JSON, no commentary.
+Preserve explicitly quoted text exactly and write in the language the user requested.
+For an original narration request, compose the finished narration from the brief and
+supplied context. Do not describe model parameters, paths, or reference audio.
+"""
+
 
 from .port import ChatRequest, ConceptError
 from .gateway import ConceptGateway
@@ -80,6 +101,46 @@ class ConceptService:
 
     def list_models(self, provider: str = "") -> list[str]:
         return self.gateway.list_models(provider)
+
+    def decompose(self, text, history, available_forges, model="", provider=""):
+        response = self._chat([
+            {"role": "system", "content": CREATION_SYSTEM_PROMPT},
+            *(history or []),
+            {"role": "user", "content": json.dumps({"request": text,
+                "available_forges": available_forges}, ensure_ascii=False)},
+        ], model, json_mode=True, provider=provider)
+        try:
+            value = json.loads(response)
+            steps = value["steps"]
+            if not isinstance(steps, list) or not 1 <= len(steps) <= 64:
+                raise ValueError("Expected 1 to 64 creative steps")
+            for step in steps:
+                if (not isinstance(step, dict) or set(step) != {"key", "forge", "brief", "depends_on"}
+                        or step["forge"] not in available_forges
+                        or any(not isinstance(step[k], str) or not step[k].strip()
+                               or len(step[k]) > 12000 for k in ("key", "brief"))
+                        or not isinstance(step["depends_on"], list)
+                        or any(not isinstance(k, str) for k in step["depends_on"])):
+                    raise ValueError("Invalid creative step")
+            return {"steps": steps}
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ConceptError("Concept Forge returned an invalid creative decomposition") from exc
+
+    def generate_speech(self, brief, context, model="", provider=""):
+        response = self._chat([
+            {"role": "system", "content": SPEECH_SYSTEM_PROMPT},
+            {"role": "user", "content": json.dumps({"brief": brief,
+                "context": context}, ensure_ascii=False)},
+        ], model, json_mode=True, provider=provider)
+        try:
+            value = json.loads(response)
+            if (not isinstance(value, dict) or set(value) != {"text"}
+                    or not isinstance(value["text"], str) or not value["text"].strip()
+                    or len(value["text"]) > 12000):
+                raise ValueError("Invalid speech text")
+            return value
+        except (ValueError, TypeError) as exc:
+            raise ConceptError("Concept Forge returned invalid speech text") from exc
 
     def generate_prompt(
         self,

@@ -3,6 +3,7 @@
   const roles = [
     { id: "concept", state: "forge", label: "Use for Concept Forge", selected: "Selected Concept Node" },
     { id: "image", state: "image_forge", label: "Use for Image Forge", selected: "Selected Image Node" },
+    { id: "audio", state: "audio_forge", label: "使用此 Audio Forge 节点", selected: "已选 Audio 节点" },
   ];
   function initialize({ api, bind, notice, changed }) {
     let selection = { bindings: {}, ready: false };
@@ -10,7 +11,7 @@
     const summary = document.querySelector("#forgeNodeSummary");
     function show() {
       const bindings = selection.bindings || {};
-      const missing = roles.filter((role) => !bindings[role.id]);
+      const missing = roles.filter((role) => role.id !== "audio" && !bindings[role.id]);
       const message = selection.error || (selection.ready ? "Remote Concept and Image Nodes are connected. Open Create to generate."
         : missing.length === 2 ? "Select the ready Concept and Image machines below to connect generation."
         : missing[0]?.id === "concept" ? "Select a ready Concept machine to complete the generation connection."

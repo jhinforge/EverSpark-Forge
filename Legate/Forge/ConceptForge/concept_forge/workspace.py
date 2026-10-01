@@ -5,6 +5,7 @@ remote transport. Persistent data is provided by Ledger through Memory.
 """
 from __future__ import annotations
 import re
+import json
 from contextlib import contextmanager
 import threading
 import time
@@ -344,6 +345,20 @@ class ConceptWorkspace:
         return selection
 
     @contextmanager
+    def prepare_creation(self, text, session, selection, available_forges, notify):
+        if not self._task_lock.acquire(blocking=False):
+            raise BusyError("Concept Forge is busy")
+        try:
+            with self.memory.operation():
+                history = self.memory.get_history(session)
+                plan = self.service.decompose(text, history, available_forges,
+                    model=str(selection.get("llm", "")),
+                    provider=str(selection.get("concept_provider", "")))
+                yield PreparedCreation(self, text, session, selection, plan, notify)
+        finally:
+            self._task_lock.release()
+
+    @contextmanager
     def prepare_generation(self, text, session, selection, notify):
         if not self._task_lock.acquire(blocking=False):
             raise BusyError("Concept Forge is busy")
@@ -396,6 +411,38 @@ class ConceptWorkspace:
         return {"llms": llms, "concept_providers": providers, "concept_models": models,
             "defaults": {"llm": default_llm or self.service.model,
                          "concept_provider": self.service.gateway.default}}
+
+class PreparedCreation:
+    """Concept owns the briefs and second-stage instructions, never runtime tasks."""
+    def __init__(self, owner, text, session, selection, plan, notify):
+        self.owner, self.text, self.session = owner, text, session
+        self.selection, self.plan, self.notify = selection, plan, notify
+
+    def prepare(self, step, dependency_results):
+        brief = json.dumps({"request": self.text, "creative_brief": step["brief"],
+                            "dependencies": dependency_results}, ensure_ascii=False)
+        if step["forge"] == "image":
+            prepared = self.owner._prepare_generation(brief, self.session, self.selection, self.notify)
+            prepared.text = step["brief"]
+            return prepared
+        if step["forge"] == "audio":
+            instruction = self.owner.service.generate_speech(step["brief"],
+                {"request": self.text, "dependencies": dependency_results},
+                model=str(self.selection.get("llm", "")),
+                provider=str(self.selection.get("concept_provider", "")))
+            return PreparedSpeech(self.owner, self.session, step["brief"], instruction)
+        raise ValueError("Unsupported creative Forge")
+
+
+class PreparedSpeech:
+    def __init__(self, owner, session, brief, instruction):
+        self.owner, self.session, self.brief = owner, session, brief
+        self.instruction = instruction
+
+    def complete(self, result):
+        self.owner.memory.record_conversation(self.session, self.brief, self.instruction["text"])
+        return result
+
 
 class PreparedGeneration:
     """Concept-owned context; the coordinator only transfers its instruction."""

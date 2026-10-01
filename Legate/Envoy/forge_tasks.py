@@ -10,7 +10,7 @@ from .settings import REPO
 
 
 def command(forge: str, action: str, message: str) -> tuple[list[str], int] | None:
-    if not isinstance(forge, str) or forge not in {"concept", "image"}:
+    if not isinstance(forge, str) or forge not in {"concept", "image", "audio"}:
         return None
     if action == "update":
         return ["bash", str(REPO / "Legate/Envoy/update_source.sh")], 1800
@@ -46,4 +46,15 @@ def command(forge: str, action: str, message: str) -> tuple[list[str], int] | No
             return ["bash", str(REPO / "Legate/Forge/ImageForge/Scripts/deploy.sh")], 3600
         if action == "health":
             return ["python3", str(REPO / "Legate/Forge/ImageForge/verify.py")], 30
+    if forge == "audio":
+        if action == "deploy":
+            return ["bash", str(REPO / "Legate/Forge/AudioForge/Scripts/deploy.sh")], 3600
+        if action in {"health", "synthesize", "fetch"} and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
+            try:
+                if isinstance(json.loads(message or "{}"), dict):
+                    return [str(REPO / "Data/Runtime/audio-venv/bin/python"),
+                        str(REPO / "Legate/Forge/AudioForge/remote_task.py"),
+                        action, message or "{}"], 600
+            except ValueError:
+                pass
     return None

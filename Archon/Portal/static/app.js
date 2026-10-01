@@ -330,6 +330,7 @@ function addSelectedLora() {
 
 function generationSelection() {
   return {
+    creation_mode: document.querySelector("#creationMode").value,
     engine: elements.imageEngineSelect.value,
     workflow: elements.workflowSelect.value,
     checkpoint: elements.checkpointSelect.value,
@@ -1352,7 +1353,7 @@ function renderMachine(machine) {
       finally { button.disabled = false; }
     },
   }));
-  const activeDeployment = machine.image_forge?.job || machine.forge?.job;
+  const activeDeployment = machine.audio_forge?.job || machine.image_forge?.job || machine.forge?.job;
   const deploymentText = activeDeployment ? window.EverSparkDeploymentProgress.format(activeDeployment) : state.podJobs[machine.id];
   if (deploymentText) {
     const progress = document.createElement("p");
@@ -1410,6 +1411,39 @@ function renderMachine(machine) {
       });
       actions.appendChild(verifyImage);
     }
+  }
+  if (machine.node?.status === "online" && machine.actual_status === "running") {
+    const actions = document.createElement("div");
+    actions.className = "machine-actions";
+    for (const [action, label] of [["deploy-audio", "部署 Audio Forge"], ["verify-audio", "验证 Audio Forge"]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost-button";
+      button.textContent = label;
+      button.disabled = Boolean(machine.audio_forge?.job);
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          const data = await api(`/api/machines/vast/${action}`, {method: "POST",
+            headers: {"Content-Type": "application/json"}, body: JSON.stringify({instance_id: machine.id})});
+          let job = data.job;
+          while (job.status === "running") {
+            showNotice(window.EverSparkDeploymentProgress.format(job));
+            await new Promise((resolve) => setTimeout(resolve, 1800));
+            job = (await api(`/api/machines/vast/audio-deployment-job?id=${encodeURIComponent(job.id)}`)).job;
+          }
+          if (job.status !== "completed") throw new Error(window.EverSparkDeploymentProgress.failure(job));
+          showNotice("Audio Forge 就绪", "success");
+          await loadMachines();
+        } catch (error) { showNotice(error.message); }
+        finally { button.disabled = false; }
+      });
+      actions.appendChild(button);
+    }
+    const status = document.createElement("span");
+    status.textContent = `Audio Forge · ${machine.audio_forge?.status || "not_deployed"}`;
+    actions.appendChild(status);
+    card.appendChild(actions);
   }
   card.appendChild(forgeNodes.render(machine));
   const destroy = document.createElement("button");
@@ -2070,6 +2104,9 @@ async function waitForGeneration(jobId) {
     }
     if (data.job.status === "completed") return data.job.response;
     if (data.job.status === "failed") throw new Error(data.job.error || t("Generation failed"));
+    const active = data.job.tasks?.find((task) => ["preparing", "running"].includes(task.status));
+    if (active) setGenerationState(active.status === "preparing" ? "Concept Forge 正在生成任务输入"
+      : `${active.forge === "audio" ? "Audio" : "Image"} Forge 正在生成`, "running");
   }
 }
 
@@ -2123,6 +2160,12 @@ async function generate() {
     }
     const data = await waitForGeneration(accepted.job.id);
     await Promise.all([loadCurrentSubject(), loadSubjects()]);
+    if (data.result?.tasks) {
+      renderCreation(data.result);
+      elements.generateButton.disabled = false;
+      setGenerationState("Complete", "success");
+      return;
+    }
     const items = data.result?.items || [];
     if (!items.length) throw new Error(t("Orchestrator did not return any queued frames."));
     renderWaiting(items);
@@ -2133,6 +2176,36 @@ async function generate() {
     setGenerationState("Failed", "error");
     showNotice(error.message);
   }
+}
+
+function renderCreation(result) {
+  elements.resultStage.replaceChildren();
+  const grid = document.createElement("div");
+  grid.className = "result-grid";
+  for (const task of result.tasks) {
+    for (const output of task.result?.outputs || []) {
+      for (const image of output.images || []) {
+        const query = new URLSearchParams({filename: image.filename, subfolder: image.subfolder || "", type: image.type || "output"});
+        grid.appendChild(imageButton({...image, url: `/api/image/view?${query}`}, "result-card"));
+      }
+    }
+  }
+  for (const resource of result.audio || []) {
+    const card = document.createElement("div");
+    card.className = "storage-panel";
+    const text = document.createElement("p");
+    text.textContent = resource.text || "";
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.src = `/api/audio/file?filename=${encodeURIComponent(resource.filename)}`;
+    const download = document.createElement("a");
+    download.href = audio.src;
+    download.download = resource.filename;
+    download.textContent = "下载 WAV";
+    card.append(text, audio, download);
+    grid.appendChild(card);
+  }
+  elements.resultStage.appendChild(grid);
 }
 
 async function loadHistory() {

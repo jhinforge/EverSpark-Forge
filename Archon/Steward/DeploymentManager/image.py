@@ -14,6 +14,9 @@ from .job_store import JobStore
 
 
 class ImageDeploymentManager:
+    forge = "image"
+    label = "Image Forge"
+
     def __init__(self, machines, bridge, state_path: Path | None = None):
         self.machines = machines
         self.bridge = bridge
@@ -24,20 +27,20 @@ class ImageDeploymentManager:
         except FileNotFoundError:
             restored = {}
         if not isinstance(restored, dict):
-            raise ValueError("Invalid Image Forge deployment state")
+            raise ValueError(f"Invalid {self.label} deployment state")
         self.states: dict[int, dict] = {int(key): (
             {"status": "deployment_unknown"} if value.get("status") == "deploying" else
             {"status": "verification_required"} if value.get("status") in {"verifying", "ready"} else value)
             for key, value in restored.items() if isinstance(value, dict)}
-        self.job_store = JobStore(state_path)
+        self.job_store = JobStore(state_path, self.forge)
         self.jobs = self.job_store.load()
         self.retired_instances = set()
-        self.connection_verification = ConnectionVerification(self, "image")
+        self.connection_verification = ConnectionVerification(self, self.forge)
         for job_id, job in list(self.jobs.items()):
             if job["status"] == "running":
                 self.states[job["instance_id"]] = {"status": "recovering"}
                 threading.Thread(target=self._recover, args=(job_id,), daemon=True,
-                                 name="image-deployment-recovery").start()
+                                 name=f"{self.forge}-deployment-recovery").start()
 
     def _save(self) -> None:
         if self.state_path is None:
@@ -69,7 +72,7 @@ class ImageDeploymentManager:
     def job(self, job_id: str) -> dict:
         with self.lock:
             if job_id not in self.jobs:
-                raise VastError("Unknown Image Forge deployment job", 404)
+                raise VastError(f"Unknown {self.label} deployment job", 404)
             return job_progress(self.bridge, self.jobs[job_id].copy())
 
     def retire_instance(self, instance_id: int) -> None:
@@ -80,17 +83,17 @@ class ImageDeploymentManager:
 
     def start(self, instance_id: int, action: str = "deploy") -> dict:
         if action not in {"deploy", "verify"}:
-            raise VastError("Unsupported Image Forge deployment action", 400)
+            raise VastError(f"Unsupported {self.label} deployment action", 400)
         if not self.bridge or not self.bridge.configured(instance_id):
-            raise VastError("Image Forge requires a registered Node Agent", 409)
+            raise VastError(f"{self.label} requires a registered Node Agent", 409)
         if self.machines.one(instance_id)["actual_status"] != "running":
             raise VastError("Wait for the Pod to finish starting", 409)
         with self.lock:
             if any(job["instance_id"] == instance_id and job["status"] == "running"
                    for job in self.jobs.values()):
-                raise VastError("Image Forge deployment is already running on this Pod", 409)
+                raise VastError(f"{self.label} deployment is already running on this Pod", 409)
             job_id = uuid.uuid4().hex
-            job = {"id": job_id, "instance_id": instance_id, "action": f"{action}-image",
+            job = {"id": job_id, "instance_id": instance_id, "action": f"{action}-{self.forge}",
                    "status": "running", "stage": "queued"}
             self.jobs[job_id] = job
             self.job_store.save(self.jobs)
@@ -104,13 +107,13 @@ class ImageDeploymentManager:
         with self.lock:
             job = self.jobs[job_id].copy()
         instance_id = job["instance_id"]
-        operation = "deploy" if job["action"] == "deploy-image" else "verify"
+        operation = "deploy" if job["action"] == f"deploy-{self.forge}" else "verify"
         confirmed_failure = False
         try:
             found = json.loads(self.bridge.execute(instance_id, "recover", job["task_id"],
-                                                  timeout=3700, forge="image"))
+                                                  timeout=3700, forge=self.forge))
             if not isinstance(found, dict) or found.get("state") != "completed" or found.get("status") not in {"completed", "failed"}:
-                raise VastError("Agent cannot confirm the previous Image task; outcome unknown")
+                raise VastError(f"Agent cannot confirm the previous {self.forge} task; outcome unknown")
             if found["status"] == "failed":
                 confirmed_failure = True
                 from Archon.Steward.NodeManager.errors import NodeTaskError
@@ -119,7 +122,7 @@ class ImageDeploymentManager:
                 raise error
         except Exception as exc:
             if not confirmed_failure:
-                exc = VastError(f"Image task recovery could not confirm the result; outcome unknown: {exc}")
+                exc = VastError(f"{self.forge} task recovery could not confirm the result; outcome unknown: {exc}")
                 exc.stage = "recovery_unknown"
             self._failed(job_id, instance_id, operation, exc)
             return
@@ -137,9 +140,9 @@ class ImageDeploymentManager:
                     self.jobs[job_id]["task_id"] = task_id
                     self.jobs[job_id]["task_action"] = action
                     self.job_store.save(self.jobs)
-                output = self.bridge.execute(instance_id, action, timeout=timeout, forge="image", task_id=task_id)
+                output = self.bridge.execute(instance_id, action, timeout=timeout, forge=self.forge, task_id=task_id)
                 if not output.strip():
-                    raise VastError(f"Image Forge {action} returned no output")
+                    raise VastError(f"{self.label} {action} returned no output")
             with self.lock:
                 if instance_id in self.retired_instances:
                     raise VastError("Node instance was destroyed", 404)

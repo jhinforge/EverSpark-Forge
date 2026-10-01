@@ -113,6 +113,24 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send(400, {"ok": False, "error": "Invalid history limit"})
             except Exception as exc:
                 self._send(502, {"ok": False, "error": str(exc)})
+        elif parsed.path == "/audio/file":
+            query = parse_qs(parsed.query)
+            try:
+                path = self.server.application.audio_path(query.get("filename", [""])[0])
+            except ValueError:
+                self._send(404, {"ok": False, "error": "Audio is unavailable"})
+                return
+            except (OSError, RuntimeError):
+                self._send(502, {"ok": False, "error": "Audio Forge is unavailable"})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", str(path.stat().st_size))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            with path.open("rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    self.wfile.write(chunk)
         elif parsed.path == "/image/file":
             query = parse_qs(parsed.query)
             try:

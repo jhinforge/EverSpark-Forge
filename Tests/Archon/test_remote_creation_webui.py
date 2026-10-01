@@ -44,6 +44,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
                 config = load_config()
                 config["memory"]["database"] = str(self.root / "memory.db")
                 config["image_forge"]["output_directory"] = str(self.root / "outputs")
+                config["audio_forge"]["output_directory"] = str(self.root / "audio")
                 return config
             runtime = create_runtime(bindings, control_url, config_loader)
             from concept_forge.subjects import new_subject
@@ -92,7 +93,9 @@ class RemoteCreationWebUITests(unittest.TestCase):
             "default_negative": lambda _: {"negative_prompt": "bad"},
             "submit": lambda _: {"prompt_id": "remote-job", "selection": {"workflow": "base", "checkpoint": "model.safetensors", "vae": "", "loras": []}},
             "poll": lambda _: {"prompt_id": "remote-job", "status": "completed", "images": [{"filename": "render.png", "subfolder": "", "type": "output"}]},
-            "fetch": lambda _: {"size": len(self.image_bytes), "data": base64.b64encode(self.image_bytes).decode()},
+            "fetch": lambda p: self.output_chunk(role, p),
+            "synthesize": lambda p: {"status": "completed", "audio": [{
+                "filename": "speech.wav", "sample_rate": 48000, "text": p["text"]}]},
             "history": lambda _: {"images": []},
         }
         try:
@@ -111,12 +114,67 @@ class RemoteCreationWebUITests(unittest.TestCase):
     def concept_response(self, payload):
         delimiter = "The required output template/current document is:\n"
         system = payload["messages"][0]["content"]
+        if "creative planning stage" in system:
+            return {"steps": [{"key": "frame", "forge": "image", "brief": "A portrait", "depends_on": []},
+                {"key": "voice", "forge": "audio", "brief": "Japanese greeting", "depends_on": ["frame"]}]}
+        if "speech-writing stage" in system:
+            return {"text": "こんにちは。"}
         if delimiter in system:
             document = json.loads(system.split(delimiter, 1)[1])
             document["identity"]["display_name"] = "Remote character"
             return document
         return {"model": "illustrious", "positive_prompt": "portrait",
                 "negative_prompt": "bad", "count": 1, "status": "over"}
+
+    def output_chunk(self, role, payload):
+        data = self.audio_bytes if role == "audio" else self.image_bytes
+        offset = payload.get("offset", 0)
+        return {"size": len(data), "data": base64.b64encode(data[offset:offset+24576]).decode()}
+
+    def test_two_stage_creation_reaches_audio_node_and_returns_playable_wav(self):
+        import io
+        import wave
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as stream:
+            stream.setnchannels(1)
+            stream.setsampwidth(2)
+            stream.setframerate(48000)
+            stream.writeframes(b"\x00\x00" * 16000)
+        self.audio_bytes = buffer.getvalue()
+        enrollment = "c" * 32
+        response = self.nodes.registration.register({"join_token": self.nodes.issue_join_token(),
+            "enrollment_id": enrollment, "runtime_id": enrollment, "info": INFO})
+        self.identities["audio"] = response["node_id"]
+        authentication = {key: response[key] for key in ("node_id", "runtime_id", "session")}
+        worker = threading.Thread(target=self.agent, args=("audio", authentication), daemon=True)
+        worker.start()
+        self.agents.append(worker)
+        self.select_pair()
+        self.assertIsNone(self.bindings.runtime.server.application.audio)
+        self.call("/api/forge-bindings", {"forge": "audio", "node_id": self.identities["audio"]})
+        request = {"message": "portrait with Japanese narration", "session_id": "creation",
+                   "selection": {"creation_mode": "plan"}, "request_id": "d" * 32}
+        job = self.call("/api/generate/start", request)["job"]
+        for _ in range(200):
+            state = self.call("/api/generate/jobs?job_id=" + job["id"])["job"]
+            if state["status"] not in {"queued", "running"}:
+                break
+            time.sleep(.01)
+        self.assertEqual(state["status"], "completed", state)
+        result = state["response"]["result"]
+        self.assertEqual([t["forge"] for t in result["tasks"]], ["image", "audio"])
+        self.assertEqual(result["tasks"][1]["depends_on"], [result["tasks"][0]["id"]])
+        self.assertEqual(result["audio"][0]["text"], "こんにちは。")
+        self.assertEqual(self.seen.count(("concept", "concept", "chat")), 3)
+        self.assertEqual(self.seen.count(("audio", "audio", "synthesize")), 1)
+        self.assertEqual(self.seen.count(("audio", "audio", "fetch")), 2)
+        with urlopen(self.url + "/api/audio/file?filename=speech.wav", timeout=5) as response:
+            self.assertEqual(response.headers["Content-Type"], "audio/wav")
+            self.assertEqual(response.read(), self.audio_bytes)
+        self.call("/api/generate/start", request)
+        self.assertEqual(self.seen.count(("audio", "audio", "synthesize")), 1)
+        self.assertTrue(all(role == forge for role, forge, _ in self.seen))
+        self.assertEqual(self.agent_errors, [])
 
     def test_complete_concept_business_and_ledger_survive_two_node_generation(self):
         self.real_subject = True

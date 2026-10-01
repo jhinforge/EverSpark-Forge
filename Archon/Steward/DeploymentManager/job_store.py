@@ -4,7 +4,8 @@ import re
 
 
 class JobStore:
-    def __init__(self, state_path):
+    def __init__(self, state_path, forge="image"):
+        self.forge = forge
         self.path = state_path.with_name(state_path.stem + ".jobs.json") if state_path else None
 
     def load(self):
@@ -16,7 +17,7 @@ class JobStore:
             raise ValueError("Invalid deployment job journal")
         for job_id, job in jobs.items():
             if (not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{32}", job_id)
-                    or job.get("id") != job_id or job.get("action") not in {"deploy-image", "verify-image"}
+                    or job.get("id") != job_id or job.get("action") not in {f"deploy-{self.forge}", f"verify-{self.forge}"}
                     or job.get("status") not in {"running", "completed", "failed"}
                     or isinstance(job.get("instance_id"), bool) or not isinstance(job.get("instance_id"), int)
                     or job["instance_id"] < 1):
@@ -24,7 +25,7 @@ class JobStore:
             if job.get("status") == "running":
                 if (isinstance(job.get("task_id"), str) and re.fullmatch(r"[0-9a-f]{32}", job["task_id"])
                         and job.get("task_action") in ({"deploy", "health", "revision"}
-                            if job["action"] == "deploy-image" else {"health", "revision"})):
+                            if job["action"] == f"deploy-{self.forge}" else {"health", "revision"})):
                     job["stage"] = "recovering"
                 else:
                     job.update(status="failed", stage="archon_restart",

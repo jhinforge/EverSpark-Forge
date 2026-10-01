@@ -17,6 +17,7 @@ from .forge_binding_routes import handle as handle_forge_bindings
 _REMOTE_FORGE_ACTIONS = {
     "concept": frozenset({"chat"}),
     "image": frozenset({"resources", "default_negative", "submit", "poll", "history", "fetch"}),
+    "audio": frozenset({"health", "synthesize", "fetch"}),
 }
 
 
@@ -24,13 +25,14 @@ class ControlServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, address: tuple[str, int], machines=None, offers=None, deployments=None,
-                 image_deployments=None, node_manager=None, forge_bindings=None):
+                 image_deployments=None, node_manager=None, forge_bindings=None, audio_deployments=None):
         self.forge_bindings = forge_bindings
         self.node_manager = node_manager
         self.machines = machines
         self.offers = offers
         self.deployments = deployments
         self.image_deployments = image_deployments
+        self.audio_deployments = audio_deployments
         super().__init__(address, ControlHandler)
 
 
@@ -80,6 +82,10 @@ class ControlHandler(BaseHTTPRequestHandler):
                             machine["image_forge"] = self.server.image_deployments.status(machine["id"])
                             if machine.get("actual_status") == "stopped" and machine["image_forge"]["status"] == "ready":
                                 machine["image_forge"] = {"status": "verification_required"}
+                    if self.server.audio_deployments:
+                        for machine in result["instances"]:
+                            self.server.audio_deployments.reconcile_machine(machine)
+                            machine["audio_forge"] = self.server.audio_deployments.status(machine["id"])
                     self._send(200, {"ok": True, **result})
                 elif path == "/machines/vast/deployment-job":
                     from urllib.parse import parse_qs
@@ -88,6 +94,12 @@ class ControlHandler(BaseHTTPRequestHandler):
                         self._send(503, {"ok": False, "error": "Deployment is unavailable"})
                     else:
                         self._send(200, {"ok": True, "job": self.server.deployments.job(job_id)})
+                elif path == "/machines/vast/audio-deployment-job":
+                    from urllib.parse import parse_qs
+                    if not self.server.audio_deployments:
+                        raise VastError("Audio deployment is unavailable", 503)
+                    job_id = parse_qs(parsed.query).get("id", [""])[0]
+                    self._send(200, {"ok": True, "job": self.server.audio_deployments.job(job_id)})
                 elif path == "/machines/vast/image-deployment-job":
                     from urllib.parse import parse_qs
                     if not self.server.image_deployments:
@@ -184,6 +196,8 @@ class ControlHandler(BaseHTTPRequestHandler):
                         self.server.deployments.retire_instance(instance_id)
                     if self.server.image_deployments:
                         self.server.image_deployments.retire_instance(instance_id)
+                    if self.server.audio_deployments:
+                        self.server.audio_deployments.retire_instance(instance_id)
                     self._send(200, {"ok": True, "instance_id": instance_id})
                 elif path == "/machines/vast/offers":
                     if self.server.offers is None:
@@ -240,7 +254,12 @@ class ControlHandler(BaseHTTPRequestHandler):
                         raise VastError("Node bridge is unavailable", 503)
                     self._send(200, {"ok": True, "output": bridge.execute(
                         payload["instance_id"], payload["action"], payload["message"],
-                        timeout=240, forge=payload["forge"])})
+                        timeout=600 if payload["forge"] == "audio" else 240, forge=payload["forge"])})
+                elif path in {"/machines/vast/deploy-audio", "/machines/vast/verify-audio"}:
+                    if set(payload) != {"instance_id"} or not self.server.audio_deployments:
+                        raise VastError("Invalid Audio Forge deployment request", 400)
+                    action = "verify" if path.endswith("/verify-audio") else "deploy"
+                    self._send(202, {"ok": True, "job": self.server.audio_deployments.start(payload["instance_id"], action)})
                 elif path in {"/machines/vast/deploy-image", "/machines/vast/verify-image"}:
                     if set(payload) != {"instance_id"} or not self.server.image_deployments:
                         raise VastError("Invalid Image Forge deployment request", 400)

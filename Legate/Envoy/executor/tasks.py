@@ -9,7 +9,7 @@ from . import progress
 
 
 def execute(action: str, message: str, forge: str = "concept") -> dict:
-    if forge not in {"concept", "image"}:
+    if forge not in {"concept", "image", "audio"}:
         return {"status": "failed", "output": "Unknown Forge identity", "exit_code": 2}
     if action == "recover":
         if not isinstance(message, str) or len(message) != 32 or any(

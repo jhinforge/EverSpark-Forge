@@ -32,6 +32,12 @@
       }
     }
   },
+  "audio_forge": {
+    "model_repo": "openbmb/VoxCPM2",
+    "model_directory": "Data/Models/AudioForge/VoxCPM2",
+    "output_directory": "Data/Outputs/AudioForge",
+    "max_text_chars": 12000
+  },
   "storage": {
     "backend": "local",
     "rclone": {

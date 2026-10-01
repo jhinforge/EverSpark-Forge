@@ -8,14 +8,25 @@ from concept_forge.workspace import ConceptWorkspace
 from Aegis.Storage.service import StorageService
 from orchestrator.core.orchestrator import Orchestrator
 from orchestrator.core.task_runner import TaskRunner
+from AudioForge.audio_forge.service import AudioService
 
 class GateApplication:
     def __init__(self, config, logger=None, concept_logger=None):
         service, connections = create_service(config, concept_logger)
         self.concept = ConceptWorkspace(config, service, connections, concept_logger or logger)
         self.image = create_management(config)
+        remote = config.get("remote_nodes", {})
+        # Remote-only hosts must never fall back to local GPU execution.
+        remote_concept = remote.get("concept_node_id") or remote.get("concept_instance_id")
+        self.audio = AudioService(config) if (not remote_concept
+            or remote.get("audio_node_id") or remote.get("audio_instance_id")) else None
         self.storage = StorageService(config)
-        self.orchestrator = Orchestrator(TaskRunner(self.concept, self.image), logger)
+        self.orchestrator = Orchestrator(TaskRunner(self.concept, self.image, self.audio), logger)
+
+    def audio_path(self, filename):
+        if self.audio is None:
+            raise ValueError("Select an Audio Forge Node first")
+        return self.audio.audio_path(filename)
 
     def resources(self, engine=""):
         # Combine independently owned resource catalogs only at the HTTP boundary.

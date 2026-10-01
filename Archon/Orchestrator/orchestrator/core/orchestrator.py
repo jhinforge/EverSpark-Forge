@@ -53,7 +53,8 @@ class Orchestrator:
             job["status"] = "running"
             text, session, selection = job["text"], job["session_id"], job["selection"]
         try:
-            result = self.submit(text, session, selection)
+            result = self.submit(text, session, selection,
+                _progress=lambda event: self._progress(job_id, event))
             update = {"status": "completed", "response": result}
         except Exception as exc:
             update = {"status": "failed", "error": str(exc)}
@@ -69,7 +70,11 @@ class Orchestrator:
                 raise ValueError("Unknown generation task")
             return {key: value for key, value in job.items() if key not in {"session_id", "text", "selection"}}
 
-    def submit(self, user_text: str, session_id: str, selection=None):
+    def _progress(self, job_id, event):
+        with self._task_jobs_lock:
+            self._task_jobs[job_id]["tasks"] = event["tasks"]
+
+    def submit(self, user_text: str, session_id: str, selection=None, *, _progress=None):
         text = normalize_unicode(user_text).strip()
         session = normalize_unicode(session_id).strip()
         if not text:
@@ -82,7 +87,13 @@ class Orchestrator:
             raise BusyError("A generation task is already running")
         notices = []
         try:
-            result = self.runner.run(text, session, selection or {}, notices.append)
+            def notify(event):
+                if isinstance(event, dict) and "tasks" in event:
+                    if _progress:
+                        _progress(event)
+                else:
+                    notices.append(event)
+            result = self.runner.run(text, session, selection or {}, notify)
             return {"ok": True, "notices": notices, "result": result}
         finally:
             self._task_lock.release()

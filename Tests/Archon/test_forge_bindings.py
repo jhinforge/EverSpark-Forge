@@ -67,7 +67,7 @@ class ForgeBindingsTests(unittest.TestCase):
         for body in ({"forge": "image", "node_id": "c" * 32},
                      {"forge": "image", "node_id": "d" * 32},
                      {"forge": "image", "node_id": "99"},
-                     {"forge": "audio", "node_id": "a" * 32}):
+                     {"forge": "video", "node_id": "a" * 32}):
             with self.subTest(body=body), self.assertRaises(NodeError):
                 self.bindings.select(body)
         self.assertEqual(self.bindings.bindings, {})

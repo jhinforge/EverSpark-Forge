@@ -102,6 +102,17 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         config, "EVERSPARK_ORCHESTRATOR_PORT", ("orchestrator", "port"), int
     )
     config.setdefault("remote_nodes", {})
+    audio = config.setdefault("audio_forge", {})
+    if not isinstance(audio, dict):
+        raise ConfigError("audio_forge must be an object")
+    audio.setdefault("model_repo", "openbmb/VoxCPM2")
+    audio.setdefault("max_text_chars", 12000)
+    if isinstance(audio["max_text_chars"], bool) or not isinstance(audio["max_text_chars"], int) or not 1 <= audio["max_text_chars"] <= 12000:
+        raise ConfigError("audio_forge.max_text_chars must be between 1 and 12000")
+    for key, fallback in (("model_directory", "Data/Models/AudioForge/VoxCPM2"),
+                          ("output_directory", "Data/Outputs/AudioForge")):
+        audio[key] = _resolve_repo_path(str(audio.get(key, fallback)), "audio_forge." + key)
+    _environment_override(config, "EVERSPARK_AUDIO_NODE_ID", ("remote_nodes", "audio_node_id"))
     _environment_override(config, "EVERSPARK_CONCEPT_NODE_ID", ("remote_nodes", "concept_node_id"))
     _environment_override(config, "EVERSPARK_IMAGE_NODE_ID", ("remote_nodes", "image_node_id"))
     _environment_override(config, "EVERSPARK_CONCEPT_INSTANCE_ID",

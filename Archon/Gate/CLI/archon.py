@@ -52,6 +52,7 @@ def start() -> int:
     from Archon.Vault.ssh_identity import SSHIdentity
     from Archon.Steward.DeploymentManager.manager import DeploymentManager
     from Archon.Steward.DeploymentManager.image import ImageDeploymentManager
+    from Archon.Steward.DeploymentManager.audio import AudioDeploymentManager
     from Archon.Steward.NodeManager import NodeManager
     from Archon.Steward.DeploymentManager.providers.network import tailscale_ip
     from Archon.Steward.DeploymentManager.providers.vast_nodes import VastNodes
@@ -89,8 +90,11 @@ def start() -> int:
         deployments = DeploymentManager(machines, SSHIdentity(), bridge=bridge) if machines else None
         image_deployments = ImageDeploymentManager(
             machines, bridge, state_path=node_state.with_name("image_deployments.json")) if machines else None
+        audio_deployments = AudioDeploymentManager(
+            machines, bridge, state_path=node_state.with_name("audio_deployments.json")) if machines else None
         backend = ControlServer(("127.0.0.1", backend_port), machines, offers, deployments,
-                                image_deployments=image_deployments, node_manager=nodes)
+                                image_deployments=image_deployments, node_manager=nodes,
+                                audio_deployments=audio_deployments)
         forge_bindings = ForgeBindings(nodes, node_state.with_name("forge_bindings.json"),
             f"http://127.0.0.1:{backend.server_port}")
         backend.forge_bindings = forge_bindings

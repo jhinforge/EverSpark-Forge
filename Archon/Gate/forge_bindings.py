@@ -7,7 +7,8 @@ from Archon.Steward.NodeManager.errors import NodeError
 from Archon.Steward.NodeManager.identity import validate_id
 from .remote_runtime import create_runtime
 
-ROLES = frozenset({"concept", "image"})
+ROLES = frozenset({"concept", "image", "audio"})
+REQUIRED_ROLES = frozenset({"concept", "image"})
 
 
 class ForgeBindings:
@@ -42,7 +43,7 @@ class ForgeBindings:
 
     def restore(self):
         with self.lock:
-            if set(self.bindings) == ROLES and all(self.nodes.configured(n) for n in self.bindings.values()):
+            if REQUIRED_ROLES <= set(self.bindings) and all(self.nodes.configured(n) for n in self.bindings.values()):
                 try:
                     self.runtime = self.factory(dict(self.bindings), self.control_url)
                 except Exception as exc:
@@ -67,7 +68,7 @@ class ForgeBindings:
                 raise NodeError("Wait for the current task before changing Forge Nodes", 409)
             replacement = None
             try:
-                if set(candidate) == ROLES:
+                if REQUIRED_ROLES <= set(candidate):
                     if not all(self.nodes.configured(n) for n in candidate.values()):
                         raise NodeError("Selected Forge Node was removed; select its replacement", 409)
                     replacement = self.factory(candidate, self.control_url)
