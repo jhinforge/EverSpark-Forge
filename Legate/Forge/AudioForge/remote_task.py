@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 from Archon.Vault.runtime_config import load_config
 from Aegis.Storage.output_resources import OutputResources
-from Legate.Forge.AudioForge.audio_forge.voxcpm import synthesize
+from Legate.Forge.AudioForge.audio_forge.voxcpm import synthesize, validate_runtime
 
 
 def run(action, payload, config=None):
@@ -31,7 +31,7 @@ def run(action, payload, config=None):
         return {"audio": [{"filename": path.name} for path in
                           itertools.islice(files, max(1, min(payload["limit"], 100)))]}
     if action == "health":
-        import torch
+        torch = validate_runtime()
         if importlib.metadata.version("voxcpm") != "2.0.3":
             raise RuntimeError("Audio Forge requires voxcpm 2.0.3")
         if not torch.cuda.is_available():

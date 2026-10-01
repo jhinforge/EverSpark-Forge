@@ -6,6 +6,18 @@ from pathlib import Path
 from Aegis.Storage.output_resources import OutputResources
 
 
+def validate_runtime():
+    """Load the speech SDK and its native extensions without loading a model."""
+    import torch
+    import torchaudio
+    profiles = {"2.9.1+cu126": "12.6", "2.9.1+cu128": "12.8"}
+    if (torch.__version__ not in profiles or torchaudio.__version__ != torch.__version__
+            or torch.version.cuda != profiles[torch.__version__]):
+        raise RuntimeError("Audio Forge requires matching Torch/torchaudio 2.9.1 CUDA builds; redeploy Audio Forge")
+    from voxcpm import VoxCPM
+    return torch
+
+
 def synthesize(payload, settings):
     if (not isinstance(payload, dict) or set(payload) != {"text"}
             or not isinstance(payload["text"], str) or not payload["text"].strip()

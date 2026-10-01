@@ -15,7 +15,7 @@ from Archon.Steward.NodeManager.transport.operator import task
 from Archon.Steward.NodeManager.errors import NodeError
 from Legate.Envoy.forge_tasks import command
 from Legate.Envoy.executor.tasks import execute
-from Legate.Forge.AudioForge.audio_forge.voxcpm import synthesize
+from Legate.Forge.AudioForge.audio_forge.voxcpm import synthesize, validate_runtime
 from Legate.Forge.AudioForge.audio_forge.service import AudioService
 from Legate.Forge.AudioForge.remote_task import run
 from Aegis.Storage.output_resources import OutputResources
@@ -24,6 +24,25 @@ from Archon.Gate.forge_bindings import ForgeBindings
 
 
 class AudioTests(unittest.TestCase):
+    def test_runtime_validation_checks_matching_cuda_builds_without_loading_model(self):
+        for profile, cuda in (("cu126", "12.6"), ("cu128", "12.8")):
+            torch = SimpleNamespace(__version__="2.9.1+" + profile, version=SimpleNamespace(cuda=cuda))
+            sdk = SimpleNamespace(VoxCPM=Mock())
+            with patch.dict("sys.modules", {"torch": torch, "torchaudio": SimpleNamespace(__version__=torch.__version__),
+                                          "voxcpm": sdk}):
+                self.assertIs(validate_runtime(), torch)
+                sdk.VoxCPM.assert_not_called()
+        torch = SimpleNamespace(__version__="2.9.1+cu128", version=SimpleNamespace(cuda="12.8"))
+        with patch.dict("sys.modules", {"torch": torch, "torchaudio": SimpleNamespace(__version__="2.10.0+cu130")}):
+            with self.assertRaisesRegex(RuntimeError, "matching Torch/torchaudio"):
+                validate_runtime()
+
+    def test_health_rejects_native_sdk_import_failure_before_reporting_ready(self):
+        with patch("Legate.Forge.AudioForge.remote_task.validate_runtime",
+                   side_effect=OSError("libcudart.so.13 missing")):
+            with self.assertRaisesRegex(OSError, "libcudart.so.13"):
+                run("health", {}, {"audio_forge": {}})
+
     def test_remote_failure_includes_action_http_status_exit_code_and_stderr(self):
         config = load_config()
         config["remote_nodes"]["audio_node_id"] = "a" * 32

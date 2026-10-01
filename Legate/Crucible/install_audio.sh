@@ -17,8 +17,17 @@ core_deploy_phase installing_python_dependencies
 source "${repo}/Legate/Warden/Hardware/torch_profile.sh"
 profile="$(core_torch_profile_detect)"
 core_deploy_phase installing_torch
-"${runtime}/bin/python" -m pip install --index-url "$(core_torch_profile_index "$profile")" 'torch==2.9.1'
+# Install both binary packages from the same CUDA index. Exact local versions
+# also repair an existing mismatched venv when deployment is retried.
+constraints="${runtime}/torch-constraints.txt"
+printf 'torch==2.9.1+%s\ntorchaudio==2.9.1+%s\n' "$profile" "$profile" > "$constraints"
+"${runtime}/bin/python" -m pip install --upgrade --index-url "$(core_torch_profile_index "$profile")" \
+  "torch==2.9.1+${profile}" "torchaudio==2.9.1+${profile}"
 core_deploy_phase installing_python_dependencies
-"${runtime}/bin/python" -m pip install 'voxcpm==2.0.3' soundfile huggingface_hub
+"${runtime}/bin/python" -m pip install --constraint "$constraints" 'voxcpm==2.0.3' soundfile huggingface_hub
+"${runtime}/bin/python" -m pip check
+# Import native extensions and the actual SDK before downloading models.
+PYTHONPATH="${repo}${PYTHONPATH:+:${PYTHONPATH}}" "${runtime}/bin/python" -c \
+  'from Legate.Forge.AudioForge.audio_forge.voxcpm import validate_runtime; validate_runtime()'
 core_deploy_phase downloading_models
 "${runtime}/bin/python" "${repo}/Aegis/Storage/model_snapshot.py"

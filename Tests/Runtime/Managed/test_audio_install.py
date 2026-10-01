@@ -20,19 +20,27 @@ class AudioInstallTests(unittest.TestCase):
         shutil.copyfile(ROOT / "Aegis/Shared/Shell/common.sh", self.root / "Aegis/Shared/Shell/common.sh")
         (self.root / "Legate/Crucible/System/apt.sh").write_text("core_apt_install_missing() { :; }\n")
         (self.root / "Legate/Warden/Hardware/torch_profile.sh").write_text(
-            "core_torch_profile_detect() { echo cu128; }\n"
-            "core_torch_profile_index() { echo https://download.pytorch.org/whl/cu128; }\n")
+            'core_torch_profile_detect() { echo "${TEST_TORCH_PROFILE:-cu128}"; }\n'
+            'core_torch_profile_index() { echo "https://download.pytorch.org/whl/$1"; }\n')
         self.trace = self.root / "trace"
         worker = self.root / "worker"
         worker.write_text('''#!/usr/bin/env bash
 set -eu
 printf '%s\\n' "$*" >> "$INSTALL_TRACE"
-if [[ "$*" == *"pip install --upgrade"* ]]; then
+if [[ "$*" == *"pip install --upgrade pip"* ]]; then
   if [[ "${FAIL_BOOTSTRAP:-0}" == 1 ]]; then exit 1; fi
   touch "$BOOTSTRAP_MARKER"
 elif [[ "$*" == *"pip install"* ]] && [[ ! -f "$BOOTSTRAP_MARKER" ]]; then
   echo 'Old pip resolver used before bootstrap' >&2
   exit 2
+fi
+if [[ "$*" == *"pip install --constraint"* ]]; then
+  [[ -f "$5" ]]
+  grep -q '^torchaudio==2.9.1+cu12' "$5"
+fi
+if [[ "$*" == *"validate_runtime"* && "${FAIL_RUNTIME_IMPORT:-0}" == 1 ]]; then
+  echo 'OSError: libcudart.so.13 missing' >&2
+  exit 1
 fi
 ''')
         worker.chmod(0o755)
@@ -62,13 +70,32 @@ fi
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertIn("[EverSpark:deploy] installing_python_dependencies", done.stdout)
         calls = self.trace.read_text().splitlines()
-        self.assertEqual(len(calls), 8)
-        for start in (0, 4):
+        self.assertEqual(len(calls), 12)
+        for start in (0, 6):
             self.assertIn("pip install --upgrade pip>=24,<26 setuptools>=70,<81 wheel>=0.43,<1", calls[start])
-            self.assertIn("torch==2.9.1", calls[start + 1])
+            self.assertIn("--index-url https://download.pytorch.org/whl/cu128", calls[start + 1])
+            self.assertIn("torch==2.9.1+cu128 torchaudio==2.9.1+cu128", calls[start + 1])
+            self.assertIn("--constraint", calls[start + 2])
             self.assertIn("voxcpm==2.0.3", calls[start + 2])
-            self.assertIn("Aegis/Storage/model_snapshot.py", calls[start + 3])
+            self.assertIn("pip check", calls[start + 3])
+            self.assertIn("validate_runtime()", calls[start + 4])
+            self.assertIn("Aegis/Storage/model_snapshot.py", calls[start + 5])
         self.assertEqual(image.read_text(), "existing image environment")
+
+    def test_cu126_uses_matching_packages_and_constraints(self):
+        done = self.install(TEST_TORCH_PROFILE="cu126")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        calls = self.trace.read_text().splitlines()
+        self.assertIn("--index-url https://download.pytorch.org/whl/cu126", calls[1])
+        self.assertIn("torch==2.9.1+cu126 torchaudio==2.9.1+cu126", calls[1])
+        self.assertEqual((self.root / "Data/Runtime/audio-venv/torch-constraints.txt").read_text(),
+                         "torch==2.9.1+cu126\ntorchaudio==2.9.1+cu126\n")
+
+    def test_failed_native_import_stops_deployment_before_model_download(self):
+        done = self.install(FAIL_RUNTIME_IMPORT="1")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("libcudart.so.13", done.stderr)
+        self.assertNotIn("model_snapshot.py", self.trace.read_text())
 
     def test_failed_bootstrap_stops_before_torch_models_or_voxcpm_installation(self):
         done = self.install(FAIL_BOOTSTRAP="1")
