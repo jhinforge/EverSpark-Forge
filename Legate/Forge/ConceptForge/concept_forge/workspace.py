@@ -427,7 +427,13 @@ class PreparedCreation:
             return prepared
         if step["forge"] == "audio":
             instruction = self.owner.service.generate_speech(step["brief"],
-                {"request": self.text, "dependencies": dependency_results},
+                {"request": self.text,
+                 "character": self.owner.get_session_subject(self.session),
+                 "related_briefs": [related["brief"] for related in self.plan["steps"]
+                                    if related["key"] in step["depends_on"]],
+                 # Retain result references, not image prompts or backend selections.
+                 "dependencies": [{key: result[key] for key in ("subject", "items", "outputs")
+                                   if key in result} for result in dependency_results]},
                 model=str(self.selection.get("llm", "")),
                 provider=str(self.selection.get("concept_provider", "")))
             return PreparedSpeech(self.owner, self.session, step["brief"], instruction)

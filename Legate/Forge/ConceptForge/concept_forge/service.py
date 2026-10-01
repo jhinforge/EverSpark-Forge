@@ -58,7 +58,16 @@ Understand the user's request and decompose the creative work. Return JSON only:
 "depends_on":["scene-1"]}]}
 Use only the available Forge names supplied by the caller. Image creates images;
 audio synthesizes spoken text, not music or sound effects. Each brief must preserve
-the user's language, explicit content and constraints. Split distinct scenes or
+the user's language, explicit content and constraints. Keep visual descriptions,
+voice characteristics, and spoken content separate in the creative briefs.
+Create an audio step only when speech, a voice, or narration is requested. When a
+character is given a voice but no dialogue is supplied, the audio brief must ask
+for one short, original line spoken by that character, fitting the character and
+scene. Default to the language of the user's request unless another spoken language
+is explicitly requested. A voice description is a delivery constraint, not dialogue;
+never ask Audio to read an image prompt or a list of visual/voice characteristics.
+Do not claim that a requested voice characteristic has already been achieved.
+Split distinct scenes or
 utterances into separate steps when requested. Dependencies refer to step keys and
 express creative relationships. Do not invent runtime task IDs, execution states,
 providers, models, checkpoints, workflows, paths, or backend settings.
@@ -67,9 +76,20 @@ Do not generate final image prompts or speech text yet: that is the second stage
 
 SPEECH_SYSTEM_PROMPT = """You are EverSpark Concept Forge's speech-writing stage.
 Return exactly {"text":"the complete text to synthesize"} as JSON, no commentary.
-Preserve explicitly quoted text exactly and write in the language the user requested.
-For an original narration request, compose the finished narration from the brief and
-supplied context. Do not describe model parameters, paths, or reference audio.
+Preserve explicitly supplied dialogue verbatim, including its language and punctuation.
+If no dialogue is supplied, create one short, natural line spoken by the character
+that fits the character and scene. For an explicitly requested narration or longer
+script, compose that content instead. Do not ask the user to provide dialogue.
+Use the original user's request to determine the spoken language: an explicit language
+request wins; otherwise use the language of that request, not the language of a brief
+or image context. For example, a Chinese request for a girl's portrait and a youthful
+female voice without dialogue needs an original Chinese character line.
+Treat visual descriptions and voice characteristics only as creative context.
+Never read or translate an image prompt, rendering tags, or technical/voice descriptions
+as dialogue unless the user explicitly requests those exact words to be spoken.
+The text field contains only words to be spoken: no speaker labels, stage directions,
+voice instructions, model parameters, paths, or reference audio. Voice delivery is
+Audio Forge's responsibility; do not claim a requested voice has been produced.
 """
 
 

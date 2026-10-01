@@ -83,6 +83,25 @@ class CreationTests(unittest.TestCase):
         self.assertEqual(len(self.concept.get_history("session")), 4)
         self.assertFalse(self.concept.busy())
 
+    def test_voice_without_dialogue_receives_creative_context_without_image_prompt(self):
+        text = "生成一张女孩的肖像，并给她配上年轻女孩的声音"
+        speech = {"text": "你好呀，今天也一起度过愉快的一天吧。"}
+        self.concept.service.generate_speech = Mock(return_value=speech)
+        self.audio.execute.side_effect = lambda instruction, *args: {"status": "completed", "audio": [
+            {"filename": "speech.wav", "text": instruction["text"]}]}
+        result = self.runner.run(text, "character-voice", {"creation_mode": "plan"})
+        brief, context = self.concept.service.generate_speech.call_args.args
+        self.assertEqual(context["request"], text)
+        self.assertEqual(context["related_briefs"], ["One portrait"])
+        self.assertIsNotNone(context["character"])
+        self.assertEqual(context["dependencies"][0]["items"][0]["prompt_id"], "image-ref")
+        self.assertNotIn("positive_prompt", context["dependencies"][0])
+        self.assertNotIn("negative_prompt", context["dependencies"][0])
+        self.assertNotIn("selection", context["dependencies"][0])
+        self.assertIn("positive_prompt", result["tasks"][0]["result"])
+        self.assertEqual(result["audio"][0]["text"], speech["text"])
+        self.assertEqual(self.audio.execute.call_args.args[0], speech)
+
     def test_invalid_dependencies_fail_before_any_second_stage_or_execution(self):
         for steps in ([{**STEPS[0], "depends_on": ["missing"]}],
                       [{**STEPS[1], "depends_on": ["voice"]}, STEPS[0]],
@@ -163,6 +182,27 @@ class ConceptStageTests(unittest.TestCase):
         service.gateway.chat.return_value.content = '{"text":"こんにちは。"}'
         self.assertEqual(service.generate_speech("narrate", {}), {"text": "こんにちは。"})
         self.assertEqual(service.gateway.chat.call_count, 2)
+
+    def test_speech_model_receives_original_language_and_automatic_character_dialogue_rule(self):
+        text = "生成一张女孩的肖像，并给她配上年轻女孩的声音"
+        service = self.service('{"text":"你好呀，今天也一起度过愉快的一天吧。"}')
+        result = service.generate_speech("a portrait with a youthful voice", {"request": text})
+        call = service.gateway.chat.call_args.args[0]
+        context = json.loads(call.messages[-1]["content"])
+        self.assertEqual(context["context"]["request"], text)
+        self.assertIn("one short, natural line spoken by the character", call.messages[0]["content"])
+        self.assertIn("Never read or translate an image prompt", call.messages[0]["content"])
+        self.assertIn("language of that request", call.messages[0]["content"])
+        self.assertEqual(result, {"text": "你好呀，今天也一起度过愉快的一天吧。"})
+
+    def test_explicit_dialogue_is_returned_verbatim_without_voice_instructions(self):
+        spoken = "こんにちは！今日は一緒に出かけよう。"
+        service = self.service(json.dumps({"text": spoken}, ensure_ascii=False))
+        result = service.generate_speech("年轻女孩", {"request": "用日语说：" + spoken})
+        self.assertEqual(result, {"text": spoken})
+        prompt = service.gateway.chat.call_args.args[0].messages[0]["content"]
+        self.assertIn("Preserve explicitly supplied dialogue verbatim", prompt)
+        self.assertIn("only words to be spoken", prompt)
 
     def test_invalid_or_executor_owned_fields_are_rejected(self):
         for response in ('[]', '{}', '{"steps":[]}', json.dumps({"steps": [

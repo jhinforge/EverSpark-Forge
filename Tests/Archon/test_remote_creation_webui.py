@@ -24,7 +24,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
         self.nodes = NodeManager("127.0.0.1", 0, state_path=self.root / "nodes.json")
         self.nodes.start()
         self.gate = ControlServer(("127.0.0.1", 0), node_manager=self.nodes)
-        self.seen, self.agent_errors = [], []
+        self.seen, self.agent_errors, self.speech_inputs = [], [], []
         self.stop = threading.Event()
         self.agents, self.identities = [], {}
         self.image_bytes = b"\x89PNG\r\n\x1a\nremote-output"
@@ -110,6 +110,8 @@ class RemoteCreationWebUITests(unittest.TestCase):
                                    "exit_code": 7}})
                     continue
                 payload = json.loads(task["message"])
+                if task["action"] == "synthesize":
+                    self.speech_inputs.append(payload)
                 if task["action"] == "fetch":
                     value = self.output_chunk(task["forge"], payload)
                 elif task["action"] == "history" and task["forge"] == "audio":
@@ -130,6 +132,13 @@ class RemoteCreationWebUITests(unittest.TestCase):
             return {"steps": [{"key": "frame", "forge": "image", "brief": "A portrait", "depends_on": []},
                 {"key": "voice", "forge": "audio", "brief": "Japanese greeting", "depends_on": ["frame"]}]}
         if "speech-writing stage" in system:
+            if getattr(self, "chinese_dialogue", False):
+                context = json.loads(payload["messages"][-1]["content"])["context"]
+                self.assertEqual(context["request"], "生成一张女孩的肖像，并给她配上年轻女孩的声音")
+                for result in context["dependencies"]:
+                    self.assertNotIn("positive_prompt", result)
+                    self.assertNotIn("selection", result)
+                return {"text": "你好呀，今天也一起度过愉快的一天吧。"}
             return {"text": "こんにちは。"}
         if delimiter in system:
             document = json.loads(system.split(delimiter, 1)[1])
@@ -191,6 +200,21 @@ class RemoteCreationWebUITests(unittest.TestCase):
         self.call("/api/generate/start", request)
         self.assertEqual(self.seen.count(("audio", "audio", "synthesize")), 1)
         self.assertTrue(all(role == forge for role, forge, _ in self.seen))
+        self.assertEqual(self.agent_errors, [])
+
+    def test_character_voice_without_dialogue_routes_original_chinese_line_to_audio(self):
+        self.chinese_dialogue = True
+        self.select_audio()
+        job = self.call("/api/generate/start", {"message": "生成一张女孩的肖像，并给她配上年轻女孩的声音",
+            "session_id": "character-dialogue", "selection": {"creation_mode": "plan"}})["job"]
+        for _ in range(200):
+            state = self.call("/api/generate/jobs?job_id=" + job["id"])["job"]
+            if state["status"] not in {"queued", "running"}:
+                break
+            time.sleep(.01)
+        self.assertEqual(state["status"], "completed", state)
+        self.assertEqual(self.speech_inputs, [{"text": "你好呀，今天也一起度过愉快的一天吧。"}])
+        self.assertEqual(state["response"]["result"]["audio"][0]["text"], self.speech_inputs[0]["text"])
         self.assertEqual(self.agent_errors, [])
 
     def test_image_and_audio_can_share_one_registered_node(self):
