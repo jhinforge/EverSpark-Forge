@@ -88,6 +88,7 @@ class NodeManager:
             result.pop("enrollment_id", None)
             lease = self.leases.get(node_id)
             result["runtime_id"] = lease.runtime_id if lease else None
+            result["connection_id"] = lease.connection_id if lease else None
             if lease:
                 result["last_seen"], result["load"] = lease.last_seen, dict(lease.load)
                 result["resources"]["allocatable"] = copy.deepcopy(lease.allocatable)

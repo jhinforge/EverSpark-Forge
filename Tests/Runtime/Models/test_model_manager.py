@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import io
+from contextlib import redirect_stdout
+from dataclasses import replace
 import subprocess
 import sys
 import tempfile
@@ -16,6 +19,31 @@ import model_manager  # noqa: E402
 
 
 class ModelManagerTests(unittest.TestCase):
+    def test_progress_counts_only_models_available_locally(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            specs = [replace(spec, target=f"Data/Models/{index}.bin")
+                     for index, spec in enumerate(model_manager.load_specs())]
+            with patch.object(model_manager, "REPO_ROOT", root), patch.object(model_manager, "STATE_PATH", root/"state.json"), patch.dict(model_manager.os.environ, {"EVERSPARK_DEPLOY_PROGRESS": "1"}):
+                specs[0].target_path.parent.mkdir(parents=True)
+                specs[0].target_path.write_bytes(b"cached")
+                output = io.StringIO()
+                def download(spec):
+                    spec.target_path.write_bytes(b"downloaded")
+                    return str(spec.target_path)
+                with redirect_stdout(output):
+                    installed = model_manager.download_models(specs, downloader=download)
+                self.assertTrue(all(item["installed"] for item in installed))
+                self.assertEqual(output.getvalue().splitlines(), [
+                    "[EverSpark:deploy] downloading_models 0/2",
+                    "[EverSpark:deploy] downloading_models 1/2",
+                    "[EverSpark:deploy] downloading_models 2/2"])
+                specs[1].target_path.unlink()
+                output = io.StringIO()
+                with redirect_stdout(output), self.assertRaises(model_manager.ModelManagerError):
+                    model_manager.download_models(specs, downloader=lambda spec: root/"missing")
+                self.assertNotIn("2/2", output.getvalue())
+
     def test_default_catalog_contains_both_managed_models(self) -> None:
         specs = model_manager.load_specs()
         self.assertEqual(

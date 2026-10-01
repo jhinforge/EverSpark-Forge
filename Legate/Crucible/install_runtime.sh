@@ -123,6 +123,7 @@ BASE_SYSTEM_PACKAGES=(
   python3-venv
   zstd
 )
+core_deploy_phase installing_system_dependencies
 required_commands=(git curl python3)
 missing_commands=()
 for command_name in "${required_commands[@]}"; do
@@ -155,6 +156,7 @@ mkdir -p "${REPO_ROOT}/Data/Runtime" "${REPO_ROOT}/Data/Models/ImageForge/checkp
 
 bash "${REPO_ROOT}/Legate/Forge/ConceptForge/Scripts/install_runtime.sh"
 
+core_deploy_phase downloading_image_runtime
 if [ ! -d "${COMFY_ROOT}/.git" ]; then
   if [ -e "$COMFY_ROOT" ]; then
     core_die runtime.comfy.path "ComfyUI runtime path exists but is not a Git checkout" \
@@ -213,12 +215,14 @@ if [ -d "$COMFY_VENV" ] && [ "$environment_matches" -ne 1 ]; then
 fi
 
 new_environment=0
+core_deploy_phase installing_python_dependencies
 if [ ! -x "${COMFY_VENV}/bin/python" ]; then
   python3 -m venv "$COMFY_VENV"
   new_environment=1
 fi
 "${COMFY_VENV}/bin/python" -m pip install --disable-pip-version-check --upgrade pip wheel
 if [ "$new_environment" -eq 1 ]; then
+  core_deploy_phase installing_torch
   case "$TORCH_PROFILE" in
     cu126|cu128)
       "${COMFY_VENV}/bin/python" -m pip install \
@@ -234,8 +238,10 @@ if [ "$new_environment" -eq 1 ]; then
       ;;
   esac
 fi
+core_deploy_phase installing_image_dependencies
 "${COMFY_VENV}/bin/python" -m pip install -r "${COMFY_ROOT}/requirements.txt"
 
+core_deploy_phase checking_runtime
 EVERSPARK_EXPECTED_TORCH_VERSION="$TORCH_VERSION" \
 EVERSPARK_EXPECTED_TORCH_CUDA="$TORCH_EXPECTED_CUDA" \
 EVERSPARK_ALLOW_CPU="${EVERSPARK_ALLOW_CPU:-0}" \

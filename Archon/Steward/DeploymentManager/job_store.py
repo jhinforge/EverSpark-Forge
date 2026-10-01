@@ -22,15 +22,22 @@ class JobStore:
                     or job["instance_id"] < 1):
                 raise ValueError("Invalid deployment job metadata")
             if job.get("status") == "running":
-                job.update(status="failed", stage="archon_restart",
-                           detail="Archon restarted during execution; outcome unknown. Verify Forge health before retrying.")
+                if (isinstance(job.get("task_id"), str) and re.fullmatch(r"[0-9a-f]{32}", job["task_id"])
+                        and job.get("task_action") in ({"deploy", "health", "revision"}
+                            if job["action"] == "deploy-image" else {"health", "revision"})):
+                    job["stage"] = "recovering"
+                else:
+                    job.update(status="failed", stage="archon_restart",
+                               detail="Archon restarted during execution; outcome unknown. Verify Forge health before retrying.")
         return jobs
 
     def save(self, jobs):
         if not self.path:
             return
-        fields = {"id", "instance_id", "action", "status", "stage", "task_id", "exit_code"}
-        value = {key: {k: v for k, v in job.items() if k in fields} for key, job in jobs.items()}
+        fields = {"id", "instance_id", "action", "status", "stage", "task_id", "task_action", "exit_code", "revision"}
+        selected = [(key, job) for key, job in jobs.items() if job["status"] == "running"]
+        selected += [(key, job) for key, job in list(jobs.items())[-100:] if job["status"] != "running"]
+        value = {key: {k: v for k, v in job.items() if k in fields} for key, job in selected}
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(self.path.name + ".tmp")
         temporary.write_text(json.dumps(value), encoding="utf-8")

@@ -12,10 +12,15 @@ def begin(task_id):
         _current = {"task_id": task_id, "stage": "executing", "started": time.monotonic()}
 
 
-def stage(value):
+def stage(value, completed=None, total=None):
     with _lock:
         if _current:
-            _current.update(stage=value, started=time.monotonic())
+            if _current["stage"] != value:
+                _current.update(stage=value, started=time.monotonic())
+            _current.pop("completed", None)
+            _current.pop("total", None)
+            if completed is not None and total is not None:
+                _current.update(completed=completed, total=total)
 
 
 def finish():
@@ -29,4 +34,5 @@ def snapshot():
         if not _current:
             return None
         return {"task_id": _current["task_id"], "stage": _current["stage"],
-                "elapsed_seconds": round(time.monotonic()-_current["started"], 1)}
+                "elapsed_seconds": round(time.monotonic()-_current["started"], 1),
+                **{key: _current[key] for key in ("completed", "total") if key in _current}}

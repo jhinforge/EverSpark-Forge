@@ -10,4 +10,9 @@ assert.match(display.failure({stage:'health',exit_code:7,detail:'模型下载失
 assert.equal(display.format({stage:'queued'}), 'Waiting for execution');
 context.window.EverSparkI18n = {t: (key) => key === 'Downloading models' ? '下载模型' : key};
 assert.match(display.format({progress:{stage:'downloading_models',elapsed_seconds:1}}), /下载模型/);
-console.log('Deployment progress: 5 checks passed');
+delete context.window.EverSparkI18n;
+assert.match(display.format({progress:{stage:'downloading_models',elapsed_seconds:9,completed:1,total:2}}), /Models ready: 1\/2/);
+assert.match(display.format({stage:'installing_torch'}), /PyTorch/);
+assert.match(display.format({stage:'recovering'}), /Recovering previous task result/);
+assert.match(display.failure({stage:'outcome_unknown',detail:'interrupted'}), /Previous task outcome unknown/);
+console.log('Deployment progress: 9 checks passed');

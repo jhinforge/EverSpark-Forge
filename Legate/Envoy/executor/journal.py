@@ -31,7 +31,7 @@ def execute_once(task: dict, journal: Path = TASK_JOURNAL, executor=None) -> dic
         if previous["state"] == "completed":
             return previous["result"]
         result = {"status": "failed", "output": "Agent restarted during execution; outcome unknown. Task was not automatically repeated; verify Forge health before retrying.",
-                  "exit_code": None}
+                  "exit_code": None, "stage": "outcome_unknown"}
         entries[task_id] = {"fingerprint": fingerprint, "state": "completed", "result": result}
         save(journal, entries)
         return result
@@ -46,4 +46,3 @@ def execute_once(task: dict, journal: Path = TASK_JOURNAL, executor=None) -> dic
     entries[task_id] = {"fingerprint": fingerprint, "state": "completed", "result": result}
     save(journal, entries)
     return result
-

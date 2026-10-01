@@ -1,5 +1,6 @@
 """Static Node fingerprint and separately maintained runtime Lease."""
 from dataclasses import dataclass, field
+import secrets
 
 
 @dataclass
@@ -23,3 +24,4 @@ class Lease:
     last_seen: str
     allocatable: dict
     load: dict = field(default_factory=dict)
+    connection_id: str = field(default_factory=lambda: secrets.token_hex(16))

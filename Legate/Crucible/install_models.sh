@@ -8,6 +8,8 @@ phase() {
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/Aegis/Shared/Shell/common.sh"
 MODEL_TOOLS="${REPO_ROOT}/Data/Runtime/ModelTools"
 SELECTION=all
 SKIP_IMPORT=false
@@ -27,6 +29,7 @@ done
 case "$SELECTION" in all|concept|image) ;; *) printf '[ERROR] invalid model selection: %s\n' "$SELECTION" >&2; exit 2 ;; esac
 
 # These are the same model steps previously run inline by setup.sh.
+core_deploy_phase installing_model_dependencies
 python3 -m venv "$MODEL_TOOLS"
 "${MODEL_TOOLS}/bin/python" -m pip install --disable-pip-version-check 'huggingface_hub>=1,<2'
 phase downloading_models
@@ -38,6 +41,7 @@ if { [ "$SELECTION" = all ] || [ "$SELECTION" = concept ]; } && [ "$SKIP_IMPORT"
     | grep -q '"managed": true'; then
     concept_was_running=true
   fi
+  core_deploy_phase starting_concept_service
   python3 "${REPO_ROOT}/Legate/Warden/runtime_manager.py" start concept
   cleanup_setup_concept() {
     if [ "$KEEP_CONCEPT_RUNNING" = false ] && [ "$concept_was_running" = false ]; then

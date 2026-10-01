@@ -15,6 +15,7 @@ class ConnectionVerification:
         self.pending = set()
         self.attempted = {}
         self.online = {}
+        self.connections = {}
 
     def consider(self, instance_id):
         manager = self.manager
@@ -22,12 +23,23 @@ class ConnectionVerification:
             return
         node = manager.bridge.status(instance_id)
         runtime = node.get("runtime_id")
+        connection = node.get("connection_id") or runtime
         available = node.get("status") == "online" and bool(runtime)
         with self.lock:
             previous = self.online.get(instance_id)
             self.online[instance_id] = available
+            changed = available and (
+                (instance_id in self.connections and self.connections[instance_id] != connection)
+                or (instance_id in self.attempted and self.attempted[instance_id] != connection))
+            if available:
+                self.connections[instance_id] = connection
             if previous is True and not available:
                 self.attempted.pop(instance_id, None)
+        if changed:
+            with manager.lock:
+                if manager.states.get(instance_id, {}).get("status") == "ready":
+                    manager.states[instance_id] = {"status": "verification_required"}
+                    manager._save()
         if not available:
             with manager.lock:
                 if manager.states.get(instance_id, {}).get("status") == "ready":
@@ -43,10 +55,10 @@ class ConnectionVerification:
             ):
                 return
         with self.lock:
-            if instance_id in self.pending or self.attempted.get(instance_id) == runtime:
+            if instance_id in self.pending or self.attempted.get(instance_id) == connection:
                 return
             self.pending.add(instance_id)
-        threading.Thread(target=self._start, args=(instance_id, runtime),
+        threading.Thread(target=self._start, args=(instance_id, connection),
                          daemon=True, name=f"{self.name}-reconnect-verification").start()
 
     def _start(self, instance_id, runtime):

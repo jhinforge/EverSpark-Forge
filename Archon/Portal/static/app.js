@@ -1325,6 +1325,7 @@ function renderMachine(machine) {
   if (machine.image_forge) {
     const imageForge = document.createElement("p");
     const imageLabels = {ready: "Image Forge ready", deploying: "Image Forge deploying",
+      recovering: "Recovering previous task result",
       verifying: "Verifying Image Forge",
       deployment_failed: "Image Forge deployment failed", not_deployed: "Image Forge not deployed",
       verification_required: "Image Forge needs verification",
@@ -1373,6 +1374,7 @@ function renderMachine(machine) {
       uiText(button, label);
       if (action === "discuss" && machine.forge?.status !== "ready") button.disabled = true;
       if (action === "verify" && !["ready", "verification_required", "deployment_unknown"].includes(machine.forge?.status)) button.disabled = true;
+      if (machine.forge?.job) button.disabled = true;
       button.addEventListener("click", () => {
         const message = action === "discuss" ? window.prompt(t("Enter a message to test the remote Concept Forge")) : "";
         if (action === "discuss" && !message?.trim()) return;
@@ -1388,7 +1390,7 @@ function renderMachine(machine) {
       deployImage.type = "button";
       deployImage.className = "ghost-button";
       uiText(deployImage, "Deploy Image Forge");
-      const imageBusy = ["deploying", "verifying"].includes(machine.image_forge?.status);
+      const imageBusy = Boolean(machine.image_forge?.job) || ["deploying", "verifying", "recovering"].includes(machine.image_forge?.status);
       deployImage.disabled = imageBusy;
       deployImage.addEventListener("click", () => {
         deployImage.disabled = true;

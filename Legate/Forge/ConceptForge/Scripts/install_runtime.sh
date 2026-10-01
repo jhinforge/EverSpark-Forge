@@ -36,6 +36,7 @@ fi
 # The full setup and the Pod deployment share these Concept Forge prerequisites.
 # In particular, Ollama's installer requires zstd to unpack the runtime.
 concept_packages=(git curl ca-certificates python3 python3-venv zstd)
+core_deploy_phase installing_system_dependencies
 if [ "${EUID:-$(id -u)}" -eq 0 ] && command -v apt-get >/dev/null 2>&1; then
   core_apt_install_missing "${concept_packages[@]}"
 else
@@ -53,6 +54,7 @@ fi
 
 mkdir -p "${REPO_ROOT}/Data/Runtime" "${REPO_ROOT}/Data/Models/ConceptForge"
 if ! command -v ollama >/dev/null 2>&1; then
+  core_deploy_phase downloading_concept_runtime
   core_info runtime.ollama.install "Installing pinned Ollama runtime" "version=${OLLAMA_VERSION}"
   curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION="$OLLAMA_VERSION" sh
 fi

@@ -84,6 +84,7 @@ class TaskReconnectionTests(unittest.TestCase):
             self.manager.lifecycle.expire()
         self.assertEqual(self.manager.status(self.first["node_id"])["status"], "offline")
         self.assertIsNone(self.manager.status(self.first["node_id"])["resources"]["allocatable"])
+        self.assertTrue(self.manager.tasks.status(self.first["node_id"], task["id"])["stale"])
         self.finish(self.first, task, {"status": "completed", "output": "done", "exit_code": 0})
 
     def test_invalid_progress_does_not_renew_lease(self):
@@ -92,3 +93,18 @@ class TaskReconnectionTests(unittest.TestCase):
             self.manager.heartbeat.receive({**protocol.auth(self.first), "allocatable": protocol.INFO["resources"]["allocatable"],
                 "task": {"task_id": "f"*32, "stage": "secret command", "elapsed_seconds": 10}})
         self.assertEqual(before, self.manager.leases[self.first["node_id"]].renewed_at)
+
+    def test_heartbeat_records_disconnect_even_without_inventory_poll(self):
+        node_id = self.first["node_id"]
+        first = self.manager.status(node_id)["connection_id"]
+        with self.manager.lock:
+            self.manager.leases[node_id].renewed_at -= 2
+        self.manager.heartbeat.receive({**protocol.auth(self.first),
+            "allocatable": protocol.INFO["resources"]["allocatable"]})
+        restored = self.manager.status(node_id)
+        self.assertEqual(restored["status"], "online")
+        self.assertEqual(restored["runtime_id"], self.first["runtime_id"])
+        self.assertNotEqual(first, restored["connection_id"])
+        self.manager.heartbeat.receive({**protocol.auth(self.first),
+            "allocatable": protocol.INFO["resources"]["allocatable"]})
+        self.assertEqual(restored["connection_id"], self.manager.status(node_id)["connection_id"])

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import asdict, dataclass
@@ -126,11 +127,16 @@ def download_models(
     downloader: Callable[[ModelSpec], str] = _huggingface_download,
 ) -> list[dict[str, Any]]:
     installed: list[dict[str, Any]] = []
+    def report():
+        if os.environ.get("EVERSPARK_DEPLOY_PROGRESS") == "1" and specs:
+            print(f"[EverSpark:deploy] downloading_models {len(installed)}/{len(specs)}", flush=True)
+    report()
     for spec in specs:
         target = spec.target_path
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.is_file() and target.stat().st_size > 0:
             installed.append(model_status(spec))
+            report()
             continue
         try:
             downloaded = Path(downloader(spec)).resolve()
@@ -143,6 +149,7 @@ def download_models(
         if downloaded != target:
             shutil.copyfile(downloaded, target)
         installed.append(model_status(spec))
+        report()
     _write_state(installed)
     return installed
 

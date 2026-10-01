@@ -5,6 +5,7 @@ from ..forge_tasks import command
 from ..settings import REPO, TASK_JOURNAL
 from .results import command_result
 from .process import run_deployment
+from . import progress
 
 
 def execute(action: str, message: str, forge: str = "concept") -> dict:
@@ -24,7 +25,7 @@ def execute(action: str, message: str, forge: str = "concept") -> dict:
         result = entry.get("result", {}) if isinstance(entry, dict) else {}
         summary = {"state": (entry.get("state") if isinstance(entry, dict) else "not_seen"),
                    "status": result.get("status"), "output": str(result.get("output", ""))[-3000:],
-                   "exit_code": result.get("exit_code")}
+                   "exit_code": result.get("exit_code"), "stage": result.get("stage")}
         return {"status": "completed", "output": json.dumps(summary), "exit_code": 0}
     selected = command(forge, action, message)
     if selected is None:
@@ -37,7 +38,10 @@ def execute(action: str, message: str, forge: str = "concept") -> dict:
                               encoding="utf-8", errors="replace", timeout=timeout,
                               stdin=subprocess.DEVNULL)
         return command_result(done, action)
-    except subprocess.TimeoutExpired:
-        return {"status": "failed", "output": "Forge task timed out", "exit_code": 124}
+    except subprocess.TimeoutExpired as exc:
+        phase = progress.snapshot()
+        tail = exc.output if isinstance(exc.output, str) else ""
+        return {"status": "failed", "output": ("Forge task timed out\n" + tail)[-4000:], "exit_code": 124,
+                **({"stage": phase["stage"]} if phase else {})}
     except OSError as exc:
         return {"status": "failed", "output": type(exc).__name__, "exit_code": 1}

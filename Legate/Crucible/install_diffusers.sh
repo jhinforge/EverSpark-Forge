@@ -3,6 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/Aegis/Shared/Shell/common.sh"
 if [ -f "${REPO_ROOT}/.env" ]; then
   set -a
   # shellcheck disable=SC1091
@@ -24,14 +26,17 @@ if [ -d "$DIFFUSERS_VENV" ] && [ "$(cat "${DIFFUSERS_RUNTIME}/torch-profile" 2>/
   rm -rf -- "$DIFFUSERS_VENV"
 fi
 if [ ! -x "${DIFFUSERS_VENV}/bin/python" ]; then
+  core_deploy_phase installing_torch
   python3 -m venv "$DIFFUSERS_VENV"
   "${DIFFUSERS_VENV}/bin/python" -m pip install --disable-pip-version-check \
     --index-url "$TORCH_INDEX_URL" "torch==${TORCH_VERSION}"
 fi
 rm -f -- "${DIFFUSERS_RUNTIME}/peft-ready"
+core_deploy_phase installing_image_dependencies
 "${DIFFUSERS_VENV}/bin/python" -m pip install --disable-pip-version-check \
   'diffusers==0.35.1' 'transformers>=4.44,<5' 'accelerate>=1,<2' \
   'peft>=0.17,<0.20' safetensors
+core_deploy_phase checking_runtime
 EVERSPARK_EXPECTED_TORCH_VERSION="$TORCH_VERSION" \
 EVERSPARK_EXPECTED_TORCH_CUDA="$TORCH_EXPECTED_CUDA" \
   "${DIFFUSERS_VENV}/bin/python" - <<'PY'

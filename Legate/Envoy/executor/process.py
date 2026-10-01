@@ -31,14 +31,18 @@ def run_deployment(args, cwd, timeout):
             lines = pending.split("\n")
             pending = lines.pop()
             for line in lines:
-                match = re.fullmatch(r"\[EverSpark:deploy\] ([a-z][a-z0-9_]{0,63})", line.strip())
+                match = re.fullmatch(r"\[EverSpark:deploy\] ([a-z][a-z0-9_]{0,63})(?: ([0-9]{1,6})/([0-9]{1,6}))?", line.strip())
                 if match:
-                    progress.stage(match.group(1))
+                    completed, total = match.group(2), match.group(3)
+                    if completed is None:
+                        progress.stage(match.group(1))
+                    elif match.group(1) == "downloading_models" and 0 <= int(completed) <= int(total) <= 100000 and int(total) > 0:
+                        progress.stage(match.group(1), int(completed), int(total))
     reader = threading.Thread(target=read, daemon=True)
     reader.start()
     try:
         process.wait(timeout=timeout)
-    except BaseException:
+    except BaseException as exc:
         if os.name == "posix":
             try:
                 os.killpg(process.pid, signal.SIGKILL)
@@ -47,6 +51,9 @@ def run_deployment(args, cwd, timeout):
         else:
             process.kill()
         process.wait()
+        reader.join(2)
+        if isinstance(exc, subprocess.TimeoutExpired):
+            exc.output = "".join(chunks)[-DIAGNOSTIC_TAIL:]
         raise
     finally:
         reader.join(2)

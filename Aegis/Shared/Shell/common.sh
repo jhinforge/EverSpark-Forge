@@ -2,6 +2,12 @@
 
 # Generic shell helpers shared by Core modules.
 
+core_deploy_phase() {
+  if [ "${EVERSPARK_DEPLOY_PROGRESS:-0}" = 1 ]; then
+    printf '[EverSpark:deploy] %s\n' "$1"
+  fi
+}
+
 core_command_exists() {
   command -v "$1" >/dev/null 2>&1
 }

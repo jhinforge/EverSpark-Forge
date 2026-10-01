@@ -37,7 +37,8 @@ class TaskChannel:
             if not value:
                 return {}
             return {k: v for k, v in value.items() if k != "received_at"} | {
-                "stale": time.monotonic() - value["received_at"] > self.manager.lease_timeout}
+                "stale": time.monotonic() - value["received_at"] > self.manager.lease_timeout
+                or self.manager.registry.nodes[node_id]["status"] != "online"}
 
     def _authenticated(self, body, pulling=False):
         record, _ = authenticate(self.manager, body)
