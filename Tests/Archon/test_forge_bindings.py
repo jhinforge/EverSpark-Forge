@@ -100,6 +100,14 @@ class ForgeBindingsTests(unittest.TestCase):
         self.assertFalse(previous.closed)
         self.assertEqual(json.loads(self.path.read_text())["image"], "b" * 32)
 
+    def test_removed_image_does_not_disable_audio_runtime(self):
+        self.select_pair()
+        self.bindings.select({"forge": "audio", "node_id": "c" * 32})
+        self.nodes.states["b" * 32] = "removed"
+        self.assertTrue(self.bindings.url)
+        self.assertFalse(self.bindings.status()["ready"])
+        self.assertEqual(self.bindings.bindings["image"], "b" * 32)
+
     def test_removed_node_disables_execution_without_silently_selecting_another(self):
         self.select_pair()
         self.nodes.states["b" * 32] = "removed"

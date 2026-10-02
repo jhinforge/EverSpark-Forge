@@ -329,16 +329,33 @@ function addSelectedLora() {
 }
 
 function generationSelection() {
-  return {
-    creation_mode: document.querySelector("#creationMode").value,
+  const mode = document.querySelector("#creationMode").value;
+  const selection = {
+    creation_mode: mode,
+    llm: elements.llmSelect.value,
+    concept_provider: elements.conceptProviderSelect.value,
+  };
+  if (mode !== "audio") Object.assign(selection, {
     engine: elements.imageEngineSelect.value,
     workflow: elements.workflowSelect.value,
     checkpoint: elements.checkpointSelect.value,
     vae: elements.vaeSelect.value,
-    llm: elements.llmSelect.value,
-    concept_provider: elements.conceptProviderSelect.value,
     loras: state.selectedLoras.map((item) => ({ ...item })),
-  };
+  });
+  return selection;
+}
+
+function updateCreationMode() {
+  const mode = document.querySelector("#creationMode").value;
+  document.querySelectorAll("[data-image-control]").forEach((node) => {
+    node.hidden = mode === "audio";
+    node.classList.toggle("hidden", mode === "audio");
+  });
+  uiText(document.querySelector("#creationModeHint"), mode === "audio"
+    ? "Describe the spoken content, language and voice. Concept Forge prepares the speech."
+    : mode === "image_audio"
+      ? "Describe the image and speech. Concept Forge prepares both tasks."
+      : "Describe the image. Concept Forge prepares the image request.");
 }
 
 function renderImagePlugin() {
@@ -1945,10 +1962,10 @@ function setMode(mode) {
   const discussing = mode === "discuss";
   elements.discussModeButton.classList.toggle("active", discussing);
   elements.generateModeButton.classList.toggle("active", !discussing);
-  uiText(elements.generateButton.firstElementChild, discussing ? "Discuss" : "Forge image");
+  uiText(elements.generateButton.firstElementChild, discussing ? "Discuss" : "Generate");
   uiAttr(elements.scenePrompt, "placeholder", discussing
     ? "Let's design a character with long black hair and amber eyes..."
-    : "Place the current character on a rooftop at blue hour...");
+    : "Describe what to create, including the spoken language and voice when needed...");
 }
 
 async function discuss() {
@@ -2190,7 +2207,7 @@ async function generate() {
   }
   const message = elements.scenePrompt.value.trim();
   if (!message || elements.generateButton.disabled) {
-    if (!message) showNotice(t("Describe the scene before generating."));
+    if (!message) showNotice(t("Describe what to create before generating."));
     return;
   }
   if (state.pollTimer) clearTimeout(state.pollTimer);
@@ -2208,7 +2225,7 @@ async function generate() {
   const title = document.createElement("h3");
   uiText(title, "Concept Forge is shaping the request");
   const detail = document.createElement("p");
-  uiText(detail, state.selectedSubject ? "Stable identity is being merged with this scene." : "This task uses scene direction only.");
+  uiText(detail, "Concept Forge will prepare the selected image or speech tasks.");
   pending.append(spinner, title, detail);
   elements.resultStage.appendChild(pending);
   try {
@@ -2485,6 +2502,8 @@ function bindEvents() {
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   $("#newConversationButton").addEventListener("click", newConversation);
   elements.discussModeButton.addEventListener("click", () => setMode("discuss"));
+  document.querySelector("#creationMode").addEventListener("change", updateCreationMode);
+  updateCreationMode();
   elements.generateModeButton.addEventListener("click", () => setMode("generate"));
   elements.workflowSelect.addEventListener("change", updateLoraAvailability);
   elements.conceptProviderSelect.addEventListener("change", updateConceptModels);

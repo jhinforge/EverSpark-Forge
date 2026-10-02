@@ -352,6 +352,7 @@ class ConceptWorkspace:
             with self.memory.operation():
                 history = self.memory.get_history(session)
                 plan = self.service.decompose(text, history, available_forges,
+                    generation_mode=selection.get("creation_mode", "plan"),
                     model=str(selection.get("llm", "")),
                     provider=str(selection.get("concept_provider", "")))
                 yield PreparedCreation(self, text, session, selection, plan, notify)

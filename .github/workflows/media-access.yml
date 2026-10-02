@@ -36,6 +36,8 @@ jobs:
         run: python -m unittest discover -s Tests/Infrastructure -p 'test_*.py'
       - name: Archon and distributed creation
         run: python -m unittest discover -s Tests/Archon -p 'test_*.py'
+      - name: Creative task modes
+        run: python -m unittest discover -s Tests/Orchestrator -p 'test_*.py'
       - name: WebUI
         run: python -m unittest discover -s Tests/WebUI -p 'test_*.py'
       - name: JavaScript UI regression

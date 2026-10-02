@@ -56,11 +56,17 @@ Understand the user's request and decompose the creative work. Return JSON only:
 {"steps":[{"key":"scene-1","forge":"image","brief":"complete creative brief",
 "depends_on":[]},{"key":"speech-1","forge":"audio","brief":"spoken content brief",
 "depends_on":["scene-1"]}]}
+Honor generation_mode as an explicit output constraint. For audio, create only
+speech steps, even if the user mentions a portrait or character as context. For
+image_audio, create at least one image and one audio step; if dialogue is absent,
+write a short fitting line in the requested spoken language. For plan, infer the
+requested outputs. Dependencies are needed only when a task requires another
+result; a shared character or theme alone does not require an image dependency.
 Use only the available Forge names supplied by the caller. Image creates images;
 audio synthesizes spoken text, not music or sound effects. Each brief must preserve
 the user's language, explicit content and constraints. Keep visual descriptions,
 voice characteristics, and spoken content separate in the creative briefs.
-Create an audio step only when speech, a voice, or narration is requested. When a
+In plan mode, create an audio step only when speech, a voice, or narration is requested. When a
 character is given a voice but no dialogue is supplied, the audio brief must ask
 for one short, original line spoken by that character, fitting the character and
 scene. Default to the language of the user's request unless another spoken language
@@ -77,7 +83,9 @@ Do not generate final image prompts or speech text yet: that is the second stage
 SPEECH_SYSTEM_PROMPT = """You are EverSpark Concept Forge's speech-writing stage.
 Return exactly {"text":"the complete spoken text","voice_description":"natural-language voice description"}
 as JSON, no commentary. Keep the two fields separate.
-Preserve explicitly supplied dialogue verbatim, including its language and punctuation.
+Preserve explicitly supplied dialogue verbatim, including its language and punctuation,
+unless the user explicitly asks to translate, rewrite, or adapt it. If translation is
+requested, translate the spoken content into the requested target language.
 If no dialogue is supplied, create one short, natural line spoken by the character
 that fits the character and scene. For an explicitly requested narration or longer
 script, compose that content instead. Do not ask the user to provide dialogue.
@@ -129,12 +137,12 @@ class ConceptService:
     def list_models(self, provider: str = "") -> list[str]:
         return self.gateway.list_models(provider)
 
-    def decompose(self, text, history, available_forges, model="", provider=""):
+    def decompose(self, text, history, available_forges, model="", provider="", generation_mode="plan"):
         response = self._chat([
             {"role": "system", "content": CREATION_SYSTEM_PROMPT},
             *(history or []),
             {"role": "user", "content": json.dumps({"request": text,
-                "available_forges": available_forges}, ensure_ascii=False)},
+                "available_forges": available_forges, "generation_mode": generation_mode}, ensure_ascii=False)},
         ], model, json_mode=True, provider=provider)
         try:
             value = json.loads(response)

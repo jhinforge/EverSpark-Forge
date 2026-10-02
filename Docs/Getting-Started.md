@@ -165,3 +165,9 @@ If `doctor` reports remote paths or credentials, fix the enabled backend before 
 Managed service logs are in `Data/Logs/`. If WebUI opens but generation fails, check Runtime, `./everspark status`, available models, and the relevant service log. Rerun `./everspark doctor` for environment and configuration checks. Other cloud images and local Windows deployments have not been verified.
 
 See the [starter model commands](Commands.md#4-manifest-starter-models) and [log commands](Commands.md#5-log-status-and-maintenance) for their separate scopes.
+
+### Choose a generation mode
+
+The creation page offers Image generation, Audio generation, and Image + audio generation. All three use Concept Forge to understand natural-language requests. Audio mode needs Concept and Audio only; it does not require an Image Forge connection or generate an image. Image settings are hidden in audio mode.
+
+For example, enter `Write a short welcome message in Chinese, spoken in a warm female voice.` Concept prepares the Chinese spoken text and voice requirements. Explicit dialogue is preserved unless translation or rewriting is requested. In combined mode, describe the image and speech; if dialogue is absent, Concept writes a short line fitting the scene.

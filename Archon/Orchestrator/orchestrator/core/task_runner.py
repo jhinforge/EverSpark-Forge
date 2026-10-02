@@ -11,7 +11,10 @@ class TaskRunner:
             self.forges["audio"] = audio
 
     def run(self, user_text, session_id, selection=None, notify=None):
-        if (selection or {}).get("creation_mode") == "plan":
+        mode = (selection or {}).get("creation_mode", "image")
+        if mode not in {"image", "audio", "image_audio", "plan"}:
+            raise TaskError("Invalid generation mode")
+        if mode in {"audio", "image_audio", "plan"}:
             return self._create(user_text, session_id, selection, notify or (lambda _message: None))
         # The context belongs to Concept Forge; only its opaque instruction and
         # result callback cross this boundary. Legacy options are forwarded intact.
@@ -52,9 +55,17 @@ class TaskRunner:
 
     def _create(self, text, session, selection, notify):
         notify("Concept Forge: understanding and creative decomposition")
+        mode = selection.get("creation_mode", "plan")
+        required = {"audio"} if mode == "audio" else {"image", "audio"} if mode == "image_audio" else set()
+        if required - self.forges.keys():
+            raise TaskError("Select an Audio Forge node first")
+        available = [forge for forge in self.forges if not required or forge in required]
         with self.concept.prepare_creation(text, session, selection,
-                                          list(self.forges), notify) as creation:
+                                          available, notify) as creation:
             tasks = self._tasks(creation.plan)
+            targets = {task["forge"] for task in tasks}
+            if required and (targets != required):
+                raise TaskError("Concept Forge task list does not match the selected generation mode")
             results = {}
             for task in tasks:
                 try:

@@ -142,7 +142,7 @@
             <section class="panel canvas-panel">
               <div class="canvas-toolbar">
                 <div>
-                  <p class="section-kicker">IMAGE FORGE</p>
+                  <p class="section-kicker">EVERSPARK FORGE</p>
                   <h2>Generation canvas</h2>
                 </div>
                 <span class="state-chip" id="generationState" data-state="idle">
@@ -151,7 +151,7 @@
               </div>
 
               <div class="generation-controls" aria-label="Generation resources">
-                <div class="resource-field engine-field">
+                <div class="resource-field engine-field" data-image-control>
                   <label for="imageEngineSelect">Drawing tool</label>
                   <span class="select-wrap"><select id="imageEngineSelect"></select></span>
                   <div class="engine-actions">
@@ -160,15 +160,15 @@
                     <button class="secondary-button" id="imageEngineDefault" type="button" hidden>Set as default</button>
                   </div>
                 </div>
-                <label class="resource-field">
+                <label class="resource-field" data-image-control>
                   <span>Workflow</span>
                   <span class="select-wrap"><select id="workflowSelect"></select></span>
                 </label>
-                <label class="resource-field">
+                <label class="resource-field" data-image-control>
                   <span>Checkpoint</span>
                   <span class="select-wrap"><select id="checkpointSelect"></select></span>
                 </label>
-                <label class="resource-field">
+                <label class="resource-field" data-image-control>
                   <span>VAE</span>
                   <span class="select-wrap"><select id="vaeSelect"></select></span>
                 </label>
@@ -180,14 +180,14 @@
                   <span>Concept LLM</span>
                   <span class="select-wrap"><select id="llmSelect"></select></span>
                 </label>
-                <div class="resource-field lora-field">
+                <div class="resource-field lora-field" data-image-control>
                   <span>LoRA</span>
                   <div class="lora-picker">
                     <span class="select-wrap"><select id="loraSelect"></select></span>
                     <button class="secondary-button" id="addLoraButton" type="button">Add</button>
                   </div>
                 </div>
-                <div class="selected-loras" id="selectedLoras"></div>
+                <div class="selected-loras" id="selectedLoras" data-image-control></div>
               </div>
 
               <div class="result-stage" id="resultStage">
@@ -209,8 +209,13 @@
                 </div>
                 <div class="conversation-feed" id="conversationFeed"></div>
                 <textarea id="scenePrompt" rows="4" placeholder="Let's design a character with long black hair and amber eyes..."></textarea>
-                <label for="creationMode">生成方式</label>
-                <select id="creationMode"><option value="image">直接出图</option><option value="plan">创作计划（图片 / 人声）</option></select>
+                <label for="creationMode">Generation mode</label>
+                <select id="creationMode">
+                  <option value="image">Image generation</option>
+                  <option value="audio">Audio generation</option>
+                  <option value="image_audio">Image + audio generation</option>
+                </select>
+                <p id="creationModeHint">Describe what to create. Concept Forge prepares the request.</p>
                 <div class="composer-footer">
                   <div class="subject-context" id="composerSubjectContext">
                     <span class="mini-avatar">—</span>

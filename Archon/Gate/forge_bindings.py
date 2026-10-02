@@ -30,9 +30,13 @@ class ForgeBindings:
     def url(self):
         with self.lock:
             has_api = bool(self.runtime and getattr(self.runtime, "has_api", lambda: False)())
-            valid = all(self.nodes.configured(node_id) for role, node_id in self.bindings.items()
-                        if role != "audio" and (role != "concept" or not has_api))
-            return self.runtime.url if self.runtime and valid else ""
+            concept = self.bindings.get("concept")
+            valid_concept = has_api or not concept or self.nodes.configured(concept)
+            workers = [node_id for role, node_id in self.bindings.items() if role in {"image", "audio"}]
+            valid_workers = not workers or any(self.nodes.configured(node_id) for node_id in workers)
+            # The Portal checks the workers required by each request's mode.
+            # Removing Image must not disable a still-configured Audio endpoint.
+            return self.runtime.url if self.runtime and valid_concept and valid_workers else ""
 
     def status(self):
         with self.lock:

@@ -156,3 +156,9 @@ cd EverSpark-Forge
 `models` 与 `logs` 子命令的区别见[起步模型命令](Commands.zh-CN.md#4-管理清单中的起步模型)及[日志命令](Commands.zh-CN.md#5-查看与整理日志)。
 
 本页的主流程针对**云端 Linux 首次部署**；其他云端镜像及本地 Windows 部署尚未验证。
+
+### 选择生成模式
+
+创作页面提供“图片生成”“音频生成”“图片＋音频生成”三个模式。三者都通过 Concept Forge 理解自然语言需求；音频模式只需要 Concept 和 Audio，无需连接 Image Forge，也不会生成图片。选择音频模式后，图片模型设置会隐藏。
+
+例如，英文用户可输入 `Write a short welcome message in Chinese, spoken in a warm female voice.`，让 Concept 准备中文台词和声音要求。明确提供的台词默认保留原文；要求翻译或改写时再转换。组合模式应同时描述画面和声音需求；没有提供台词时，Concept 会创作一段符合场景的短台词。

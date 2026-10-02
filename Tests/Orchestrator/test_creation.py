@@ -67,6 +67,32 @@ class CreationTests(unittest.TestCase):
         self.assertEqual(instruction, {"text": "こんにちは。"})
         return {"status": "completed", "audio": [{"filename": "speech.wav"}]}
 
+    def test_audio_mode_keeps_concept_and_never_calls_image(self):
+        self.concept.service.decompose = Mock(return_value={"steps": [{**STEPS[0], "depends_on": []}]})
+        result = self.runner.run("Write a warm welcome in Chinese", "speech", {"creation_mode": "audio"})
+        self.image.execute.assert_not_called()
+        self.image.generate.assert_not_called()
+        self.audio.execute.assert_called_once()
+        self.assertEqual(self.concept.service.decompose.call_args.args[2], ["audio"])
+        self.assertEqual(self.concept.service.decompose.call_args.kwargs["generation_mode"], "audio")
+        self.assertEqual(result["items"], [])
+        self.assertEqual(len(result["audio"]), 1)
+
+    def test_selected_mode_rejects_wrong_outputs_before_execution(self):
+        for mode, steps in (("audio", STEPS), ("image_audio", [STEPS[1]])):
+            self.concept.service.decompose = Mock(return_value={"steps": steps})
+            with self.subTest(mode=mode), self.assertRaisesRegex(TaskError, "selected generation mode"):
+                self.runner.run("create", "s", {"creation_mode": mode})
+        self.image.execute.assert_not_called()
+        self.audio.execute.assert_not_called()
+
+    def test_audio_mode_requires_audio_binding_and_invalid_modes_fail(self):
+        runner = TaskRunner(self.concept, self.image)
+        with self.assertRaisesRegex(TaskError, "Audio Forge node"):
+            runner.run("speak", "s", {"creation_mode": "audio"})
+        with self.assertRaisesRegex(TaskError, "Invalid generation mode"):
+            self.runner.run("speak", "s", {"creation_mode": "unknown"})
+
     def test_decomposition_then_tasks_then_prompts_then_forges_and_aggregation(self):
         events = []
         result = self.runner.run("portrait and narration", "session", {"creation_mode": "plan"}, events.append)
@@ -175,6 +201,18 @@ class ConceptStageTests(unittest.TestCase):
         gateway.select.return_value = SimpleNamespace(model="test")
         gateway.chat.return_value = SimpleNamespace(content=response)
         return ConceptService(gateway)
+
+    def test_explicit_audio_mode_and_translation_rules_reach_concept(self):
+        service = self.service(json.dumps({"steps": [{**STEPS[0], "depends_on": []}]}))
+        service.decompose("Write a Chinese welcome", [], ["audio"], generation_mode="audio")
+        request = service.gateway.chat.call_args.args[0]
+        payload = json.loads(request.messages[-1]["content"])
+        self.assertEqual(payload["generation_mode"], "audio")
+        self.assertEqual(payload["available_forges"], ["audio"])
+        self.assertIn("create only", request.messages[0]["content"])
+        service.gateway.chat.return_value.content = '{"text":"欢迎！"}'
+        service.generate_speech("Translate welcome", {"request": "Translate welcome into Chinese"})
+        self.assertIn("translate the spoken content", service.gateway.chat.call_args.args[0].messages[0]["content"])
 
     def test_creative_json_and_speech_are_distinct_model_calls(self):
         service = self.service(json.dumps({"steps": STEPS}))

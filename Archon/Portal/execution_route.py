@@ -30,7 +30,14 @@ def execution_request(method):
                 if not provider:
                     application = getattr(getattr(bindings.runtime, "server", None), "application", None)
                     provider = application.concept.connections.gateway.default if application else "ollama"
-                required = [role for role in REQUIRED_NODES[path] if role != "concept" or provider == "ollama"]
+                roles = REQUIRED_NODES[path]
+                if path in {"/api/generate", "/api/generate/start"}:
+                    mode = (payload.get("selection") or {}).get("creation_mode", "image")
+                    if mode not in {"image", "audio", "image_audio", "plan"}:
+                        handler._json(400, {"ok": False, "error": "Invalid generation mode"})
+                        return
+                    roles = ("concept", "audio") if mode == "audio" else ("concept", "image", "audio") if mode == "image_audio" else roles
+                required = [role for role in roles if role != "concept" or provider == "ollama"]
                 if not url or any(states.get(role) != "online" for role in required):
                     handler._json(503, {"ok": False, "error": "Selected Forge Node is offline. Wait for reconnection or select another ready machine."})
                     return

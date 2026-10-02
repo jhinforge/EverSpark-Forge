@@ -149,9 +149,17 @@ class RemoteCreationWebUITests(unittest.TestCase):
         delimiter = "The required output template/current document is:\n"
         system = payload["messages"][0]["content"]
         if "creative planning stage" in system:
+            context = json.loads(payload["messages"][-1]["content"])
+            if context.get("generation_mode") == "audio":
+                self.assertEqual(context["available_forges"], ["audio"])
+                return {"steps": [{"key": "voice", "forge": "audio", "brief": "Chinese welcome", "depends_on": []}]}
             return {"steps": [{"key": "frame", "forge": "image", "brief": "A portrait", "depends_on": []},
                 {"key": "voice", "forge": "audio", "brief": "Japanese greeting", "depends_on": ["frame"]}]}
         if "speech-writing stage" in system:
+            if getattr(self, "audio_only", False):
+                context = json.loads(payload["messages"][-1]["content"])["context"]
+                self.assertEqual(context["request"], "Write a welcome message in Chinese")
+                return {"text": "欢迎！", "voice_description": "warm voice"}
             if getattr(self, "chinese_dialogue", False):
                 context = json.loads(payload["messages"][-1]["content"])["context"]
                 self.assertEqual(context["request"], "生成一张女孩的肖像，并给她配上年轻女孩的声音")
@@ -193,6 +201,27 @@ class RemoteCreationWebUITests(unittest.TestCase):
         self.select_pair()
         self.assertIsNone(self.bindings.runtime.server.application.audio)
         self.call("/api/forge-bindings", {"forge": "audio", "node_id": self.identities["audio"]})
+
+    def test_audio_mode_reaches_concept_and_audio_without_image_binding(self):
+        self.select_audio()
+        # Recompose with only Concept and Audio; Image must be unnecessary.
+        self.bindings.close()
+        configured = {role: node for role, node in self.bindings.bindings.items() if role != "image"}
+        self.bindings.bindings = configured
+        self.bindings.runtime = self.factory(configured, self.bindings.control_url)
+        self.audio_only = True
+        job = self.call("/api/generate/start", {"message": "Write a welcome message in Chinese",
+            "session_id": "audio-only", "selection": {"creation_mode": "audio"}})["job"]
+        for _ in range(200):
+            state = self.call("/api/generate/jobs?job_id=" + job["id"])["job"]
+            if state["status"] not in {"queued", "running"}:
+                break
+            time.sleep(.01)
+        self.assertEqual(state["status"], "completed", state)
+        self.assertEqual([t["forge"] for t in state["response"]["result"]["tasks"]], ["audio"])
+        self.assertEqual(state["response"]["result"]["items"], [])
+        self.assertFalse(any(forge == "image" for _, forge, _ in self.seen))
+        self.assertEqual(self.speech_inputs[-1]["text"], "欢迎！")
 
     def test_two_stage_creation_reaches_audio_node_and_returns_playable_wav(self):
         self.select_audio()
