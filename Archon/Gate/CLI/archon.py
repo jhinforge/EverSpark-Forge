@@ -18,7 +18,10 @@ def _load_local_settings() -> None:
                "EVERSPARK_REMOTE_ORCHESTRATOR_PORT", "EVERSPARK_CONCEPT_NODE_ID",
                "EVERSPARK_IMAGE_NODE_ID", "EVERSPARK_NODE_HOST", "EVERSPARK_NODE_PORT",
                "EVERSPARK_NODE_STATE",
-               "EVERSPARK_LOG_DIR", "EVERSPARK_WEBUI_LOG", "EVERSPARK_OUTPUT_DIR"}
+               "EVERSPARK_LOG_DIR", "EVERSPARK_WEBUI_LOG", "EVERSPARK_OUTPUT_DIR",
+               "EVERSPARK_STORAGE_BACKEND", "RCLONE_CONFIG", "RCLONE_BIN",
+               "IMAGE_FORGE_RCLONE_REMOTE", "CONCEPT_FORGE_RCLONE_REMOTE",
+               "EVERSPARK_BACKUP_REMOTE"}
     config = REPO_ROOT / ".env"
     if config.is_file():
         for raw in config.read_text(encoding="utf-8-sig").splitlines():

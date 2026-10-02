@@ -57,6 +57,7 @@ class RemoteModels:
             raise DownloadError("Configure rclone storage before pulling cloud models")
         storage = copy.deepcopy(self.config["storage"])
         storage["rclone"].pop("config_file", None)
+        storage["rclone"].pop("binary", None)
         return {"storage": storage, "rclone_config": settings.config_file.read_text(encoding="utf-8"),
                 "paths": self.catalog.paths.read()}
 

@@ -38,6 +38,7 @@ class StorageSettings:
     concept_root: Path
     backup_remote: str = ""
     timeout: int = 60
+    binary: str = ""
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> "StorageSettings":
@@ -63,6 +64,7 @@ class StorageSettings:
             concept_root=(REPO_ROOT / "Data/Models/ConceptForge/Ollama").resolve(),
             backup_remote=_clean_remote(str(rclone.get("backup_remote") or "")),
             timeout=int(rclone.get("timeout", 60)),
+            binary=str(rclone.get("binary") or "").strip(),
         )
 
 
@@ -82,13 +84,21 @@ class RcloneClient:
         self.settings = settings
         self._run_command = run
 
+    def executable(self) -> str:
+        candidate = self.settings.binary or "rclone"
+        resolved = shutil.which(candidate)
+        if resolved is None:
+            if self.settings.binary:
+                raise StorageError(f"RCLONE_BIN executable not found: {candidate}")
+            raise StorageError("rclone is not installed or not on PATH; set RCLONE_BIN to its executable path")
+        return resolved
+
     def validate(self) -> None:
         if not self.settings.enabled:
             raise StorageError("Remote storage is disabled")
         if self.settings.backend != "rclone":
             raise StorageError(f"Unsupported storage backend: {self.settings.backend}")
-        if shutil.which("rclone") is None:
-            raise StorageError("rclone is not installed")
+        self.executable()
         if self.settings.config_file is None:
             raise StorageError("RCLONE_CONFIG is required when remote storage is enabled")
         if not self.settings.config_file.is_file():
@@ -99,7 +109,7 @@ class RcloneClient:
             raise StorageError("CONCEPT_FORGE_RCLONE_REMOTE is required")
 
     def run(self, *arguments: str, timeout: int | None = None) -> str:
-        command = ["rclone", *arguments]
+        command = [self.executable(), *arguments]
         if self.settings.config_file is not None:
             command.extend(["--config", str(self.settings.config_file)])
         log_root = Path(

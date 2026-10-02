@@ -28,7 +28,7 @@ EVERSPARK_SSH_USER=root
 
 ## 3. 导入和更新配置
 
-将 `env.txt` **或** `.env` 放入 `Configuration/Import/`，从仓库根目录运行：
+将 `env.txt` **或** `.env` 放入 `Archon/Vault/Import/`，从仓库根目录运行：
 
 ```bash
 ./everspark configure
@@ -38,7 +38,7 @@ EVERSPARK_SSH_USER=root
 ./everspark start
 ```
 
-`Configuration/Import/` 的上传文件不会被移动或删除；导入后的 `.env` 被 Git 忽略。导入器还会将需要的凭据复制到 `Data/Configuration/`，对导入文件设置仅当前用户可读写的权限。已有环境只想更新配置时，重新上传**完整的**环境文件并再次运行 `./everspark configure`；这会替换根目录的 `.env`，不是把新字段追加到旧文件。
+`Archon/Vault/Import/` 的上传文件不会被移动或删除；导入后的 `.env` 被 Git 忽略。导入器还会将需要的凭据复制到 `Data/Configuration/`，对导入文件设置仅当前用户可读写的权限。已有环境只想更新配置时，重新上传**完整的**环境文件并再次运行 `./everspark configure`；这会替换根目录的 `.env`，不是把新字段追加到旧文件。
 
 如果文件放在其他目录，可用 `./everspark configure --from <目录>`；同一目录中同时有 `.env` 与 `env.txt` 且内容不同，可用 `--env <文件>` 显式指定一个。修改了运行中服务使用的配置后，按需要运行 `./everspark restart` 使服务重新读取配置。
 
@@ -67,7 +67,7 @@ DeepSeek 复用 OpenAI 格式的 Chat Completions 适配器。点击 **Fill Deep
 
 ## 5. 接入 rclone 远程存储（可选）
 
-准备已有的 `rclone.conf`，与 `env.txt` 一起放入 `Configuration/Import/`。环境文件中至少明确启用后端并配置两个模型扫描根路径，例如：
+准备已有的 `rclone.conf`，与 `env.txt` 一起放入 `Archon/Vault/Import/`。环境文件中至少明确启用后端并配置两个模型扫描根路径，例如：
 
 ```dotenv
 EVERSPARK_STORAGE_BACKEND=rclone
@@ -109,6 +109,25 @@ CF_LOCAL_PORT=8780
 | 程序代码、公开示例、可公开的工作流 | `.env`、`env.txt`、`rclone.conf`、Tunnel 凭据 |
 | 公开的配置字段说明 | `Data/` 下的模型、生成输出、角色及记忆 |
 
-仓库的 `.gitignore` 已忽略 `.env`、`Configuration/Import/` 中的上传文件和 `Data/` 运行目录。Git 忽略规则只防止普通提交，不代替自己的数据备份；也不要使用强制添加命令把私人文件提交到公开仓库。
+仓库的 `.gitignore` 已忽略 `.env`、`Archon/Vault/Import/` 中的上传文件和 `Data/` 运行目录。Git 忽略规则只防止普通提交，不代替自己的数据备份；也不要使用强制添加命令把私人文件提交到公开仓库。
 
-更完整的导入细节见 [`Configuration/README.md`](../Configuration/README.md)，全部可选字段见 [`.env.example`](../.env.example)。
+更完整的导入细节见 [`Archon/Vault/README.md`](../Archon/Vault/README.md)，全部可选字段见 [`.env.example`](../.env.example)。
+
+### Windows 主机的云盘模型配置
+
+将 `env.txt` 与 `rclone.conf` 放入 `Archon/Vault/Import/`。在 `env.txt` 中启用 `EVERSPARK_STORAGE_BACKEND=rclone`，设置真实的 `IMAGE_FORGE_RCLONE_REMOTE` 和 `CONCEPT_FORGE_RCLONE_REMOTE`。如果 rclone 不在 PATH 中，再添加：
+
+```dotenv
+RCLONE_BIN=C:\rclone\rclone.exe
+```
+
+在仓库根目录的 PowerShell 中执行：
+
+```powershell
+python .\Archon\Vault\import_config.py
+.\everspark.cmd archon start
+```
+
+导入器会生成根目录 `.env` 并导入 rclone 凭据；Windows 启动入口读取 `.env` 中的存储设置。修改配置后，先停止旧服务再重新启动。进程已有的环境变量优先于 `.env`，如果以前在 PowerShell 手动设置过旧值，请使用新窗口启动。
+
+主机需要本机 rclone 扫描云盘目录；模型下载仍在对应的 Forge 节点执行。`RCLONE_BIN` 只指定本机程序，不会随云盘凭据发送给节点；节点使用自己的 rclone。仅放好配置文件不会安装 rclone。点击“扫描 R2”后，Storage 显示扫描状态或具体错误。

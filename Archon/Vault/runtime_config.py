@@ -153,6 +153,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         config, "RCLONE_CONFIG", ("storage", "rclone", "config_file")
     )
     _environment_override(
+        config, "RCLONE_BIN", ("storage", "rclone", "binary")
+    )
+    _environment_override(
         config,
         "IMAGE_FORGE_RCLONE_REMOTE",
         ("storage", "rclone", "image_remote"),

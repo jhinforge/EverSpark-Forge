@@ -26,6 +26,28 @@ def unused_port() -> int:
 
 
 class ArchonOnlyTests(unittest.TestCase):
+    def test_storage_settings_load_from_dotenv_without_activating_legacy_services(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / ".env").write_text(
+                "EVERSPARK_STORAGE_BACKEND=rclone\n"
+                "RCLONE_CONFIG='C:\\private\\rclone.conf'\n"
+                "RCLONE_BIN='C:\\rclone\\rclone.exe'\n"
+                "IMAGE_FORGE_RCLONE_REMOTE=cloud:images\n"
+                "CONCEPT_FORGE_RCLONE_REMOTE=cloud:concept\n"
+                "EVERSPARK_BACKUP_REMOTE=cloud:backups\n"
+                "COMFYUI_BASE_URL=http://legacy.invalid\n", encoding="utf-8")
+            with patch("Archon.Gate.CLI.archon.REPO_ROOT", root), patch.dict(os.environ, {}, clear=True):
+                _load_local_settings()
+                self.assertEqual(os.environ["EVERSPARK_STORAGE_BACKEND"], "rclone")
+                self.assertEqual(os.environ["RCLONE_BIN"], r"C:\rclone\rclone.exe")
+                self.assertEqual(os.environ["EVERSPARK_BACKUP_REMOTE"], "cloud:backups")
+                self.assertNotIn("COMFYUI_BASE_URL", os.environ)
+                self.assertEqual(os.environ["EVERSPARK_ARCHON_ONLY"], "1")
+            with patch("Archon.Gate.CLI.archon.REPO_ROOT", root), patch.dict(os.environ, {"EVERSPARK_STORAGE_BACKEND": "local"}, clear=True):
+                _load_local_settings()
+                self.assertEqual(os.environ["EVERSPARK_STORAGE_BACKEND"], "local")
+
     def test_explicit_node_target_enables_remote_mode_and_separates_ports(self):
         with patch.dict(os.environ, {"EVERSPARK_CONCEPT_NODE_ID": "a"*32,
                                    "EVERSPARK_ORCHESTRATOR_PORT": "8765"}, clear=True):

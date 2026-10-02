@@ -24,7 +24,7 @@ Replace these with your actual connection details. Quote values containing space
 
 ## 3. Import and update
 
-Place `env.txt` **or** `.env` in `Configuration/Import/`, then run:
+Place `env.txt` **or** `.env` in `Archon/Vault/Import/`, then run:
 
 ```bash
 ./everspark configure
@@ -59,7 +59,7 @@ Character subjects, memory, and outputs are runtime data: save what you need bef
 
 ## 5. rclone remote storage (optional)
 
-Place your existing `rclone.conf` and `env.txt` in `Configuration/Import/`. Explicitly enable the backend and set both model scanning roots:
+Place your existing `rclone.conf` and `env.txt` in `Archon/Vault/Import/`. Explicitly enable the backend and set both model scanning roots:
 
 ```dotenv
 EVERSPARK_STORAGE_BACKEND=rclone
@@ -101,4 +101,23 @@ Use your real UUID and hostname. The credential JSON `TunnelID` must match. `CF_
 | Code, public examples, shareable workflows | `.env`, `env.txt`, `rclone.conf`, Tunnel credentials |
 | Public configuration field descriptions | Models, outputs, subjects, and memory under `Data/` |
 
-`.gitignore` excludes `.env`, private imports under `Configuration/Import/`, and `Data/`. Ignored files are not backups; do not force-add them to a public repository. See [`Configuration/README.md`](../Configuration/README.md) for importer details and [`.env.example`](../.env.example) for optional fields.
+`.gitignore` excludes `.env`, private imports under `Archon/Vault/Import/`, and `Data/`. Ignored files are not backups; do not force-add them to a public repository. See [`Archon/Vault/README.md`](../Archon/Vault/README.md) for importer details and [`.env.example`](../.env.example) for optional fields.
+
+### Cloud model storage on a Windows host
+
+Place `env.txt` and `rclone.conf` in `Archon/Vault/Import/`. Set `EVERSPARK_STORAGE_BACKEND=rclone` and the real `IMAGE_FORGE_RCLONE_REMOTE` and `CONCEPT_FORGE_RCLONE_REMOTE` paths in `env.txt`. If rclone is not on PATH, also set:
+
+```dotenv
+RCLONE_BIN=C:\rclone\rclone.exe
+```
+
+From PowerShell in the repository root:
+
+```powershell
+python .\Archon\Vault\import_config.py
+.\everspark.cmd archon start
+```
+
+The importer creates the root `.env` and imports rclone credentials. The Windows launcher reads storage settings from `.env`. Stop the existing service and start it again after configuration changes. Existing process environment variables take precedence; use a new terminal if an earlier session contains stale overrides.
+
+The host needs its own rclone to scan cloud directories. Model downloads run on the relevant Forge node. The host's `RCLONE_BIN` is never sent with cloud credentials to nodes, which use their own rclone. Importing configuration does not install rclone. Storage shows scan progress or the specific failure when you click “Scan R2”.

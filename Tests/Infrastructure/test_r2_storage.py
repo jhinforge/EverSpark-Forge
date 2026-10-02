@@ -130,6 +130,23 @@ class SlowListing(FakeRclone):
 
 
 class R2StorageTests(unittest.TestCase):
+    def test_explicit_binary_is_used_and_missing_binary_is_actionable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            conf = Path(directory) / "rclone.conf"
+            conf.write_text("[cloud]\ntype = s3\n")
+            config = enabled_config(conf)
+            config["storage"]["rclone"]["binary"] = "/private/rclone"
+            runner = unittest.mock.Mock(return_value=subprocess.CompletedProcess([], 0, "", ""))
+            manager = R2StorageManager(config, run=runner)
+            with patch("r2_manager.shutil.which", return_value="/private/rclone") as which:
+                manager.client.validate()
+                manager.client.run("lsf", "cloud:bucket")
+                which.assert_called_with("/private/rclone")
+                self.assertEqual(runner.call_args.args[0][0], "/private/rclone")
+            with patch("r2_manager.shutil.which", return_value=None):
+                with self.assertRaisesRegex(StorageError, "RCLONE_BIN executable not found"):
+                    manager.client.run("lsf", "cloud:bucket")
+
     @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
     def test_remote_scan_returns_immediately_then_exposes_result(self, _which) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -515,6 +515,7 @@ function updateStorageButtons() {
 async function loadRemoteStorage(force = false) {
   if (state.remoteScanTimer) { window.clearTimeout(state.remoteScanTimer); state.remoteScanTimer = null; }
   try {
+    if (force) uiText(elements.storageSummary, "Scanning remote model directories…");
     let scan = await api("/api/storage/scan");
     if (force || scan.status === "idle") {
       scan = await api("/api/storage/scan", { method: "POST",
@@ -529,6 +530,7 @@ async function loadRemoteStorage(force = false) {
     }
     const data = scan.result;
     if (!data) throw new Error(t("Remote scan returned no data"));
+    if (force && !data.enabled) showNotice(t("Remote storage is disabled in local mode. Configure the rclone backend to enable it."));
     state.remoteStorage = data;
     const image = data.image || {};
     fillRemoteSelect(elements.remoteCheckpointSelect, image.checkpoint || []);

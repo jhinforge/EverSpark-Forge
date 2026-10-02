@@ -57,13 +57,15 @@ class RemoteModelTests(unittest.TestCase):
         config_file.parent.mkdir()
         config_file.write_text("[cloud]\ntype = s3\nsecret_access_key = private-fixture\n")
         self.config["storage"] = {"backend": "rclone", "rclone": {"config_file": str(config_file),
-            "image_remote": "cloud:images", "concept_remote": "cloud:concept"}}
+            "image_remote": "cloud:images", "concept_remote": "cloud:concept",
+            "binary": r"C:\rclone\rclone.exe"}}
         service = StorageService(self.config)
         with patch.object(service.remote, "call", return_value={"job_id": "c" * 32}) as call:
             result = service.start_storage_pull("lora", "cloud:images/loras::girl.safetensors")
             self.assertEqual(call.call_args.args[:3], ("a" * 32, "image", "models_pull_start"))
             cloud = call.call_args.args[3]["cloud"]
             self.assertNotIn("config_file", cloud["storage"]["rclone"])
+            self.assertNotIn("binary", cloud["storage"]["rclone"])
             self.assertNotIn("private-fixture", json.dumps(result))
         catalog = {"image": {"checkpoint": [{"name": "same.safetensors", "installed": True}]},
                    "concept": {"models": [{"name": "llm", "format": "ollama", "installed": False}]}}
