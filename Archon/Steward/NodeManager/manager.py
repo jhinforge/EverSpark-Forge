@@ -19,6 +19,8 @@ class NodeManager:
         self.lock = threading.Condition(threading.RLock())
         self.leases = {}
         self.heartbeat_interval, self.lease_timeout = heartbeat_interval, lease_timeout
+        from .output_streams import OutputStreams
+        self.outputs = OutputStreams(self)
         self.tasks = TaskChannel(self)
         self.lifecycle, self.registration, self.heartbeat = Lifecycle(self), Registration(self), Heartbeat(self)
         self.server = NodeServer((host, port), self)
@@ -57,6 +59,7 @@ class NodeManager:
 
     def close(self):
         self.stop.set()
+        self.outputs.close()
         with self.lock:
             self.lock.notify_all()
         if self.thread:

@@ -118,7 +118,21 @@ class RemoteCreationWebUITests(unittest.TestCase):
                 payload = json.loads(task["message"])
                 if task["action"] == "synthesize":
                     self.speech_inputs.append(payload)
-                if task["action"] == "fetch":
+                if task["action"] == "stream":
+                    import io
+                    import zipfile
+                    data = self.audio_bytes if task["forge"] == "audio" else self.image_bytes
+                    if payload.get("archive"):
+                        buffer = io.BytesIO()
+                        with zipfile.ZipFile(buffer, "w") as archive:
+                            archive.writestr("EverSpark-Outputs/render.png", data)
+                        data = buffer.getvalue()
+                    request = Request(self.nodes.url + "/node/output", data=data, method="POST",
+                        headers={"Content-Type": "application/octet-stream",
+                                 "Authorization": "Bearer " + payload["token"]})
+                    with urlopen(request, timeout=5) as response:
+                        value = json.load(response)
+                elif task["action"] == "fetch":
                     value = self.output_chunk(task["forge"], payload)
                 elif task["action"] == "history" and task["forge"] == "audio":
                     value = {"audio": [{"filename": "speech.wav"}]}
@@ -197,13 +211,14 @@ class RemoteCreationWebUITests(unittest.TestCase):
         self.assertEqual(result["audio"][0]["text"], "こんにちは。")
         self.assertEqual(self.seen.count(("concept", "concept", "chat")), 3)
         self.assertEqual(self.seen.count(("audio", "audio", "synthesize")), 1)
-        self.assertEqual(self.seen.count(("audio", "audio", "fetch")), 2)
+        self.assertEqual(self.seen.count(("audio", "audio", "fetch")), 0)
 
         with urlopen(self.url + "/api/audio/file?filename=speech.wav", timeout=5) as response:
             self.assertEqual(response.headers["Content-Type"], "audio/wav")
             self.assertEqual(response.read(), self.audio_bytes)
         history = self.call("/api/audio/history?limit=36")
-        self.assertEqual(history["audio"], [{"filename": "speech.wav"}])
+        self.assertEqual(history["audio"][0]["filename"], "speech.wav")
+        self.assertIn("fallback_url", history["audio"][0])
         self.call("/api/generate/start", request)
         self.assertEqual(self.seen.count(("audio", "audio", "synthesize")), 1)
         self.assertTrue(all(role == forge for role, forge, _ in self.seen))
@@ -349,16 +364,39 @@ class RemoteCreationWebUITests(unittest.TestCase):
         for role in ("concept", "image"):
             self.call("/api/forge-bindings", {"forge": role, "node_id": self.identities[role]})
 
+    def test_results_do_not_transfer_files_and_archive_is_created_on_demand(self):
+        import io
+        import zipfile
+        self.select_pair()
+        result = self.call("/api/results?prompt_id=remote-job")
+        self.assertEqual(result["results"][0]["status"], "completed")
+        self.assertNotIn(("image", "image", "fetch"), self.seen)
+        self.assertNotIn(("image", "image", "stream"), self.seen)
+        with urlopen(self.url + "/api/outputs/archive", timeout=5) as response:
+            self.assertEqual(response.headers["Content-Type"], "application/zip")
+            with zipfile.ZipFile(io.BytesIO(response.read())) as archive:
+                self.assertEqual(archive.read("EverSpark-Outputs/render.png"), self.image_bytes)
+        self.assertEqual(self.seen.count(("image", "image", "stream")), 1)
+        self.assertFalse(list((self.root / "outputs").rglob("*.png")))
+        self.assertEqual(self.agent_errors, [])
+
     def test_gallery_lists_remote_outputs_before_transferring_any_image(self):
         self.history_images = [{"filename": "render.png", "subfolder": "", "type": "output",
                                 "url": "/api/image/view?filename=render.png"}]
         self.select_pair()
         history = self.call("/api/history?limit=36")
-        self.assertEqual(history["images"], self.history_images)
+        self.assertEqual(len(history["images"]), 1)
+        image = history["images"][0]
+        self.assertEqual(image["filename"], "render.png")
+        self.assertEqual(image["subfolder"], "")
+        self.assertEqual(image["type"], "output")
+        self.assertIn("node_id=", image["fallback_url"])
+        self.assertEqual(image["url"], image["fallback_url"])
         self.assertNotIn(("image", "image", "fetch"), self.seen)
         with urlopen(self.url + history["images"][0]["url"], timeout=5) as response:
             self.assertEqual(response.read(), self.image_bytes)
-        self.assertEqual(self.seen.count(("image", "image", "fetch")), 1)
+        self.assertEqual(self.seen.count(("image", "image", "stream")), 1)
+        self.assertFalse(list((self.root / "outputs").rglob("*.png")))
         self.assertEqual(self.agent_errors, [])
 
     def test_selection_generation_result_transfer_and_persistent_restore(self):
@@ -386,7 +424,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
             self.assertTrue(all(role == forge for role, forge, _ in self.seen))
             self.assertIn(("concept", "concept", "chat"), self.seen)
             self.assertIn(("image", "image", "submit"), self.seen)
-            self.assertIn(("image", "image", "fetch"), self.seen)
+            self.assertIn(("image", "image", "stream"), self.seen)
             self.bindings.close()
             restored = ForgeBindings(self.nodes, self.root / "forge_bindings.json",
                 f"http://127.0.0.1:{self.gate.server_port}", factory=self.factory)

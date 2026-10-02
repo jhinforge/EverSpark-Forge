@@ -1,0 +1,40 @@
+name: Media access regression
+on:
+  push:
+    branches:
+      - "refactor/distributed-architecture"
+      - "codex/media-access-*"
+    paths:
+      - "Aegis/Storage/**"
+      - "Archon/**"
+      - "Legate/**"
+      - "Tests/**"
+      - ".github/workflows/media-access.yml"
+  pull_request:
+    paths:
+      - "Aegis/Storage/**"
+      - "Archon/**"
+      - "Legate/**"
+      - "Tests/**"
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check Python syntax
+        run: python -m compileall -q Aegis Archon Legate Tests
+      - name: Infrastructure and binary media
+        run: python -m unittest discover -s Tests/Infrastructure -p 'test_*.py'
+      - name: Archon and distributed creation
+        run: python -m unittest discover -s Tests/Archon -p 'test_*.py'
+      - name: WebUI
+        run: python -m unittest discover -s Tests/WebUI -p 'test_*.py'

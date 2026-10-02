@@ -18,6 +18,9 @@ from image_forge.port import ImageRequest
 
 def run(action: str, payload: dict) -> dict:
     config = load_config()
+    if action == "stream":
+        from Aegis.Storage.node_output_stream import send_output
+        return send_output(config, payload)
     manifests = discover_plugins()
     engines = create_engines(config["image_forge"]["adapters"], config["workflow"], manifests)
     gateway = ImageGateway(engines, config["memory"]["database"],
@@ -39,9 +42,13 @@ def run(action: str, payload: dict) -> dict:
                                            engine=str(payload.get("engine", "")))
         return {"prompt_id": job_id, "selection": selection}
     if action == "poll":
-        return gateway.result(str(payload.get("prompt_id", "")))
+        result = gateway.result(str(payload.get("prompt_id", "")))
+        from Aegis.Storage.node_media_access import media_urls
+        result["images"] = media_urls(result.get("images", []))
+        return result
     if action == "history":
-        return {"images": gateway.history(int(payload.get("limit", 24)))}
+        from Aegis.Storage.node_media_access import media_urls
+        return {"images": media_urls(gateway.history(int(payload.get("limit", 24))))}
     if action == "fetch":
         filename = str(payload.get("filename", ""))
         subfolder = str(payload.get("subfolder", ""))

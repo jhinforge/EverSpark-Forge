@@ -1,5 +1,6 @@
 """Loopback-only Node administration, shared by Gate and standalone Node host."""
 import ipaddress
+from urllib.parse import urlsplit
 from .server import NodeServer, NodeHandler
 from ..errors import NodeError
 from ..identity import validate_id
@@ -46,6 +47,10 @@ def handle(handler, manager, method, path):
         local_request(handler)
         if manager is None:
             raise NodeError("Node management unavailable", 503)
+        if method == "GET" and path == "/nodes/output":
+            from urllib.parse import parse_qs, urlsplit
+            manager.outputs.serve(handler, parse_qs(urlsplit(handler.path).query))
+            return True
         if method == "GET" and path == "/nodes":
             value = {"nodes": manager.list_nodes()}
         elif method == "POST" and path in POST_ROUTES:
@@ -66,7 +71,7 @@ def handle(handler, manager, method, path):
 
 class OperatorHandler(NodeHandler):
     def do_GET(self):
-        if not handle(self, self.server.manager, "GET", self.path):
+        if not handle(self, self.server.manager, "GET", urlsplit(self.path).path):
             self._send(404, {"error": "Not found"})
 
     def do_POST(self):

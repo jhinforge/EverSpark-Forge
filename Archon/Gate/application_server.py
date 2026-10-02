@@ -123,6 +123,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send(502, {"ok": False, "error": str(exc)})
         elif parsed.path == "/audio/file":
             query = parse_qs(parsed.query)
+            audio = getattr(self.server.application, "audio", None)
+            if audio is not None and getattr(audio, "url", None):
+                self._stream_remote_output(lambda: audio.open_audio(query.get("filename", [""])[0]))
+                return
             try:
                 path = self.server.application.audio_path(query.get("filename", [""])[0])
             except ValueError:
@@ -139,8 +143,20 @@ class RequestHandler(BaseHTTPRequestHandler):
             with path.open("rb") as stream:
                 while chunk := stream.read(1024 * 1024):
                     self.wfile.write(chunk)
+        elif parsed.path == "/image/archive":
+            gateway = getattr(self.server.application.image, "gateway", None)
+            if not hasattr(gateway, "open_archive"):
+                self._send(404, {"ok": False, "error": "Remote output archive unavailable"})
+                return
+            self._stream_remote_output(gateway.open_archive)
         elif parsed.path == "/image/file":
             query = parse_qs(parsed.query)
+            gateway = getattr(self.server.application.image, "gateway", None)
+            if hasattr(gateway, "open_image"):
+                self._stream_remote_output(lambda: gateway.open_image(
+                    query.get("filename", [""])[0], query.get("subfolder", [""])[0],
+                    query.get("type", ["output"])[0]))
+                return
             try:
                 path = self.server.application.image_path(
                     query.get("filename", [""])[0], query.get("subfolder", [""])[0],
@@ -500,6 +516,30 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _log(self, level: str, event: str, message: str, **fields: Any) -> None:
         if self.server.logger is not None:
             getattr(self.server.logger, level)(event, message, **fields)
+
+    def _stream_remote_output(self, opener):
+        started = False
+        try:
+            with opener() as source:
+                self.send_response(200)
+                for name in ("Content-Type", "Content-Length", "Content-Disposition"):
+                    if source.headers.get(name):
+                        self.send_header(name, source.headers[name])
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                started = True
+                remaining = int(source.headers["Content-Length"])
+                while remaining:
+                    block = source.read(min(64 * 1024, remaining))
+                    if not block:
+                        raise OSError("Incomplete image stream")
+                    self.wfile.write(block)
+                    remaining -= len(block)
+        except (OSError, ValueError, RuntimeError):
+            if not started:
+                self._send(502, {"ok": False, "error": "Image Node output unavailable"})
+            else:
+                self.close_connection = True
 
     def _send(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=True).encode("utf-8")

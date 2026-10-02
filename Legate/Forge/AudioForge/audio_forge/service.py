@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from urllib.parse import urlencode, urlsplit
 from Aegis.Storage.output_resources import OutputResources
 from Archon.Gate.remote_target import target
 from Legate.Warden.audio_backend import run
@@ -62,8 +63,11 @@ class AudioService:
         result = self._call("synthesize", instruction)
         if result.get("status") != "completed" or not isinstance(result.get("audio"), list) or not result["audio"]:
             raise RuntimeError("Audio Forge did not return completed speech")
-        for resource in result["audio"]:
-            self.audio_path(resource["filename"])
+        if self.url:
+            result["audio"] = self._media_links(result["audio"])
+        else:
+            for resource in result["audio"]:
+                self.audio_path(resource["filename"])
         return result
 
     def history(self, limit=24):
@@ -74,10 +78,36 @@ class AudioService:
             raise RuntimeError("Audio Forge returned invalid history")
         for resource in audio:
             self.outputs.path(resource["filename"], require_file=False)
-        return audio[:limit]
+        return self._media_links(audio[:limit]) if self.url else audio[:limit]
 
     def health(self):
         return self._call("health", {})
+
+    def _media_links(self, resources):
+        import ipaddress
+        for resource in resources:
+            self.outputs.path(resource["filename"], require_file=False)
+            fallback = "/api/audio/file?" + urlencode({
+                "filename": resource["filename"], **self.target_identity})
+            resource["fallback_url"] = fallback
+            direct = resource.get("url", "")
+            address = urlsplit(direct)
+            try:
+                private = address.scheme == "http" and ipaddress.ip_address(address.hostname) in ipaddress.ip_network("100.64.0.0/10")
+            except (ValueError, TypeError):
+                private = False
+            resource["url"] = direct if private and not address.username else fallback
+        return resources
+
+    def open_audio(self, filename):
+        self.outputs.path(filename, require_file=False)
+        if not self.url:
+            return None
+        if "node_id" not in self.target_identity:
+            raise RuntimeError("Select a registered Audio Node for streaming outputs")
+        url = self.url.rsplit("/", 1)[0] + "/output?" + urlencode({
+            **self.target_identity, "forge": "audio", "filename": filename})
+        return urlopen(url, timeout=320)
 
     def audio_path(self, filename):
         if self.url:

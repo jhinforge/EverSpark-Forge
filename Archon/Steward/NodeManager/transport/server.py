@@ -20,6 +20,9 @@ class NodeHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            if self.path == "/node/output":
+                self.server.manager.outputs.upload(self)
+                return
             self._send(200, dispatch(self.server.manager, self.path, self.read_body()))
         except (ValueError, TypeError, KeyError, UnicodeError):
             self._send(400, {"error": "Invalid Node request"})

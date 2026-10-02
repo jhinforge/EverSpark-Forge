@@ -4,12 +4,12 @@ const vm = require('node:vm');
 const source = fs.readFileSync('Archon/Portal/static/app.js', 'utf8');
 function extract(start, end) { return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))); }
 function element(tag) {
-  return {tag, children: [], append(...items) {this.children.push(...items);},
+  return {tag, children: [], addEventListener() {}, append(...items) {this.children.push(...items);},
     appendChild(item) {this.children.push(item);}, replaceChildren(...items) {this.children = items;}};
 }
 const stage = element('stage'), audioHistory = element('history'), gallery = element('gallery');
 const completedImage = {forge: 'image', status: 'completed', result: {outputs: [{images: [{filename: 'ready.png'}]}]}};
-const context = {document: {createElement: element}, elements: {resultStage: stage, galleryGrid: gallery}, uiText: (el, value) => {el.textContent = value;},
+const context = {window: {location: {protocol: 'http:'}}, document: {createElement: element}, elements: {resultStage: stage, galleryGrid: gallery}, uiText: (el, value) => {el.textContent = value;},
   URLSearchParams, encodeURIComponent, t: x => x, setGenerationState() {},
   transientApiError: () => false, setTimeout: fn => fn(),
   imageButton: image => ({tag: 'image', ...image}), $: () => audioHistory};

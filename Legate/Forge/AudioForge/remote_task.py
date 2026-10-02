@@ -12,9 +12,16 @@ from Legate.Forge.AudioForge.audio_forge.voxcpm import synthesize, validate_runt
 
 
 def run(action, payload, config=None):
-    settings = (config or load_config())["audio_forge"]
+    configuration = config or load_config()
+    settings = configuration["audio_forge"]
+    if action == "stream":
+        from Aegis.Storage.node_output_stream import send_output
+        return send_output(configuration, payload, forge="audio")
     if action == "synthesize":
-        return synthesize(payload, settings)
+        result = synthesize(payload, settings)
+        from Aegis.Storage.node_media_access import media_urls
+        result["audio"] = media_urls(result.get("audio", []), forge="audio")
+        return result
     if action == "fetch":
         if set(payload) != {"filename", "offset"}:
             raise ValueError("Invalid audio fetch request")
@@ -27,8 +34,9 @@ def run(action, payload, config=None):
         # Speech outputs live directly in the output directory, not in model/cache folders.
         files = (path for path in outputs.files() if path.parent == outputs.directory)
         import itertools
-        return {"audio": [{"filename": path.name} for path in
-                          itertools.islice(files, max(1, min(payload["limit"], 100)))]}
+        from Aegis.Storage.node_media_access import media_urls
+        return {"audio": media_urls([{"filename": path.name} for path in
+                          itertools.islice(files, max(1, min(payload["limit"], 100)))], forge="audio")}
     if action == "health":
         torch = validate_runtime()
         if not torch.cuda.is_available():

@@ -2015,13 +2015,52 @@ function imageButton(image, className) {
   button.type = "button";
   button.className = className;
   const img = document.createElement("img");
-  img.src = image.url;
+  const fallback = image.fallback_url || image.url;
+  const direct = !(window.location.protocol === "https:" && image.url?.startsWith("http:"));
+  let source = direct ? image.url : fallback;
+  img.referrerPolicy = "no-referrer";
+  img.addEventListener("error", () => {
+    if (source !== fallback) {
+      source = fallback;
+      img.src = source;
+    }
+  });
+  let directTimer;
+  img.addEventListener("load", () => window.clearTimeout(directTimer));
+  const armDirectTimeout = () => {
+    if (source !== fallback) {
+      directTimer = window.setTimeout(() => {
+        if (!img.complete && source !== fallback) {
+          source = fallback;
+          img.src = source;
+        }
+      }, 10000);
+    }
+  };
+  if (source !== fallback && typeof IntersectionObserver !== "undefined") {
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        armDirectTimeout();
+        observer.disconnect();
+      }
+    });
+    observer.observe(img);
+    img.addEventListener("load", () => observer.disconnect());
+  } else {
+    armDirectTimeout();
+  }
+  img.src = source;
   if (image.filename) img.alt = image.filename;
   else uiAttr(img, "alt", "Generated image");
   img.loading = "lazy";
   button.appendChild(img);
   button.addEventListener("click", () => {
-    elements.viewerImage.src = image.url;
+    const viewer = elements.viewerImage;
+    viewer.referrerPolicy = "no-referrer";
+    viewer.onerror = () => {
+      if (viewer.src !== new URL(fallback, window.location.href).href) viewer.src = fallback;
+    };
+    viewer.src = source;
     if (image.filename) elements.viewerImage.alt = image.filename;
     else uiAttr(elements.viewerImage, "alt", "Generated image");
     elements.imageViewer.showModal();
@@ -2208,7 +2247,7 @@ function renderCreation(result) {
     for (const output of task.result?.outputs || []) {
       for (const image of output.images || []) {
         const query = new URLSearchParams({filename: image.filename, subfolder: image.subfolder || "", type: image.type || "output"});
-        grid.appendChild(imageButton({...image, url: `/api/image/view?${query}`}, "result-card"));
+        grid.appendChild(imageButton({...image, url: image.url || `/api/image/view?${query}`}, "result-card"));
       }
     }
   }
@@ -2225,9 +2264,33 @@ function audioCard(resource) {
   const audio = document.createElement("audio");
   audio.controls = true;
   audio.preload = "none";
-  audio.src = `/api/audio/file?filename=${encodeURIComponent(resource.filename)}`;
+  const fallback = resource.fallback_url || `/api/audio/file?filename=${encodeURIComponent(resource.filename)}`;
+  const direct = resource.url && !(window.location.protocol === "https:" && resource.url.startsWith("http:"));
+  let source = direct ? resource.url : fallback;
+  audio.addEventListener("error", () => {
+    if (source !== fallback) {
+      source = fallback;
+      audio.src = source;
+    }
+  });
+  let directTimer;
+  audio.addEventListener("loadstart", () => {
+    window.clearTimeout(directTimer);
+    if (source !== fallback) {
+      directTimer = window.setTimeout(() => {
+        if (audio.readyState < 2 && source !== fallback) {
+          const playing = !audio.paused;
+          source = fallback;
+          audio.src = source;
+          if (playing) audio.play().catch(() => {});
+        }
+      }, 10000);
+    }
+  });
+  audio.addEventListener("loadeddata", () => window.clearTimeout(directTimer));
+  audio.src = source;
   const download = document.createElement("a");
-  download.href = audio.src;
+  download.href = fallback;
   download.download = resource.filename;
   download.textContent = "下载 WAV";
   card.append(text, audio, download);

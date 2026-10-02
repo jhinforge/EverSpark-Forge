@@ -479,15 +479,22 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not filename or "/" in filename or "\\" in filename or ".." in filename or not filename.endswith(".wav"):
             self._json(400, {"ok": False, "error": "Invalid audio filename"})
             return
-        request = Request(f"{self.orchestrator_url}/audio/file?{urlencode({'filename': filename})}")
-        with urlopen(request, timeout=self.server.settings.request_timeout) as response:
-            self.send_response(response.status)
-            self.send_header("Content-Type", "audio/wav")
-            self.send_header("Content-Length", response.headers["Content-Length"])
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            while chunk := response.read(1024 * 1024):
-                self.wfile.write(chunk)
+        node_id = query.get("node_id", [""])[0]
+        if node_id:
+            if len(node_id) != 32 or any(char not in "0123456789abcdef" for char in node_id):
+                self._json(400, {"ok": False, "error": "Invalid Audio Node"})
+                return
+            url = f"{self.server.settings.control_url}/nodes/output?" + urlencode({
+                "node_id": node_id, "forge": "audio", "filename": filename})
+        else:
+            url = f"{self.orchestrator_url}/audio/file?{urlencode({'filename': filename})}"
+        try:
+            with urlopen(url, timeout=self.server.settings.request_timeout) as response:
+                self._forward_output(response)
+        except HTTPError as exc:
+            self._json(exc.code, {"ok": False, "error": "Audio is unavailable"})
+        except (URLError, TimeoutError):
+            self._json(502, {"ok": False, "error": "Audio Node output unavailable"})
 
     def _proxy_image(self, query: dict[str, list[str]]) -> None:
         filename = query.get("filename", [""])[0]
@@ -505,24 +512,21 @@ class RequestHandler(BaseHTTPRequestHandler):
         upstream_query = urlencode(
             {"filename": filename, "subfolder": subfolder, "type": folder_type}
         )
-        request = Request(
-            f"{self.orchestrator_url}/image/file?{upstream_query}",
-            method="GET",
-        )
+        node_id = query.get("node_id", [""])[0]
+        if node_id:
+            if len(node_id) != 32 or any(char not in "0123456789abcdef" for char in node_id):
+                self._json(400, {"ok": False, "error": "Invalid Image Node"})
+                return
+            url = f"{self.server.settings.control_url}/nodes/output?" + urlencode({
+                "node_id": node_id, "filename": filename, "subfolder": subfolder, "type": folder_type})
+        else:
+            url = f"{self.orchestrator_url}/image/file?{upstream_query}"
+        request = Request(url, method="GET")
         try:
             with urlopen(
                 request, timeout=self.server.settings.request_timeout
             ) as response:
-                body = response.read()
-                self.send_response(response.status)
-                self.send_header(
-                    "Content-Type",
-                    response.headers.get("Content-Type", "application/octet-stream"),
-                )
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "private, max-age=3600")
-                self.end_headers()
-                self.wfile.write(body)
+                self._forward_output(response, cache=True)
         except HTTPError as exc:
             self._json(exc.code, {"ok": False, "error": "Image not found"})
         except (URLError, TimeoutError) as exc:
@@ -594,7 +598,45 @@ class RequestHandler(BaseHTTPRequestHandler):
         finally:
             path.unlink(missing_ok=True)
 
+    def _forward_output(self, source, cache=False):
+        # Forward bounded chunks without a host file or a full-image memory buffer.
+        remaining = int(source.headers["Content-Length"])
+        self.send_response(source.status)
+        for name in ("Content-Type", "Content-Length", "Content-Disposition"):
+            if source.headers.get(name):
+                self.send_header(name, source.headers[name])
+        self.send_header("Cache-Control", "private, max-age=3600" if cache else "no-store")
+        self.end_headers()
+        try:
+            while remaining:
+                block = source.read(min(64 * 1024, remaining))
+                if not block:
+                    raise OSError("Incomplete output stream")
+                self.wfile.write(block)
+                remaining -= len(block)
+        except OSError:
+            # Once headers are sent, terminate the stream instead of emitting JSON.
+            self.close_connection = True
+
+    def _remote_output_archive(self):
+        if not self.server.archive_lock.acquire(blocking=False):
+            self._json(409, {"ok": False, "error": "An output archive is already being prepared"})
+            return
+        try:
+            with urlopen(f"{self.orchestrator_url}/image/archive",
+                         timeout=self.server.settings.request_timeout) as source:
+                self._forward_output(source)
+        except HTTPError as exc:
+            self._json(exc.code, {"ok": False, "error": "Remote output archive unavailable"})
+        except (URLError, TimeoutError):
+            self._json(502, {"ok": False, "error": "Image Node output unavailable"})
+        finally:
+            self.server.archive_lock.release()
+
     def _output_archive(self) -> None:
+        if self.server.forge_bindings and self.server.forge_bindings.bindings.get("image"):
+            self._remote_output_archive()
+            return
         if not self.server.archive_lock.acquire(blocking=False):
             self._json(409, {"ok": False, "error": "An output archive is already being prepared"})
             return

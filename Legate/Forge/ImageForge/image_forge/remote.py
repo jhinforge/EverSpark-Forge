@@ -6,7 +6,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlencode
 from urllib.request import Request, urlopen
 
 from Aegis.Storage.output_resources import OutputResources
@@ -77,9 +77,9 @@ class RemoteImageGateway:
         return result["prompt_id"], result["selection"]
 
     def result(self, job_id: str) -> dict:
+        # Poll only descriptors. Viewing an image opens a binary stream separately.
         result = self._call("poll", {"prompt_id": job_id})
-        for image in result.get("images", []):
-            self.image_path(image["filename"], image.get("subfolder", ""), image.get("type", "output"))
+        result["images"] = self._image_links(result.get("images", []))
         return result
 
     def results(self, job_ids: list[str]) -> list[dict]:
@@ -95,7 +95,40 @@ class RemoteImageGateway:
             if image.get("type", "output") != "output":
                 raise ValueError("Invalid image path")
             self.outputs.path(image["filename"], image.get("subfolder", ""), require_file=False)
+        return self._image_links(images)
+
+    def _image_links(self, images):
+        for image in images:
+            query = {"filename": image["filename"], "subfolder": image.get("subfolder", ""),
+                     "type": "output", **self.target_identity}
+            fallback = "/api/image/view?" + urlencode(query)
+            image["fallback_url"] = fallback
+            direct = image.get("url", "")
+            # Browser may use a signed private URL; the fallback never exposes credentials.
+            address = urlsplit(direct)
+            import ipaddress
+            try:
+                private = address.scheme == "http" and ipaddress.ip_address(address.hostname) in ipaddress.ip_network("100.64.0.0/10")
+            except (ValueError, TypeError):
+                private = False
+            image["url"] = direct if private and not address.username else fallback
         return images
+
+    def _open_output(self, payload):
+        if "node_id" not in self.target_identity:
+            raise RuntimeError("Select a registered Image Node for streaming outputs")
+        url = self.url.rsplit("/", 1)[0] + "/output?" + urlencode({
+            **self.target_identity, **payload})
+        return urlopen(Request(url, method="GET"), timeout=320)
+
+    def open_image(self, filename, subfolder="", kind="output"):
+        if kind != "output":
+            raise ValueError("Invalid image path")
+        self.outputs.path(filename, subfolder, require_file=False)
+        return self._open_output({"filename": filename, "subfolder": subfolder, "type": kind})
+
+    def open_archive(self):
+        return self._open_output({"archive": "1"})
 
     def image_path(self, filename: str, subfolder: str = "", kind: str = "output") -> Path:
         if kind != "output":
