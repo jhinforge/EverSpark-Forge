@@ -3,6 +3,7 @@ import threading
 from .fingerprint.hardware import dynamic
 from .transport import BridgeError
 from .executor.progress import snapshot
+from .bandwidth import snapshot as bandwidth_snapshot
 
 
 class Heartbeat:
@@ -17,7 +18,7 @@ class Heartbeat:
             if authentication:
                 try:
                     available, load = dynamic(self.data_dir, self.registration.info["resources"]["capacity"])
-                    self.registration.transport.request("/node/heartbeat", {**authentication, "status": "online", "allocatable": available, "load": load, "task": snapshot()})
+                    self.registration.transport.request("/node/heartbeat", {**authentication, "status": "online", "allocatable": available, "load": load, "task": snapshot(), "bandwidth": bandwidth_snapshot(self.data_dir)})
                 except BridgeError as exc:
                     if exc.status == 403:
                         self.registration.invalidate(authentication)

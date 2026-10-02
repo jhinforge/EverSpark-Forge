@@ -4,7 +4,7 @@
     if (value == null || !Number.isFinite(Number(value)) || Number(value) < 0) return "—";
     return `${(Number(value) / 1024 ** 3).toFixed(1)} GiB`;
   }
-  function render(raw, { t, bind, diagnose }) {
+  function render(raw, { t, bind, diagnose, speedtest }) {
     const node = raw || { status: "unconfigured" };
     const panel = document.createElement("section");
     panel.className = "node-inventory";
@@ -30,6 +30,29 @@
     if (messages[node.status]) { const note = document.createElement("p"); bind(note, messages[node.status]); panel.appendChild(note); }
     const stages = { agent_disconnected: "Heartbeat expired", pod_stopped: "Pod stopped", join_expired_or_revoked: "Join token expired or revoked" };
     if (node.stage && stages[node.stage]) { const note = document.createElement("p"); bind(note, stages[node.stage]); panel.appendChild(note); }
+    const speed = node.bandwidth;
+    if (speed) {
+      const note = document.createElement("p");
+      if (speed.status === "completed" && Number.isFinite(speed.download_mb_s)) {
+        const key = speed.download_mb_s >= 50
+          ? "This machine downloads at {speed} MB/s, qualified."
+          : "This machine downloads at {speed} MB/s; consider replacing the Pod.";
+        bind(note, key, { speed: speed.download_mb_s.toFixed(2) });
+        panel.appendChild(note);
+        field("Test server", speed.server_name || "LibreSpeed");
+      } else {
+        bind(note, speed.status === "failed" ? "Download speed test failed. Please retry." : "Testing download speed… (30-second download)");
+        panel.appendChild(note);
+      }
+      if (speed.finished_at) field("Test time", new Date(speed.finished_at).toLocaleString());
+    }
+    if (node.status === "online" && speedtest) {
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "ghost-button";
+      button.disabled = ["pending", "running"].includes(speed?.status);
+      bind(button, "Retest download speed");
+      button.addEventListener("click", () => speedtest(button)); panel.appendChild(button);
+    }
     if (node.resources?.capacity) {
       const table = document.createElement("table");
       table.className = "node-resources";

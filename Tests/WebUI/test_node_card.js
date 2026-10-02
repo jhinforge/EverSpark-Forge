@@ -35,3 +35,16 @@ test('unknown dynamic resources never display as zero capacity', () => {
   assert.equal(context.window.EverSparkNodeCard.bytes(null), '—');
   assert.equal(context.window.EverSparkNodeCard.bytes(0), '0.0 GiB');
 });
+test('download result uses MB/s and the inclusive 50 MB/s threshold', () => {
+  for (const [speed, expected] of [[49.9, /consider replacing/], [50, /qualified/]]) {
+    const panel = context.window.EverSparkNodeCard.render({status: 'online', bandwidth: {
+      status: 'completed', download_mb_s: speed, server_name: 'Fixture'
+    }}, options);
+    assert.match(texts(panel), expected);
+    assert.match(texts(panel), /MB\/s/);
+    assert.match(texts(panel), /Fixture/);
+  }
+  const failed = context.window.EverSparkNodeCard.render({status: 'online', bandwidth: {status: 'failed'}}, options);
+  assert.match(texts(failed), /failed/);
+  assert.doesNotMatch(texts(failed), /consider replacing/);
+});

@@ -37,7 +37,20 @@ def task(manager, body):
                                       timeout=timeout, forge=body.get("forge", "concept"), task_id=body.get("task_id"))}
 
 
-POST_ROUTES = {"/nodes/join": join, "/nodes/remove": remove, "/nodes/task": task}
+def bandwidth(manager, body):
+    if set(body) != {"node_id"}:
+        raise NodeError("Invalid bandwidth request", 400)
+    node_id = validate_id(body["node_id"])
+    if manager.status(node_id).get("status") != "online":
+        raise NodeError("Node must be online for download testing", 409)
+    import json
+    value = json.loads(manager.execute(node_id, "bandwidth", forge="node", timeout=10))
+    if not value:
+        raise NodeError("Download testing is disabled or unsupported on this Node", 409)
+    return {"bandwidth": value}
+
+
+POST_ROUTES = {"/nodes/bandwidth": bandwidth, "/nodes/join": join, "/nodes/remove": remove, "/nodes/task": task}
 
 
 def handle(handler, manager, method, path):

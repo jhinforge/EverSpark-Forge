@@ -25,9 +25,14 @@ class Heartbeat:
             reconnected = (node["status"] == "offline" or
                            time.monotonic()-lease.renewed_at > self.manager.lease_timeout)
             seen = timestamp()
-            if node["status"] != state:
+            from .bandwidth import validate
+            bandwidth = validate(body.get("bandwidth"))
+            changed = bandwidth is not None and bandwidth != node.get("bandwidth")
+            if node["status"] != state or changed:
                 nodes, joins = self.manager.registry.candidates()
                 nodes[node["node_id"]].update(status=state, last_seen=seen)
+                if changed:
+                    nodes[node["node_id"]]["bandwidth"] = bandwidth
                 self.manager.registry.publish(nodes, joins)
             if reconnected:
                 lease.connection_id = new_id()

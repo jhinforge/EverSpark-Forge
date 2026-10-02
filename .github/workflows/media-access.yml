@@ -38,3 +38,17 @@ jobs:
         run: python -m unittest discover -s Tests/Archon -p 'test_*.py'
       - name: WebUI
         run: python -m unittest discover -s Tests/WebUI -p 'test_*.py'
+      - name: JavaScript UI regression
+        run: node --test Tests/WebUI/*.js
+      - name: Verify pinned LibreSpeed installer
+        run: |
+          python - <<'PYTEST'
+          import tempfile, subprocess
+          from pathlib import Path
+          from Legate.Envoy.bandwidth import install
+          with tempfile.TemporaryDirectory() as directory:
+              binary = install(Path(directory))
+              version = subprocess.check_output([str(binary), '--version'], text=True)
+              assert '1.0.14' in version, version
+              print(version)
+          PYTEST

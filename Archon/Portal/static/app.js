@@ -1353,6 +1353,16 @@ function renderMachine(machine) {
     }
   }
   card.appendChild(window.EverSparkNodeCard.render(machine.node, { t, bind: uiText,
+    speedtest: async (button) => {
+      button.disabled = true;
+      try {
+        await api("/api/nodes/bandwidth", {method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({node_id: machine.node.node_id})});
+        showNotice(t("Download speed test started."));
+        await loadMachines();
+      } catch (error) { showNotice(error.message); }
+      finally { button.disabled = false; }
+    },
     diagnose: async (button) => {
       button.disabled = true;
       try {

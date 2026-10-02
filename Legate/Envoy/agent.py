@@ -35,6 +35,8 @@ def run():
                 try:
                     response = registration.register()
                     attempts = 0
+                    from .bandwidth import start
+                    start(DATA_DIR)
                     startup_status("registered")
                     print(f"[EverSpark] Node {response['node_id']} registered", flush=True)
                 except (OSError, ValueError, KeyError, RuntimeError) as exc:

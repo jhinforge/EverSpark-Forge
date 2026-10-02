@@ -442,7 +442,7 @@ class NodeRegistrationTests(unittest.TestCase):
     def test_real_agent_process_registers_heartbeats_restarts_and_runs_existing_tasks(self):
         env = {k: v for k, v in os.environ.items() if not k.startswith("EVERSPARK_NODE_") and k != "CONTAINER_ID"}
         env.update({"EVERSPARK_NODE_URL": self.manager.url, "EVERSPARK_NODE_JOIN_TOKEN": self.token,
-                    "EVERSPARK_NODE_DATA_DIR": str(self.directory/"real-agent")})
+                    "EVERSPARK_NODE_DATA_DIR": str(self.directory/"real-agent"), "EVERSPARK_NODE_BANDWIDTH": "0"})
         process = None
         def start():
             return subprocess.Popen([sys.executable, "-m", "Legate.Envoy.node_agent"], cwd=ROOT, env=env,
@@ -475,6 +475,20 @@ class NodeRegistrationTests(unittest.TestCase):
             self.assertEqual(self.manager.execute(node_id, "revision", timeout=10).strip(), expected)
         finally:
             stop()
+
+    def test_bandwidth_heartbeat_is_persisted_and_survives_registration(self):
+        response = self.register()
+        speed = {"status": "completed", "download_mb_s": 50, "server_name": "Fixture", "finished_at": "2026-10-02T00:00:00Z"}
+        self.heartbeat(response, bandwidth=speed)
+        stored = self.manager.status(response["node_id"])["bandwidth"]
+        self.assertTrue(stored["qualified"])
+        self.heartbeat(response, bandwidth={"status": "completed", "download_mb_s": float("nan")})
+        self.assertEqual(self.manager.status(response["node_id"])["bandwidth"], stored)
+        body = {**self.body, "node_id": response["node_id"], "credential": response["credential"]}
+        self.register(body)
+        self.assertEqual(self.manager.status(response["node_id"])["bandwidth"], stored)
+        self.restart_host()
+        self.assertEqual(self.manager.status(response["node_id"])["bandwidth"], stored)
 
     def test_core_has_no_provider_implementation_dependency(self):
         for path in (ROOT/"Archon/Steward/NodeManager").rglob("*.py"):

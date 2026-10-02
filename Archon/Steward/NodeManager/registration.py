@@ -68,6 +68,8 @@ class Registration:
                 nodes[node_id] = {**record, "status": "joining"}
                 manager.registry.publish(nodes, joins)
                 nodes, joins = manager.registry.candidates()
+            if manager.registry.nodes.get(node_id, {}).get("bandwidth"):
+                record["bandwidth"] = manager.registry.nodes[node_id]["bandwidth"]
             nodes[node_id] = record
             manager.registry.publish(nodes, joins)  # session becomes usable only after durable publication
             manager.leases[node_id] = Lease(runtime, session, time.monotonic(), seen, capacity["allocatable"])

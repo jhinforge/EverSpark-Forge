@@ -226,7 +226,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/subjects/compile": "/subjects/compile",
         }
         try:
-            if path in {"/api/forge-bindings", "/api/machines/vast/credential", "/api/machines/vast/credential/remove",
+            if path in {"/api/nodes/bandwidth", "/api/forge-bindings", "/api/machines/vast/credential", "/api/machines/vast/credential/remove",
                         "/api/machines/vast/destroy", "/api/machines/vast/deploy-image",
                         "/api/machines/vast/verify-image",
                         "/api/machines/vast/deploy-audio", "/api/machines/vast/verify-audio",
