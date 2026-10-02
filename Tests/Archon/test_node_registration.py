@@ -478,7 +478,7 @@ class NodeRegistrationTests(unittest.TestCase):
 
     def test_bandwidth_heartbeat_is_persisted_and_survives_registration(self):
         response = self.register()
-        speed = {"status": "completed", "download_mb_s": 50, "server_name": "Fixture", "finished_at": "2026-10-02T00:00:00Z"}
+        speed = {"status": "completed", "region": "AS", "server_region": "AS", "download_mb_s": 50, "server_name": "Fixture", "finished_at": "2026-10-02T00:00:00Z"}
         self.heartbeat(response, bandwidth=speed)
         stored = self.manager.status(response["node_id"])["bandwidth"]
         self.assertTrue(stored["qualified"])

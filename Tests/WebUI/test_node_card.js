@@ -38,7 +38,7 @@ test('unknown dynamic resources never display as zero capacity', () => {
 test('download result uses MB/s and the inclusive 50 MB/s threshold', () => {
   for (const [speed, expected] of [[49.9, /consider replacing/], [50, /qualified/]]) {
     const panel = context.window.EverSparkNodeCard.render({status: 'online', bandwidth: {
-      status: 'completed', download_mb_s: speed, server_name: 'Fixture'
+      status: 'completed', region: 'AS', server_region: 'AS', download_mb_s: speed, server_name: 'Fixture'
     }}, options);
     assert.match(texts(panel), expected);
     assert.match(texts(panel), /MB\/s/);
@@ -47,4 +47,13 @@ test('download result uses MB/s and the inclusive 50 MB/s threshold', () => {
   const failed = context.window.EverSparkNodeCard.render({status: 'online', bandwidth: {status: 'failed'}}, options);
   assert.match(texts(failed), /failed/);
   assert.doesNotMatch(texts(failed), /consider replacing/);
+});
+test('unverified and cross-region speeds never suggest replacing the Pod', () => {
+  for (const metadata of [{}, {region: 'AS', server_region: 'NA'}]) {
+    const panel = context.window.EverSparkNodeCard.render({status: 'online', bandwidth: {
+      status: 'completed', download_mb_s: 1, ...metadata
+    }}, options);
+    assert.match(texts(panel), /reference only/);
+    assert.doesNotMatch(texts(panel), /consider replacing|qualified/);
+  }
 });

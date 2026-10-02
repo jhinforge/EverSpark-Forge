@@ -34,7 +34,8 @@
     if (speed) {
       const note = document.createElement("p");
       if (speed.status === "completed" && Number.isFinite(speed.download_mb_s)) {
-        const key = speed.download_mb_s >= 50
+        const regional = ["AS", "EU", "NA", "SA", "AF", "OC"].includes(speed.region) && speed.region === speed.server_region;
+        const key = !regional ? "Download speed: {speed} MB/s; region unverified, for reference only." : speed.download_mb_s >= 50
           ? "This machine downloads at {speed} MB/s, qualified."
           : "This machine downloads at {speed} MB/s; consider replacing the Pod.";
         bind(note, key, { speed: speed.download_mb_s.toFixed(2) });
@@ -44,6 +45,12 @@
         bind(note, speed.status === "failed" ? "Download speed test failed. Please retry." : "Testing download speed… (30-second download)");
         panel.appendChild(note);
       }
+      if (speed.region) {
+        const regions = {AS: "Asia", EU: "Europe", NA: "North America", SA: "South America", AF: "Africa", OC: "Oceania"};
+        field("Node test region", t(regions[speed.region] || "Unknown"));
+      }
+      if (speed.country) field("Node egress country", speed.country);
+      if (speed.error) { const detail = document.createElement("p"); bind(detail, speed.error); panel.appendChild(detail); }
       if (speed.finished_at) field("Test time", new Date(speed.finished_at).toLocaleString());
     }
     if (node.status === "online" && speedtest) {

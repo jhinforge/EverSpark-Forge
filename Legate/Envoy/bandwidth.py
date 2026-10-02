@@ -15,6 +15,9 @@ from pathlib import Path
 from urllib.request import Request, build_opener, ProxyHandler
 
 from .executor.storage import save
+from .bandwidth_regions import discovery, RegionError
+
+POLICY = 2
 
 VERSION = "1.0.14"
 CHECKSUMS = {
@@ -72,7 +75,7 @@ def start(directory, force=False):
             except BlockingIOError:
                 return snapshot(directory)
             value = _read(directory)
-            if value and (not force or _alive(value)):
+            if value and (_alive(value) or (not force and value.get("policy") == POLICY)):
                 return snapshot(directory)
             run_id = secrets.token_hex(16)
             with (directory / "bandwidth.log").open("ab") as log:
@@ -83,7 +86,7 @@ def start(directory, force=False):
                     cwd=Path(__file__).resolve().parents[2], env=env, stdin=subprocess.DEVNULL,
                     stdout=log, stderr=log, start_new_session=True)
             save(directory / "bandwidth.json", {"status": "pending", "pid": process.pid,
-                 "run_id": run_id, "created": time.time(), "started_at": now()})
+                 "run_id": run_id, "created": time.time(), "started_at": now(), "policy": POLICY})
         return snapshot(directory)
     except OSError:
         return {"status": "failed", "error": "Could not start download test"}
@@ -148,15 +151,26 @@ def run(directory, run_id):
             # Stagger automatic workers instead of starting all new Pods together.
             time.sleep(secrets.randbelow(10))
             binary = install(directory)
-            value["status"] = "running"
+            location, servers = discovery()
+            value.update(location, status="running")
+            local_servers = directory / "bandwidth-servers.json"
+            save(local_servers, servers)
             save(directory / "bandwidth.json", value)
             done = subprocess.run([str(binary), "--no-upload", "--no-icmp", "--duration", "30",
                 "--concurrent", "3", "--timeout", "5", "--secure", "--json",
-                "--telemetry-level", "disabled"], capture_output=True, text=True,
+                "--telemetry-level", "disabled", "--local-json", str(local_servers)], capture_output=True, text=True,
                 stdin=subprocess.DEVNULL, timeout=90, check=True)
             measured = parse_result(done.stdout)
+            chosen = next((server for server in servers
+                           if server.get("server", "").rstrip("/") == measured["server_url"].rstrip("/")), None)
+            if not chosen:
+                raise RegionError("Speed test server region could not be verified")
+            measured.update(location, server_region=location["region"])
+        except RegionError as exc:
+            measured = {"status": "failed", "error": str(exc)}
         except (OSError, ValueError, subprocess.SubprocessError, tarfile.TarError, StopIteration):
             measured = {"status": "failed", "error": "Download test unavailable or interrupted; retry"}
+        (directory / "bandwidth-servers.json").unlink(missing_ok=True)
         value.update(measured, finished_at=now())
         save(directory / "bandwidth.json", value)
 
