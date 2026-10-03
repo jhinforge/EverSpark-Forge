@@ -5,6 +5,8 @@ import json
 import os
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -17,6 +19,31 @@ from everspark_logging import LogConfig, get_logger  # noqa: E402
 
 
 class EverSparkLoggingTests(unittest.TestCase):
+    def test_blocked_windows_console_does_not_block_file_logging_or_close(self):
+        entered, release = threading.Event(), threading.Event()
+        class PausedConsole:
+            def write(self, message):
+                entered.set()
+                release.wait(5)
+            def flush(self):
+                pass
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "service.log"
+            with patch("everspark_logging.sys.platform", "win32"), patch("everspark_logging.sys.stderr", PausedConsole()):
+                logger = get_logger("test.paused", path, config=LogConfig(level=20, format="text", console=True, run_id="paused"))
+            try:
+                logger.info("service.first", "First")
+                self.assertTrue(entered.wait(1))
+                started = time.monotonic()
+                for number in range(600):
+                    logger.info("service.progress", "Progress", number=number)
+                logger.close()
+                self.assertLess(time.monotonic() - started, 2)
+                self.assertEqual(path.read_text(encoding="utf-8").count("service.progress"), 600)
+            finally:
+                release.set()
+                logger.close()
+
     def test_json_contract_and_redaction(self) -> None:
         stream = io.StringIO()
         config = LogConfig(level=10, format="json", console=True, run_id="run-1")

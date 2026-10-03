@@ -20,7 +20,7 @@
 
 | 内容 | 默认位置 | 迁移时怎么处理 |
 | --- | --- | --- |
-| 程序代码、公开工作流 | Git 仓库，工作流在 `ImageForge/Workflows/` | 从仓库重新获取；自行新增但未提交的工作流要另行保存 |
+| 程序代码、公开工作流 | Git 仓库，工作流在 `Legate/Forge/ImageForge/Workflows/` | 从仓库重新获取；自行新增但未提交的工作流要另行保存 |
 | 私人环境配置 | 根目录 `.env` | 单独保存，或在新机器重新准备 `env.txt` 并导入 |
 | 远程存储、Tunnel、模型服务凭据及路径映射 | `Data/Configuration/` | 单独保存原始凭据和映射，或在新机器重新配置 |
 | 托管的 ComfyUI、Ollama、可选 Diffusers 进程及虚拟环境 | `Data/Runtime/` | 通常由新机器上的 `setup` 重建；可选插件需在 Forge 重新安装 |
@@ -33,7 +33,7 @@
 | 服务日志 | `Data/Logs/` | 排障时留存；新环境会重新生成 |
 | 数据恢复前的本地旧版本 | `Data/Recovery/` | 恢复角色数据时生成；其安全性取决于当前机器是否仍在 |
 
-Git 默认忽略 `.env`、`Configuration/Import/` 下的私人上传文件及 `Data/`。**“被 Git 忽略”只表示不会随普通提交进入仓库，不表示已经有备份。** 如果云端机器的磁盘是临时的，删除实例前应确认所需数据已传到别处。
+Git 默认忽略 `.env`、`Archon/Vault/Import/` 下的私人上传文件及 `Data/`。**“被 Git 忽略”只表示不会随普通提交进入仓库，不表示已经有备份。** 如果云端机器的磁盘是临时的，删除实例前应确认所需数据已传到别处。
 
 ## 3. 生成时发生了什么
 
@@ -59,7 +59,7 @@ WebUI 的讨论模式通过 Concept Forge 更新当前对话的角色主体；�
 以下是一条基于 v0.1 现有功能的恢复顺序：
 
 1. 从 Git 获取源码，在新机器准备 Linux、NVIDIA GPU 和网络环境。
-2. 如需原有远程资源或 Tunnel，将 `env.txt`、`rclone.conf`、Tunnel 凭据等原始文件上传到 `Configuration/Import/`，执行 `./everspark configure`。在旧机器 Storage 页面保存过的**手工远程路径映射**存放在 `Data/Configuration/rclone/model_paths.json`；若没有单独带走它，需在新机器重新设置。模型服务也需在 WebUI 重新填写，或安全转移 `Data/Configuration/ConceptForge/connections.json`；角色 ZIP 不含这份文件。
+2. 如需原有远程资源或 Tunnel，将 `env.txt`、`rclone.conf`、Tunnel 凭据等原始文件上传到 `Archon/Vault/Import/`，执行 `./everspark configure`。在旧机器 Storage 页面保存过的**手工远程路径映射**存放在 `Data/Configuration/rclone/model_paths.json`；若没有单独带走它，需在新机器重新设置。模型服务也需在 WebUI 重新填写，或安全转移 `Data/Configuration/ConceptForge/connections.json`；角色 ZIP 不含这份文件。
 3. 执行 `./everspark setup --plan`、`./everspark setup`、`./everspark doctor`、`./everspark start`，确认服务就绪。
 4. 在 Storage 页面按需要从远程库拉取模型；如果没有远程库，可用直链重新下载。检查所选工作流所需的模型是否已在新机器上。
 5. 对下载到本地的 EverSpark 数据 ZIP，在 **Storage → 角色与 Memory 压缩包** 中选择文件并点击旁边的 **验证并恢复**（上传 ZIP 上限为 128 MiB）。文件暂存于 `Data/Imports/`；系统验证清单与文件校验值、SQLite 完整性以及角色文档与数据库的一致性，成功后用 ZIP 内数据替换当前角色文档和 Memory 数据库，并将原数据保存至 `Data/Recovery/`。上传的暂存 ZIP 随后会被删除。也可以在 **Storage → Restore character data** 选择远程恢复点。恢复完成后重启 EverSpark。

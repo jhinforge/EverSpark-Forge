@@ -128,6 +128,15 @@ class WebUIServer(ThreadingHTTPServer):
 class RequestHandler(BaseHTTPRequestHandler):
     server: WebUIServer
 
+    def handle(self) -> None:
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # Browser refreshes/cancelled requests can close the socket while
+            # headers, JSON, or static assets are being sent. Do not reply again.
+            self.close_connection = True
+            self._log("debug", "http.client.disconnected", "Client disconnected")
+
     @property
     def orchestrator_url(self):
         return getattr(self, "_execution_url", None) or self.server.orchestrator_url

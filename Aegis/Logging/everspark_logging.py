@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import re
 import sys
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -184,6 +186,46 @@ class EverSparkLogger:
             self._logger.removeHandler(handler)
 
 
+class ConsoleMirror(logging.Handler):
+    """Bounded, best-effort console output; file logging remains synchronous."""
+
+    def __init__(self, stream: TextIO):
+        super().__init__()
+        self.stream = stream
+        self.pending: queue.Queue[str] = queue.Queue(maxsize=256)
+        self.stopping = threading.Event()
+        self.worker = threading.Thread(target=self._write, name="everspark-console-log", daemon=True)
+        self.worker.start()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if self.stopping.is_set():
+            return
+        try:
+            # Format/redact before handing data to a background thread.
+            self.pending.put_nowait(self.format(record) + "\n")
+        except queue.Full:
+            pass  # only the console copy is dropped; the file retains the record
+
+    def _write(self) -> None:
+        while not self.stopping.is_set() or not self.pending.empty():
+            try:
+                message = self.pending.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            try:
+                self.stream.write(message)
+                self.stream.flush()
+            except (OSError, ValueError):
+                self.stopping.set()
+                return
+
+    def close(self) -> None:
+        self.stopping.set()
+        # A paused/closed terminal must not block service shutdown either.
+        self.worker.join(timeout=0.2)
+        super().close()
+
+
 def get_logger(
     component: str,
     log_file: str | Path | None = None,
@@ -200,7 +242,9 @@ def get_logger(
     formatter = RecordFormatter(config.format, config.run_id)
 
     if config.console:
-        console_handler = logging.StreamHandler(stream or sys.stderr)
+        console_handler = (ConsoleMirror(sys.stderr)
+                           if stream is None and sys.platform == "win32"
+                           else logging.StreamHandler(stream or sys.stderr))
         console_handler.setLevel(config.level)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)

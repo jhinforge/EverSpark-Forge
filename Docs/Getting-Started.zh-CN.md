@@ -112,7 +112,7 @@ ssh -p 22 root@example.com
 
 ## 5. 已有私人配置：先导入，再安装
 
-如果你已有 Pod 上使用的配置，可先将以下文件上传到仓库里的 `Configuration/Import/`：
+如果你已有 Pod 上使用的配置，可先将以下文件上传到仓库里的 `Archon/Vault/Import/`：
 
 | 文件 | 什么时候需要 |
 | --- | --- |
@@ -136,7 +136,7 @@ cd EverSpark-Forge
 ./everspark start
 ```
 
-`env.txt` 就是方便在自己的电脑上查看、保存和上传的 `.env`：仅文件名不同，均使用相同的 `KEY=VALUE` 格式。`configure` 会验证它并复制为仓库根目录下被 Git 忽略的 `.env`，保留原始上传文件。`rclone.conf` 的存在**不会自动启用**远程存储；需要在私人环境配置中显式设置 `EVERSPARK_STORAGE_BACKEND=rclone` 及相应远程路径。Cloudflare 集成同样需要完整配置。配置的格式、路径和启用条件见 [`Configuration/README.md`](../Configuration/README.md) 和 [`.env.example`](../.env.example)。
+`env.txt` 就是方便在自己的电脑上查看、保存和上传的 `.env`：仅文件名不同，均使用相同的 `KEY=VALUE` 格式。`configure` 会验证它并复制为仓库根目录下被 Git 忽略的 `.env`，保留原始上传文件。`rclone.conf` 的存在**不会自动启用**远程存储；需要在私人环境配置中显式设置 `EVERSPARK_STORAGE_BACKEND=rclone` 及相应远程路径。Cloudflare 集成同样需要完整配置。配置的格式、路径和启用条件见 [`Archon/Vault/README.md`](../Archon/Vault/README.md) 和 [`.env.example`](../.env.example)。
 
 导入后如果 `doctor` 报远程路径或凭据错误，请先修复启用的后端配置，再启动。仓库的 `.gitignore` 忽略私人配置和 `Data/` 运行数据；不要强制将凭据或个人数据加入 Git。
 

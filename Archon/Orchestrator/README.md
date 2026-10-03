@@ -4,7 +4,7 @@ Orchestrator coordinates tasks between Forges. It receives generation requests,
 maintains task admission and status, passes Concept Forge's instruction to Image
 Forge, and returns task result references. Its public API is `submit`,
 `start_task`, and `task_job`. `TaskRunner.run` implements the existing serial
-Concept → Image pipeline through injected Forge interfaces.
+Concept → Image pipeline and Concept-planned audio/combined tasks through injected Forge interfaces.
 
 Concept Forge owns conversations, Memory, Subjects, prompt planning, provider
 selection, and connection tests. Image Forge owns its engines, workflows,
@@ -31,13 +31,13 @@ unchanged by Orchestrator and interpreted only inside the responsible Forge.
 
 ## Distributed execution
 
-Gate retains explicit Concept and Image Node bindings. The corresponding Forge
+Gate retains explicit Concept, Image and Audio Node bindings. The corresponding Forge
 adapters retain the existing Archon NodeManager / Envoy task channel. Selecting
 a Forge Node locates an execution target; selecting its internal resources is
 owned by that Forge. Orchestrator owns neither Node registration nor runtime
 lifecycle state.
 
-One generation request remains active at a time. A generation job's `completed`
+One generation request remains active at a time. Audio mode does not require Image; combined mode runs its planned tasks in dependency order. A generation job's `completed`
 status means Concept planning and Image submission completed; image rendering
 status and gallery history are queried from Image Forge. Task result references
 remain in Orchestrator's existing in-memory job map. This responsibility migration

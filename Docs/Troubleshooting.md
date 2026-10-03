@@ -46,7 +46,7 @@ The default WebUI listens only on localhost. The cloud machine's `127.0.0.1:8780
 
 In **Forge**, inspect the selected **Drawing tool**, **Workflow** (ComfyUI), **Checkpoint**, **VAE**, and **Concept LLM**. Run `./everspark models status`. For user downloads, check that the task completed under **Storage** and that you chose the correct Checkpoint/diffusion, LoRA, VAE, or GGUF card. Interrupted or failed direct downloads are not exposed as complete models. For a hosted language model, open **Model services**, verify the `/v1` base URL and exact model ID, then use **Test**; these IDs are entered explicitly rather than discovered from `/models`.
 
-ComfyUI workflows must be registered **API Format JSON** with a matching manifest. A regular ComfyUI UI workflow cannot simply be placed in the registered workflow directory. Diffusers does not use those workflows and currently accepts SDXL single-file checkpoints. Installed models must match the chosen engine. See [Image Forge](../ImageForge/README.md) for node, LoRA, and VAE constraints. For remote libraries, check scanned model directories and set manual paths for unusual layouts. Public direct URL downloads work without rclone.
+ComfyUI workflows must be registered **API Format JSON** with a matching manifest. A regular ComfyUI UI workflow cannot simply be placed in the registered workflow directory. Diffusers does not use those workflows and currently accepts SDXL single-file checkpoints. Installed models must match the chosen engine. See [Image Forge](../Legate/Forge/ImageForge/README.md) for node, LoRA, and VAE constraints. For remote libraries, check scanned model directories and set manual paths for unusual layouts. Public direct URL downloads work without rclone.
 
 ## 5. Generation fails or no result appears
 
@@ -80,3 +80,9 @@ For outputs, choose **Outputs folder** to upload the whole directory. Remote res
 ## Filing an issue
 
 Include your Linux environment, commands, failing step, and **first error**, plus relevant `./everspark status` and `./everspark doctor` output and a short tail of the appropriate service log. On the cloud machine, use `tail -n 80 Data/Logs/<log-file>`. Redact public IPs, private paths, tokens, signed model URLs, and credentials. Do not upload your `.env` or `rclone.conf`.
+
+## Windows console selection pauses the page
+
+If selecting text in PowerShell freezes the page and Esc restores it, classic console Quick Edit may be pausing output. `everspark.cmd archon start` attempts to disable Quick Edit for the current Windows console; redirected input and unsupported hosts are skipped. Default Windows console logging uses a bounded background queue so request threads do not wait for the terminal. A full queue drops console copies only; file logging retains every record. Stop the old service and start it again to apply this handling.
+
+Browser refreshes and cancelled requests no longer print connection-abort tracebacks. Upstream timeouts and failures remain recorded in file logs.

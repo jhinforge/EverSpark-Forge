@@ -10,7 +10,7 @@
 | --- | --- |
 | `./everspark help` | 列出顶层入口。直接运行 `./everspark` 也是显示帮助；部分子命令的参数需要运行各自的 `--help` 才能看到。 |
 | `./everspark init` | 创建 `Data/Logs`、`Data/Outputs`、`Data/Memory`、模型和运行时等目录，以及配置导入目录；不会安装运行时、下载模型或生成 `.env`。会写入初始化日志。 |
-| `./everspark configure` | 从 `Configuration/Import/` 读取 `env.txt` 或 `.env`，验证并导入为仓库根目录的 `.env`；可导入 rclone 与 Named Tunnel 凭据。**再次执行会替换 `.env`，不会在旧配置上追加字段**；原始上传文件保留。默认本地模式无需运行。 |
+| `./everspark configure` | 从 `Archon/Vault/Import/` 读取 `env.txt` 或 `.env`，验证并导入为仓库根目录的 `.env`；可导入 rclone 与 Named Tunnel 凭据。**再次执行会替换 `.env`，不会在旧配置上追加字段**；原始上传文件保留。默认本地模式无需运行。 |
 | `./everspark configure --from <目录>` | 从指定目录读取私人配置。`--env <文件>` 在两个环境文件冲突时明确选择一个；`--json` 输出适合程序读取的结果。 |
 | `./everspark setup --plan` | 显示准备安装的托管运行时、模型来源和目标位置，**不安装或下载**。首次部署建议先运行。 |
 | `./everspark setup` | 初始化目录、安装托管 ComfyUI/Ollama 与 Python 环境、下载清单中的起步模型，并将 Concept Forge 模型导入 Ollama。需要网络、磁盘空间；安装可选后端时还可能需要 root 权限。失败后处理错误再重试。成功后自动安装 `everspark` 命令，仓库内的 `./everspark` 仍可使用；普通用户首次安装后可能需打开新终端使 PATH 生效。 |
@@ -58,7 +58,7 @@
 
 ## 4. 管理清单中的起步模型
 
-这里的 `models` 针对 `Runtime/Models/default_models.json` 中的**起步模型**，与 WebUI Storage 页面下载任意公开直链、扫描 rclone 模型库的功能不同。
+这里的 `models` 针对 `Legate/Crucible/Models/default_models.json` 中的**起步模型**，与 WebUI Storage 页面下载任意公开直链、扫描 rclone 模型库的功能不同。
 
 | 命令 | 用途与实际影响 |
 | --- | --- |

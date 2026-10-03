@@ -20,7 +20,7 @@ Paths are relative to the repository root. Private data and installation artifac
 
 | Content | Default location | When migrating |
 | --- | --- | --- |
-| Code and public workflows | Git repository; `ImageForge/Workflows/` | Clone again; separately save uncommitted custom workflows |
+| Code and public workflows | Git repository; `Legate/Forge/ImageForge/Workflows/` | Clone again; separately save uncommitted custom workflows |
 | Private environment settings | Root `.env` | Save separately or import `env.txt` on the new machine |
 | Remote storage, Tunnel and model service credentials, path mappings | `Data/Configuration/` | Save original credentials and mappings or configure again |
 | Managed ComfyUI and Ollama; optional Diffusers worker, virtual environments, process state | `Data/Runtime/` | Usually rebuild with `setup`; install the optional plugin again in Forge |
@@ -33,7 +33,7 @@ Paths are relative to the repository root. Private data and installation artifac
 | Service logs | `Data/Logs/` | Preserve for diagnosis if needed; recreated on the new machine |
 | Previous local data before restoration | `Data/Recovery/` | Created during character restore; remains only on this machine |
 
-Git ignores `.env`, private `Configuration/Import/` uploads, and `Data/`. **Ignored by Git does not mean backed up.** Confirm data has left an ephemeral cloud disk before deleting the instance.
+Git ignores `.env`, private `Archon/Vault/Import/` uploads, and `Data/`. **Ignored by Git does not mean backed up.** Confirm data has left an ephemeral cloud disk before deleting the instance.
 
 ## 3. What happens during generation
 
@@ -57,7 +57,7 @@ Absent `EVERSPARK_BACKUP_REMOTE`, the first image model source bucket uses an `e
 ## 5. Moving to another cloud machine
 
 1. Clone source on a Linux machine with an NVIDIA GPU and network access.
-2. To keep remote resources or a Tunnel, upload original `env.txt`, `rclone.conf`, and Tunnel credentials into `Configuration/Import/`, then run `./everspark configure`. Manual remote path mappings saved in Storage live in `Data/Configuration/rclone/model_paths.json`; transfer that file separately or re-enter those mappings. Re-enter model services in WebUI or transfer `Data/Configuration/ConceptForge/connections.json` securely; the character ZIP does not include it.
+2. To keep remote resources or a Tunnel, upload original `env.txt`, `rclone.conf`, and Tunnel credentials into `Archon/Vault/Import/`, then run `./everspark configure`. Manual remote path mappings saved in Storage live in `Data/Configuration/rclone/model_paths.json`; transfer that file separately or re-enter those mappings. Re-enter model services in WebUI or transfer `Data/Configuration/ConceptForge/connections.json` securely; the character ZIP does not include it.
 3. Run `./everspark setup --plan`, `./everspark setup`, `./everspark doctor`, and `./everspark start`; confirm services are ready.
 4. Pull required models from remote Storage, or redownload by direct URL. Check compatibility with the selected workflow.
 5. For a downloaded EverSpark data ZIP, choose it under **Storage → Character and Memory ZIP** and click the adjacent **Validate and restore** button (maximum uploaded ZIP size: 128 MiB). The file is staged in `Data/Imports/`. The system checks its manifest and hashes, SQLite integrity, and agreement between character documents and the database before replacing the current subjects and Memory database. It saves the previous data in `Data/Recovery/` and removes the staged ZIP. Alternatively, select a remote restore point under **Storage → Restore character data**. Restart EverSpark after either restore.

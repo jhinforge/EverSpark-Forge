@@ -25,7 +25,9 @@ class ControlServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, address: tuple[str, int], machines=None, offers=None, deployments=None,
-                 image_deployments=None, node_manager=None, forge_bindings=None, audio_deployments=None):
+                 image_deployments=None, node_manager=None, forge_bindings=None, audio_deployments=None,
+                 logger=None):
+        self.logger = logger
         self.forge_bindings = forge_bindings
         self.node_manager = node_manager
         self.machines = machines
@@ -37,6 +39,17 @@ class ControlServer(ThreadingHTTPServer):
 
 
 class ControlHandler(BaseHTTPRequestHandler):
+    def handle(self) -> None:
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            self.close_connection = True
+
+    def log_message(self, format: str, *args) -> None:
+        if self.server.logger is not None:
+            self.server.logger.info("http.access", "HTTP request completed",
+                                    client=self.address_string(), request=format % args)
+
     def do_GET(self) -> None:
         parsed = urlsplit(self.path)
         path = parsed.path

@@ -51,7 +51,7 @@ cd EverSpark-Forge
 
 ## 私人配置与数据
 
-如果已有私人配置，可以把 `env.txt` **或** `.env` 以及需要的 `rclone.conf`、Cloudflare `<UUID>.json` 凭据放入 `Configuration/Import/`，在 `setup` 前运行：
+如果已有私人配置，可以把 `env.txt` **或** `.env` 以及需要的 `rclone.conf`、Cloudflare `<UUID>.json` 凭据放入 `Archon/Vault/Import/`，在 `setup` 前运行：
 
 ```bash
 ./everspark configure

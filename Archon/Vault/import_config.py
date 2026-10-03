@@ -52,6 +52,17 @@ def parse_env(path: Path) -> dict[str, str]:
         value_text = raw_value.strip()
         if not value_text:
             value = ""
+        elif re.match(r"^(?:[A-Za-z]:[\\/]|\\\\)", value_text.lstrip('"')):
+            # Windows paths are literal; POSIX shlex would consume unquoted
+            # backslashes. Keep the imported .env shell-safe via _render_env.
+            if value_text.startswith('"') and not value_text.endswith('"'):
+                raise ConfigurationImportError(f"Invalid environment value for {key}: No closing quotation")
+            quoted = value_text.startswith('"') and value_text.endswith('"')
+            if not quoted and any(character.isspace() for character in value_text):
+                raise ConfigurationImportError(
+                    f"Environment value for {key} must be quoted when it contains spaces"
+                )
+            value = value_text[1:-1] if quoted else value_text
         else:
             try:
                 parts = shlex.split(value_text, comments=False, posix=True)
@@ -299,7 +310,7 @@ def _render_result(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Import private EverSpark configuration")
     parser.add_argument(
         "--from",
@@ -312,7 +323,7 @@ def main() -> int:
     )
     parser.add_argument("--env", dest="environment", help="explicit .env or env.txt path")
     parser.add_argument("--json", action="store_true", help="print machine-readable output")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         result = import_configuration(args.source, explicit_env=args.environment)
     except (ConfigurationImportError, OSError) as exc:

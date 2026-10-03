@@ -48,7 +48,7 @@
 
 在 WebUI 的 **Forge** 检查**绘图工具**、ComfyUI 的 **Workflow**、**Checkpoint**、**VAE** 和 **Concept LLM**；运行 `./everspark models status`，确认安装所需模型。如果是自己下载的模型，在 **Storage** 查看任务是否完成，并确认选对了 Checkpoint/扩散模型、LoRA、VAE 或 GGUF 下载卡片。中断或失败的直链下载不会把不完整文件当作可用模型展示。托管语言模型则在**模型服务**中核对 `/v1` 地址和准确模型 ID，并点击**测试**；远端模型 ID 需要手工填写。
 
-ComfyUI 工作流必须是注册的 **API Format JSON**，并有相应清单。普通 ComfyUI 界面工作流不能直接当成可执行文件放入工作流目录。Diffusers 不使用这类工作流，当前仅支持 SDXL 单文件 Checkpoint。模型虽然安装成功，也必须与所选引擎匹配；工作流、LoRA、VAE 限制见 [Image Forge 说明](../ImageForge/README.md)。
+ComfyUI 工作流必须是注册的 **API Format JSON**，并有相应清单。普通 ComfyUI 界面工作流不能直接当成可执行文件放入工作流目录。Diffusers 不使用这类工作流，当前仅支持 SDXL 单文件 Checkpoint。模型虽然安装成功，也必须与所选引擎匹配；工作流、LoRA、VAE 限制见 [Image Forge 说明](../Legate/Forge/ImageForge/README.md)。
 
 如果使用远程模型库，还要确认 Storage 扫描的是实际模型目录；目录结构特殊时设置手工扫描路径。没有启用 rclone 时，仍可使用 Storage 的公开直链下载功能。
 
@@ -84,3 +84,9 @@ ComfyUI 工作流必须是注册的 **API Format JSON**，并有相应清单。�
 ## 提交 Issue 时附什么
 
 说明你使用的 Linux 环境、执行的命令、失败步骤和**第一条错误信息**；附 `./everspark status` 与 `./everspark doctor` 的相关输出，以及对应服务日志的最后一小段。可以在云端机器用 `tail -n 80 Data/Logs/<日志文件>` 查看末尾内容。提交前检查并遮盖公网 IP、私人路径、访问令牌、模型直链中的签名参数和其他凭据；不要上传 `.env` 或 `rclone.conf` 原件。
+
+## Windows 控制台选择导致页面暂停
+
+如果选择 PowerShell 窗口里的文本后页面卡住，而按 Esc 就恢复，通常是经典控制台的快速编辑模式暂停了输出。Windows 的 `everspark.cmd archon start` 会尝试关闭当前控制台的快速编辑模式；重定向输入或不支持该 API 时会跳过。Windows 默认控制台日志通过有界后台队列输出，避免请求线程等待终端；队列满时省略控制台副本，文件日志仍完整记录。关闭旧服务并重新启动即可使用此处理。
+
+浏览器刷新或取消请求产生的连接中止不会再打印请求异常堆栈。这不改变上游超时的处理；真实上游故障仍记录在文件日志中。

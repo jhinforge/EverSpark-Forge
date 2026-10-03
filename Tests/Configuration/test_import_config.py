@@ -40,6 +40,26 @@ def write_tunnel_files(source: Path, env_name: str = "env.txt") -> None:
 
 
 class ConfigurationImportTests(unittest.TestCase):
+    def test_windows_paths_survive_import_and_render_roundtrip(self):
+        values = {
+            "RCLONE_BIN": r"C:\rclone\rclone.exe",
+            "RCLONE_CONFIG": r"D:\My Files\rclone.conf",
+            "UNC_PATH": r"\\server\share\models",
+            "APOSTROPHE_PATH": r"D:\User's Files\rclone.conf",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text('RCLONE_BIN=' + values['RCLONE_BIN'] + '\n'
+                            + 'RCLONE_CONFIG="' + values['RCLONE_CONFIG'] + '"\n'
+                            + 'UNC_PATH=' + values['UNC_PATH'] + '\n', encoding="utf-8")
+            self.assertEqual(import_config.parse_env(path), {k: v for k, v in values.items() if k != "APOSTROPHE_PATH"})
+            path.write_bytes(import_config._render_env(values))
+            self.assertEqual(import_config.parse_env(path), values)
+            for bad in ['"C:\\rclone', r'C:\My Files\rclone.conf']:
+                path.write_text("RCLONE_CONFIG=" + bad, encoding="utf-8")
+                with self.assertRaises(import_config.ConfigurationImportError):
+                    import_config.parse_env(path)
+
     def test_cli_defaults_to_repository_import_inbox(self) -> None:
         expected = REPO_ROOT / "Archon" / "Vault" / "Import"
         imported = {

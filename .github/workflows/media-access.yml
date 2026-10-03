@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - "refactor/distributed-architecture"
-      - "codex/media-access-*"
     paths:
       - "Aegis/Storage/**"
       - "Archon/**"
@@ -38,6 +37,10 @@ jobs:
         run: python -m unittest discover -s Tests/Archon -p 'test_*.py'
       - name: Creative task modes
         run: python -m unittest discover -s Tests/Orchestrator -p 'test_*.py'
+      - name: Configuration import and logging
+        run: |
+          python -m unittest discover -s Tests/Configuration -p 'test_*.py'
+          python -m unittest discover -s Tests/Runtime/Logging -p 'test_*.py'
       - name: WebUI
         run: python -m unittest discover -s Tests/WebUI -p 'test_*.py'
       - name: JavaScript UI regression

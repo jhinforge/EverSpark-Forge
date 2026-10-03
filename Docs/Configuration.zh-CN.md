@@ -55,9 +55,9 @@ EVERSPARK_SSH_USER=root
 | 图片模型 | `Data/Models/ImageForge/` 下的分类目录 |
 | Concept Forge 模型 | `Data/Models/ConceptForge/Ollama/` |
 | 输出 | `Data/Outputs/`，可在 Gallery 下载整个目录的 ZIP |
-| 工作流 | `ImageForge/Workflows/` 中的 API Format JSON 与相邻的清单文件 |
+| 工作流 | `Legate/Forge/ImageForge/Workflows/` 中的 API Format JSON 与相邻的清单文件 |
 
-ComfyUI 是默认绘图工具。可在 Forge 的绘图工具选择器中选择 Diffusers，点击 **安装工具**，按页面提示启用；**设为默认**会保存选择，无需修改 `.env`。Diffusers 当前支持 SDXL 单文件 Checkpoint 及兼容的 LoRA、VAE。ComfyUI 使用已注册的 API Format 工作流；高级使用者可以通过 `EVERSPARK_WORKFLOW_TEMPLATE` 指向其他 API Format 工作流文件。普通 ComfyUI 界面工作流不能直接当作 API Format 文件放入注册目录。限制与节点要求见 [Image Forge 说明](../ImageForge/README.md)。
+ComfyUI 是默认绘图工具。可在 Forge 的绘图工具选择器中选择 Diffusers，点击 **安装工具**，按页面提示启用；**设为默认**会保存选择，无需修改 `.env`。Diffusers 当前支持 SDXL 单文件 Checkpoint 及兼容的 LoRA、VAE。ComfyUI 使用已注册的 API Format 工作流；高级使用者可以通过 `EVERSPARK_WORKFLOW_TEMPLATE` 指向其他 API Format 工作流文件。普通 ComfyUI 界面工作流不能直接当作 API Format 文件放入注册目录。限制与节点要求见 [Image Forge 说明](../Legate/Forge/ImageForge/README.md)。
 
 使用托管语言模型时，在 WebUI 侧边栏打开**模型服务**，填写连接名称、以 `/v1` 结尾的 API 基础地址、API Key 和平台要求的准确模型 ID。测试连接后在 Forge 选择服务与模型，也可设置角色修订使用的默认服务。OpenAI Compatible 适配器默认使用非流式 Chat Completions（`/chat/completions`）；遇到特定 HTTP 错误会自动尝试流式，并在收齐文本后继续。已有连接的流式偏好仍保留；已有连接若开启了 JSON 模式而服务拒绝 `response_format`，则自动重试。不会自动发现远端模型 ID。连接和密钥保存在仅当前用户可读写的 `Data/Configuration/ConceptForge/connections.json`；WebUI API 不返回已保存的密钥。选择托管服务后，发送给该服务的提示词会传至对应平台；Ollama 仍可本地使用。
 
@@ -124,7 +124,7 @@ RCLONE_BIN=C:\rclone\rclone.exe
 在仓库根目录的 PowerShell 中执行：
 
 ```powershell
-python .\Archon\Vault\import_config.py
+.\everspark.cmd configure
 .\everspark.cmd archon start
 ```
 

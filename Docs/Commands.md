@@ -10,7 +10,7 @@ For deployment steps see [Getting started](Getting-Started.md), for private file
 | --- | --- |
 | `./everspark help` | Lists top-level commands. Running `./everspark` without arguments does the same. Some options appear only in a subcommand's `--help`. |
 | `./everspark init` | Creates `Data/Logs`, `Data/Outputs`, `Data/Memory`, model and runtime directories, and the configuration import directory. It does not install runtimes, download models, or create `.env`. It writes an initialization log. |
-| `./everspark configure` | Reads `env.txt` or `.env` from `Configuration/Import/`, validates it, and imports it as the root `.env`. It can import rclone and Named Tunnel credentials. **Running it again replaces `.env` rather than appending settings.** Uploaded source files remain. Default local mode does not need it. |
+| `./everspark configure` | Reads `env.txt` or `.env` from `Archon/Vault/Import/`, validates it, and imports it as the root `.env`. It can import rclone and Named Tunnel credentials. **Running it again replaces `.env` rather than appending settings.** Uploaded source files remain. Default local mode does not need it. |
 | `./everspark configure --from <directory>` | Reads private files from another directory. Use `--env <file>` to select one of two conflicting environment files; `--json` prints a machine-readable result. |
 | `./everspark setup --plan` | Displays planned managed runtimes, model sources, and local destinations **without installing or downloading**. Run this before first deployment. |
 | `./everspark setup` | Creates runtime directories, installs managed ComfyUI/Ollama and Python environments, downloads manifest starter models, and imports the Concept model into Ollama. Requires network and disk space; installing optional backends can require root. Address a failure and rerun it. On success, the global `everspark` command is installed; `./everspark` remains available. Non-root users may need a new shell for PATH changes. |
@@ -58,7 +58,7 @@ For status records and logs see [Runtime and data](Runtime-and-Data.md). To rest
 
 ## 4. Manifest starter models
 
-The `models` command handles **starter models** in `Runtime/Models/default_models.json`. It is separate from the WebUI Storage page's arbitrary public URL downloader and rclone library scans.
+The `models` command handles **starter models** in `Legate/Crucible/Models/default_models.json`. It is separate from the WebUI Storage page's arbitrary public URL downloader and rclone library scans.
 
 | Command | What it does |
 | --- | --- |

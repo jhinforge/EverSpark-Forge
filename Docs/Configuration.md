@@ -47,9 +47,9 @@ See the [command reference for initialization and configuration](Commands.md#1-i
 | Image models | Category directories under `Data/Models/ImageForge/` |
 | Concept Forge models | `Data/Models/ConceptForge/Ollama/` |
 | Outputs | `Data/Outputs/`; Gallery exports the entire directory as a ZIP |
-| Workflows | API Format JSON and adjacent manifests in `ImageForge/Workflows/` |
+| Workflows | API Format JSON and adjacent manifests in `Legate/Forge/ImageForge/Workflows/` |
 
-ComfyUI is the default drawing tool. In Forge, select the optional Diffusers plugin, click **Install tool**, then enable it if prompted. **Set as default** saves your choice without an `.env` edit. Diffusers currently accepts SDXL single-file checkpoints with compatible LoRA and VAE files. ComfyUI uses registered API Format workflows; advanced users can point `EVERSPARK_WORKFLOW_TEMPLATE` to another one. A regular ComfyUI interface workflow is not directly executable as an API Format file. See [Image Forge](../ImageForge/README.md) for plugin and node requirements.
+ComfyUI is the default drawing tool. In Forge, select the optional Diffusers plugin, click **Install tool**, then enable it if prompted. **Set as default** saves your choice without an `.env` edit. Diffusers currently accepts SDXL single-file checkpoints with compatible LoRA and VAE files. ComfyUI uses registered API Format workflows; advanced users can point `EVERSPARK_WORKFLOW_TEMPLATE` to another one. A regular ComfyUI interface workflow is not directly executable as an API Format file. See [Image Forge](../Legate/Forge/ImageForge/README.md) for plugin and node requirements.
 
 For a hosted language model, open **Model services** in the WebUI sidebar. Enter a name, API base URL ending in `/v1`, API Key, and the provider's exact model ID; test the connection, then select its service and model in Forge. You can also set the default used for subject revisions. The OpenAI Compatible adapter calls Chat Completions (`/chat/completions`) without streaming by default and retries selected HTTP errors with streaming, collecting the text before continuing. Existing streaming preferences are preserved. Existing JSON-mode connections retry without `response_format` if the provider rejects it. It does not discover remote model IDs. Connections and keys are kept in `Data/Configuration/ConceptForge/connections.json` with owner-only permissions; the WebUI API does not return stored keys. A hosted provider receives the prompts sent to that service. Ollama remains available locally.
 
@@ -114,7 +114,7 @@ RCLONE_BIN=C:\rclone\rclone.exe
 From PowerShell in the repository root:
 
 ```powershell
-python .\Archon\Vault\import_config.py
+.\everspark.cmd configure
 .\everspark.cmd archon start
 ```
 

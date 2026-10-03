@@ -123,7 +123,7 @@ To take your characters and memory with you, use **Storage → Character and Mem
 
 ## 5. Import existing private configuration first (optional)
 
-Upload any files you need into `Configuration/Import/`:
+Upload any files you need into `Archon/Vault/Import/`:
 
 | File | Use |
 | --- | --- |
@@ -147,7 +147,7 @@ Then run from the repository root:
 ./everspark start
 ```
 
-`env.txt` is a convenient name for viewing, saving, and uploading `.env` contents on your own machine: both use the same `KEY=VALUE` format. `configure` validates and copies it to the Git-ignored root `.env`, leaving the uploaded original in place. Importing `rclone.conf` **does not activate** remote storage: set `EVERSPARK_STORAGE_BACKEND=rclone` and the required remote paths explicitly. Cloudflare likewise needs complete configuration. See [the configuration guide](Configuration.md), [`Configuration/README.md`](../Configuration/README.md), and [`.env.example`](../.env.example).
+`env.txt` is a convenient name for viewing, saving, and uploading `.env` contents on your own machine: both use the same `KEY=VALUE` format. `configure` validates and copies it to the Git-ignored root `.env`, leaving the uploaded original in place. Importing `rclone.conf` **does not activate** remote storage: set `EVERSPARK_STORAGE_BACKEND=rclone` and the required remote paths explicitly. Cloudflare likewise needs complete configuration. See [the configuration guide](Configuration.md), [`Archon/Vault/README.md`](../Archon/Vault/README.md), and [`.env.example`](../.env.example).
 
 If `doctor` reports remote paths or credentials, fix the enabled backend before starting. The repository ignores private configuration and `Data/`; do not force-add credentials or personal data to Git.
 

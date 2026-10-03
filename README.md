@@ -60,10 +60,10 @@ boundaries and data flow.
 ## Configuration model
 
 The default configuration is defined in
-[Configuration/default.yaml](Configuration/default.yaml).
+[Archon/Vault/default.yaml](Archon/Vault/default.yaml).
 
 Optional integrations use private environment settings; see
-[Configuration/README.md](Configuration/README.md). Use `.env.example` as a
+[Archon/Vault/README.md](Archon/Vault/README.md). Use `.env.example` as a
 field reference; create a private `.env` containing only the settings you need.
 
 ## Quick start
@@ -96,7 +96,7 @@ Concept Forge, Image Forge, Orchestrator, and WebUI in dependency order.
 
 Users with existing private configuration can upload `.env` or `env.txt`, a
 Cloudflare `<UUID>.json` credential, and an optional `rclone.conf` into the
-tracked but ignored `Configuration/Import/` inbox, then normalize and validate
+tracked but ignored `Archon/Vault/Import/` inbox, then normalize and validate
 them before setup:
 
 ```bash

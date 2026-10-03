@@ -21,15 +21,15 @@ def _load_local_settings() -> None:
                "EVERSPARK_LOG_DIR", "EVERSPARK_WEBUI_LOG", "EVERSPARK_OUTPUT_DIR",
                "EVERSPARK_STORAGE_BACKEND", "RCLONE_CONFIG", "RCLONE_BIN",
                "IMAGE_FORGE_RCLONE_REMOTE", "CONCEPT_FORGE_RCLONE_REMOTE",
-               "EVERSPARK_BACKUP_REMOTE"}
+               "EVERSPARK_BACKUP_REMOTE", "EVERSPARK_LOG_LEVEL",
+               "EVERSPARK_LOG_FORMAT", "EVERSPARK_LOG_CONSOLE", "EVERSPARK_RUN_ID"}
     config = REPO_ROOT / ".env"
     if config.is_file():
-        for raw in config.read_text(encoding="utf-8-sig").splitlines():
-            line = raw.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, value = line.split("=", 1)
-                if key.strip() in allowed:
-                    os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+        sys.path.insert(0, str(REPO_ROOT))
+        from Archon.Vault.import_config import parse_env
+        for key, value in parse_env(config).items():
+            if key in allowed:
+                os.environ.setdefault(key, value)
 
     # The control-only mode is always local, even if a legacy .env points elsewhere.
     os.environ["EVERSPARK_WEBUI_HOST"] = "127.0.0.1"
@@ -48,6 +48,8 @@ def _load_local_settings() -> None:
 def start() -> int:
     _load_local_settings()
     sys.path.insert(0, str(REPO_ROOT))
+    from Archon.Gate.CLI.windows_console import disable_quick_edit
+    disable_quick_edit()
     from Archon.Gate.control_server import ControlServer
     from Archon.Steward.vast_instances import VastInstances
     from Archon.Steward.vast_offers import VastOffers
@@ -97,7 +99,7 @@ def start() -> int:
             machines, bridge, state_path=node_state.with_name("audio_deployments.json")) if machines else None
         backend = ControlServer(("127.0.0.1", backend_port), machines, offers, deployments,
                                 image_deployments=image_deployments, node_manager=nodes,
-                                audio_deployments=audio_deployments)
+                                audio_deployments=audio_deployments, logger=backend_logger)
         forge_bindings = ForgeBindings(nodes, node_state.with_name("forge_bindings.json"),
             f"http://127.0.0.1:{backend.server_port}")
         backend.forge_bindings = forge_bindings
@@ -154,9 +156,15 @@ def start() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+    if args[:1] == ["configure"]:
+        sys.path.insert(0, str(REPO_ROOT))
+        from Archon.Vault.import_config import main as configure
+        return configure(args[1:])
+    if args[:1] == ["archon"]:
+        args = args[1:]
     if args == ["start"]:
         return start()
-    print("Usage: everspark archon start")
+    print("Usage: everspark archon start | everspark configure [--from DIRECTORY]")
     return 0 if args in ([], ["help"], ["--help"]) else 2
 
 
