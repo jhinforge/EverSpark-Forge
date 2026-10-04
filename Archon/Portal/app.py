@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager, nullcontext
 import json
 import mimetypes
 import os
@@ -117,6 +118,37 @@ class WebUIServer(ThreadingHTTPServer):
         self.logger = logger
         self.archive_lock = threading.Lock()
         self.forge_bindings = forge_bindings
+        from Archon.Vault.storage_config import StorageConfiguration
+        self.storage_configuration = StorageConfiguration(REPO_ROOT, self.apply_storage_configuration, guard=self.storage_configuration_guard)
+
+    @contextmanager
+    def storage_configuration_guard(self):
+        bindings = self.forge_bindings
+        if bindings is None:
+            yield
+            return
+        with bindings.lock:
+            if bindings.active_requests or (bindings.runtime and bindings.runtime.busy()):
+                raise ValueError("Wait for the current task before changing storage configuration")
+            storage = bindings.runtime.server.application.storage if bindings.runtime else None
+            with storage.configuration_guard() if storage else nullcontext():
+                yield
+
+    def apply_storage_configuration(self, values):
+        bindings = self.forge_bindings
+        if bindings is not None:
+            with bindings.lock:
+                if bindings.active_requests or (bindings.runtime and bindings.runtime.busy()):
+                    raise ValueError("Wait for the current task before changing storage configuration")
+                if bindings.runtime:
+                    bindings.runtime.server.application.storage.reconfigure(values)
+                    return
+            if self.settings.orchestrator_url == self.settings.control_url:
+                return
+        status, body = request_json(self.settings.orchestrator_url + "/storage/reconfigure",
+                                    20, {"values": values})
+        if status != 200:
+            raise ValueError(body.get("error", "Could not apply storage configuration"))
 
     @property
     def orchestrator_url(self):
@@ -173,6 +205,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/concept/connections/test/jobs": lambda: self._proxy_orchestrator_get(
                 "/concept/connections/test/jobs", parsed.query),
             "/api/image/plugins/jobs": lambda: self._proxy_orchestrator_get("/image/plugins/jobs", parsed.query),
+            "/api/storage/config": lambda: self._storage_configuration("status"),
             "/api/storage/resources": lambda: self._proxy_orchestrator_get(
                 "/storage/resources", parsed.query
             ),
@@ -235,6 +268,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/subjects/compile": "/subjects/compile",
         }
         try:
+            if path in {"/api/storage/config/import", "/api/storage/config/browse", "/api/storage/config/save"}:
+                self._storage_configuration(path.rsplit("/", 1)[-1])
+                return
             if path in {"/api/nodes/bandwidth", "/api/forge-bindings", "/api/machines/vast/credential", "/api/machines/vast/credential/remove",
                         "/api/machines/vast/destroy", "/api/machines/vast/deploy-image",
                         "/api/machines/vast/verify-image",
@@ -350,6 +386,30 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(status, body)
         except (URLError, TimeoutError) as exc:
             self._upstream_unavailable(exc)
+
+    def _storage_configuration(self, action):
+        if not self._local_control_request():
+            return
+        try:
+            service = self.server.storage_configuration
+            if action == "status":
+                result = service.status()
+            else:
+                if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
+                    self._json(415, {"ok": False, "error": "JSON request required"})
+                    return
+                if not 0 < int(self.headers.get("Content-Length", "0")) <= 100000:
+                    raise ValueError("Configuration request is too large")
+                body = self._read_json()
+                if action == "import":
+                    result = service.import_file(body.get("content"))
+                elif action == "browse":
+                    result = service.browse(body)
+                else:
+                    result = service.save(body)
+            self._json(200, {"ok": True, **result})
+        except (ValueError, OSError, UnicodeError) as exc:
+            self._json(400, {"ok": False, "error": str(exc)})
 
     def _local_control_request(self) -> bool:
         host = self.headers.get("Host", "")

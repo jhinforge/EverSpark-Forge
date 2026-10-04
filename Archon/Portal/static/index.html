@@ -404,117 +404,6 @@
               <p class="section-copy" id="modelDownloadTargets">Model downloads use the selected Forge nodes.</p>
             </div>
           </div>
-          <div class="storage-panel">
-            <div class="storage-heading">
-              <div>
-                <p class="section-kicker">OPTIONAL R2 STORAGE</p>
-                <h3>Remote model library</h3>
-                <p class="section-copy" id="storageSummary">Remote storage is disabled in local mode.</p>
-              </div>
-              <button class="ghost-button" id="refreshStorageButton" type="button">Scan R2</button>
-            </div>
-            <div class="storage-resource-grid" id="storageResourceGrid">
-              <div class="storage-resource">
-                <span>Checkpoint</span>
-                <span class="select-wrap"><select id="remoteCheckpointSelect"></select></span>
-                <button class="secondary-button storage-pull-button" type="button" data-kind="checkpoint">Download</button>
-              </div>
-              <div class="storage-resource">
-                <span>Diffusion model</span>
-                <span class="select-wrap"><select id="remoteDiffusionSelect"></select></span>
-                <button class="secondary-button storage-pull-button" type="button" data-kind="diffusion_model">Download</button>
-              </div>
-              <div class="storage-resource">
-                <span>LoRA</span>
-                <span class="select-wrap"><select id="remoteLoraSelect"></select></span>
-                <button class="secondary-button storage-pull-button" type="button" data-kind="lora">Download</button>
-              </div>
-              <div class="storage-resource">
-                <span>VAE</span>
-                <span class="select-wrap"><select id="remoteVaeSelect"></select></span>
-                <button class="secondary-button storage-pull-button" type="button" data-kind="vae">Download</button>
-              </div>
-              <div class="storage-resource">
-                <span>Concept LLM</span>
-                <span class="select-wrap"><select id="remoteConceptSelect"></select></span>
-                <button class="secondary-button storage-pull-button" type="button" data-kind="concept_model">Download</button>
-              </div>
-            </div>
-            <div class="storage-progress hidden" id="storageProgress">
-              <progress id="storageProgressBar" max="100" value="0"></progress>
-              <div class="storage-progress-meta">
-                <span id="storageJobStatus"></span>
-                <span id="storageProgressDetail"></span>
-              </div>
-            </div>
-          </div>
-          <div class="storage-panel">
-            <div class="storage-heading">
-              <div>
-                <p class="section-kicker">REMOTE PATHS</p>
-                <h3>Directory mappings</h3>
-                <p class="section-copy">Automatic discovery searches model folders within the configured remotes. Add manual source directories when names differ. Upload targets must be writable physical remotes, not a union.</p>
-              </div>
-            </div>
-            <form id="remotePathsForm" class="remote-path-form">
-              <label>Checkpoint source <input data-path-kind="checkpoint" data-path-field="source" placeholder="r2-assets:bucket/custom-checkpoints"></label>
-              <label>Checkpoint upload target <input data-path-kind="checkpoint" data-path-field="upload" placeholder="r2-assets:bucket/models/checkpoints"></label>
-              <label>Diffusion source <input data-path-kind="diffusion_model" data-path-field="source" placeholder="r2-assets:bucket/custom-diffusion"></label>
-              <label>Diffusion upload target <input data-path-kind="diffusion_model" data-path-field="upload" placeholder="r2-assets:bucket/models/diffusion_models"></label>
-              <label>LoRA source <input data-path-kind="lora" data-path-field="source" placeholder="r2-assets:bucket/custom-loras"></label>
-              <label>LoRA upload target <input data-path-kind="lora" data-path-field="upload" placeholder="r2-assets:bucket/models/loras"></label>
-              <label>VAE source <input data-path-kind="vae" data-path-field="source" placeholder="r2-assets:bucket/custom-vae"></label>
-              <label>VAE upload target <input data-path-kind="vae" data-path-field="upload" placeholder="r2-assets:bucket/models/vae"></label>
-              <label>Ollama/GGUF source <input id="conceptSourcePath" placeholder="r2-assets:bucket/llms"></label>
-              <label>GGUF upload target <input id="conceptUploadPath" placeholder="r2-assets:bucket/everspark-gguf"></label>
-              <label>Data backup target <input id="dataBackupPath" placeholder="Default: bucket/everspark-backups"></label>
-              <button class="secondary-button" type="submit">Save mapping and scan</button>
-            </form>
-          </div>
-          <div class="storage-panel" id="localDataPanel">
-            <div class="storage-heading">
-              <div>
-                <p class="section-kicker">LOCAL DATA</p>
-                <h3>Character and Memory ZIP</h3>
-                <p class="section-copy">Download the four JSON documents for every character with a consistent Memory SQLite snapshot. Choose a ZIP below and click Validate and restore to upload, verify and place its data. Current data is saved in Data/Recovery; restart EverSpark after restoring.</p>
-              </div>
-              <button class="ghost-button" id="downloadDataButton" type="button">Download data ZIP</button>
-            </div>
-            <div class="backup-actions local-import-actions">
-              <input id="localDataFile" type="file" accept=".zip,application/zip" aria-label="Choose EverSpark data ZIP">
-              <button class="secondary-button" id="restoreDataButton" type="button">Validate and restore</button>
-            </div>
-          </div>
-          <div class="storage-panel" id="backupPanel">
-            <div class="storage-heading">
-              <div>
-                <p class="section-kicker">REMOTE BACKUP</p>
-                <h3>Upload local data</h3>
-                <p class="section-copy" id="backupSummary">Select local models and character JSON files, or the complete outputs folder. Back up Memory too to preserve subject links and revisions.</p>
-              </div>
-              <button class="ghost-button" id="refreshBackupButton" type="button">Scan changes</button>
-            </div>
-            <div class="backup-actions">
-              <label><input id="backupMemory" type="checkbox"> Save a new Memory database snapshot</label>
-              <button class="secondary-button" id="startBackupButton" type="button">Upload selected</button>
-            </div>
-            <div id="backupFiles" class="backup-files"></div>
-            <div class="storage-progress hidden" id="backupProgress">
-              <progress id="backupProgressBar" max="100" value="0"></progress>
-              <div class="storage-progress-meta">
-                <span id="backupJobStatus"></span>
-                <span id="backupProgressDetail"></span>
-              </div>
-            </div>
-            <div class="storage-heading restore-heading">
-              <div><h3>Restore character data</h3><p class="section-copy">Restore one complete batch of character JSON and Memory SQLite. Current data is saved under Data/Recovery before replacement. Restart EverSpark after restoring.</p></div>
-              <button class="ghost-button" id="refreshRestoreButton" type="button">Find restore points</button>
-            </div>
-            <div class="backup-actions">
-              <select id="restorePointSelect" aria-label="Data restore point"></select>
-              <button class="secondary-button" id="startRestoreButton" type="button">Restore selected batch</button>
-            </div>
-          </div>
           <div class="storage-panel direct-download-panel">
             <div class="storage-heading">
               <div>
@@ -606,6 +495,154 @@
                 <button class="ghost-button" id="cancelDirectDownload" type="button">Cancel</button>
                 <button class="ghost-button hidden" id="retryDirectDownload" type="button">Retry</button>
               </div>
+            </div>
+          </div>
+          <div class="storage-panel" id="cloudConfigurationPanel">
+            <div class="storage-heading">
+              <div><p class="section-kicker">CLOUD STORAGE</p><h3>Cloud storage</h3>
+                <p class="section-copy" id="cloudConfigurationSummary">Import your rclone connections and choose model directories to enable cloud operations.</p></div>
+              <button class="secondary-button" id="configureCloudButton" type="button">Enable cloud storage</button>
+            </div>
+            <div id="cloudConfigurationEditor" class="hidden">
+              <form id="cloudImportForm" class="backup-actions">
+                <label>rclone configuration <input id="rcloneConfigFile" type="file" accept=".conf,text/plain" required></label>
+                <button class="secondary-button" type="submit">Import connections</button>
+              </form>
+              <details><summary>rclone executable</summary>
+                <label>Executable path <input id="rcloneExecutable" placeholder="C:\rclone\rclone.exe"></label>
+                <p class="section-copy">Leave empty to detect rclone automatically.</p>
+              </details>
+              <div id="cloudDirectoryPicker" class="hidden">
+                <div class="cloud-picker-controls">
+                  <label>Connection <select id="cloudRemoteSelect"></select></label>
+                  <button class="ghost-button" id="browseCloudRoot" type="button">Browse connection</button>
+                  <button class="ghost-button" id="cloudDirectoryUp" type="button">Parent directory</button>
+                </div>
+                <p id="cloudBrowserPath" class="cloud-browser-path"></p>
+                <div id="cloudDirectoryList" class="cloud-directory-list"></div>
+                <div class="backup-actions">
+                  <button class="secondary-button" id="addImageDirectory" type="button">Use for image models</button>
+                  <button class="secondary-button" id="setConceptDirectory" type="button">Use for Concept models</button>
+                </div>
+                <h4>Image model directories</h4><div id="cloudImageSources" class="cloud-source-list"></div>
+                <h4>Concept model directory</h4><p id="cloudConceptSource" class="cloud-browser-path"></p>
+                <p class="section-copy">Select the model roots. EverSpark generates and saves the configuration for you.</p>
+                <button class="primary-button" id="saveCloudConfiguration" type="button">Validate and enable</button>
+              </div>
+              <p id="cloudConfigurationMessage" role="status" aria-live="polite"></p>
+            </div>
+          </div>
+          <div class="storage-panel hidden" data-cloud-storage>
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">CLOUD MODELS</p>
+                <h3>Remote model library</h3>
+                <p class="section-copy" id="storageSummary">Remote storage is disabled in local mode.</p>
+              </div>
+              <button class="ghost-button" id="refreshStorageButton" type="button">Scan cloud models</button>
+            </div>
+            <div class="storage-resource-grid" id="storageResourceGrid">
+              <div class="storage-resource">
+                <span>Checkpoint</span>
+                <span class="select-wrap"><select id="remoteCheckpointSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="checkpoint">Download</button>
+              </div>
+              <div class="storage-resource">
+                <span>Diffusion model</span>
+                <span class="select-wrap"><select id="remoteDiffusionSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="diffusion_model">Download</button>
+              </div>
+              <div class="storage-resource">
+                <span>LoRA</span>
+                <span class="select-wrap"><select id="remoteLoraSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="lora">Download</button>
+              </div>
+              <div class="storage-resource">
+                <span>VAE</span>
+                <span class="select-wrap"><select id="remoteVaeSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="vae">Download</button>
+              </div>
+              <div class="storage-resource">
+                <span>Concept LLM</span>
+                <span class="select-wrap"><select id="remoteConceptSelect"></select></span>
+                <button class="secondary-button storage-pull-button" type="button" data-kind="concept_model">Download</button>
+              </div>
+            </div>
+            <div class="storage-progress hidden" id="storageProgress">
+              <progress id="storageProgressBar" max="100" value="0"></progress>
+              <div class="storage-progress-meta">
+                <span id="storageJobStatus"></span>
+                <span id="storageProgressDetail"></span>
+              </div>
+            </div>
+          </div>
+          <div class="storage-panel hidden" data-cloud-storage>
+            <details><summary>Advanced directory mappings</summary>
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">REMOTE PATHS</p>
+                <h3>Directory mappings</h3>
+                <p class="section-copy">Automatic discovery searches model folders within the configured remotes. Add manual source directories when names differ. Upload targets must be writable physical remotes, not a union.</p>
+              </div>
+            </div>
+            <form id="remotePathsForm" class="remote-path-form">
+              <label>Checkpoint source <input data-path-kind="checkpoint" data-path-field="source" placeholder="r2-assets:bucket/custom-checkpoints"></label>
+              <label>Checkpoint upload target <input data-path-kind="checkpoint" data-path-field="upload" placeholder="r2-assets:bucket/models/checkpoints"></label>
+              <label>Diffusion source <input data-path-kind="diffusion_model" data-path-field="source" placeholder="r2-assets:bucket/custom-diffusion"></label>
+              <label>Diffusion upload target <input data-path-kind="diffusion_model" data-path-field="upload" placeholder="r2-assets:bucket/models/diffusion_models"></label>
+              <label>LoRA source <input data-path-kind="lora" data-path-field="source" placeholder="r2-assets:bucket/custom-loras"></label>
+              <label>LoRA upload target <input data-path-kind="lora" data-path-field="upload" placeholder="r2-assets:bucket/models/loras"></label>
+              <label>VAE source <input data-path-kind="vae" data-path-field="source" placeholder="r2-assets:bucket/custom-vae"></label>
+              <label>VAE upload target <input data-path-kind="vae" data-path-field="upload" placeholder="r2-assets:bucket/models/vae"></label>
+              <label>Ollama/GGUF source <input id="conceptSourcePath" placeholder="r2-assets:bucket/llms"></label>
+              <label>GGUF upload target <input id="conceptUploadPath" placeholder="r2-assets:bucket/everspark-gguf"></label>
+              <label>Data backup target <input id="dataBackupPath" placeholder="Default: bucket/everspark-backups"></label>
+              <button class="secondary-button" type="submit">Save mapping and scan</button>
+            </form>
+            </details>
+          </div>
+          <div class="storage-panel" id="localDataPanel">
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">LOCAL DATA</p>
+                <h3>Character and Memory ZIP</h3>
+                <p class="section-copy">Download the four JSON documents for every character with a consistent Memory SQLite snapshot. Choose a ZIP below and click Validate and restore to upload, verify and place its data. Current data is saved in Data/Recovery; restart EverSpark after restoring.</p>
+              </div>
+              <button class="ghost-button" id="downloadDataButton" type="button">Download data ZIP</button>
+            </div>
+            <div class="backup-actions local-import-actions">
+              <input id="localDataFile" type="file" accept=".zip,application/zip" aria-label="Choose EverSpark data ZIP">
+              <button class="secondary-button" id="restoreDataButton" type="button">Validate and restore</button>
+            </div>
+          </div>
+          <div class="storage-panel hidden" id="backupPanel" data-cloud-storage>
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">REMOTE BACKUP</p>
+                <h3>Upload local data</h3>
+                <p class="section-copy" id="backupSummary">Select local models and character JSON files, or the complete outputs folder. Back up Memory too to preserve subject links and revisions.</p>
+              </div>
+              <button class="ghost-button" id="refreshBackupButton" type="button">Scan changes</button>
+            </div>
+            <div class="backup-actions">
+              <label><input id="backupMemory" type="checkbox"> Save a new Memory database snapshot</label>
+              <button class="secondary-button" id="startBackupButton" type="button">Upload selected</button>
+            </div>
+            <div id="backupFiles" class="backup-files"></div>
+            <div class="storage-progress hidden" id="backupProgress">
+              <progress id="backupProgressBar" max="100" value="0"></progress>
+              <div class="storage-progress-meta">
+                <span id="backupJobStatus"></span>
+                <span id="backupProgressDetail"></span>
+              </div>
+            </div>
+            <div class="storage-heading restore-heading">
+              <div><h3>Restore character data</h3><p class="section-copy">Restore one complete batch of character JSON and Memory SQLite. Current data is saved under Data/Recovery before replacement. Restart EverSpark after restoring.</p></div>
+              <button class="ghost-button" id="refreshRestoreButton" type="button">Find restore points</button>
+            </div>
+            <div class="backup-actions">
+              <select id="restorePointSelect" aria-label="Data restore point"></select>
+              <button class="secondary-button" id="startRestoreButton" type="button">Restore selected batch</button>
             </div>
           </div>
         </section>

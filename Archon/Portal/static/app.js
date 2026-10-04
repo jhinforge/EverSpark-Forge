@@ -10,6 +10,10 @@ const state = {
   mode: "discuss",
   resources: { workflows: [], checkpoints: [], vaes: [], loras: [], llms: [], defaults: {}, loraStrengthMode: "independent" },
   remoteStorage: null,
+  cloudConfiguration: null,
+  cloudBrowserPath: "",
+  cloudConfigurationBusy: false,
+  cloudConfigurationEpoch: 0,
   pathsLoaded: false,
   selectedLoras: [],
   imagePlugins: [],
@@ -529,7 +533,123 @@ function updateStorageButtons() {
   });
 }
 
+function renderCloudConfiguration(data) {
+  state.cloudConfiguration = data;
+  $$("[data-cloud-storage]").forEach((panel) => panel.classList.toggle("hidden", !data.enabled));
+  uiText($("#configureCloudButton"), data.enabled ? "Manage cloud configuration" : "Enable cloud storage");
+  uiText($("#cloudConfigurationSummary"), data.enabled ? "Cloud storage is enabled. Model downloads use the selected Forge nodes." : "Import your rclone connections and choose model directories to enable cloud operations.");
+  const select = $("#cloudRemoteSelect");
+  const current = select.value;
+  select.replaceChildren();
+  (data.remotes || []).forEach((remote) => {
+    const option = document.createElement("option");
+    option.value = remote.name;
+    option.textContent = `${remote.name} (${remote.type})`;
+    select.append(option);
+  });
+  if ((data.remotes || []).some((remote) => remote.name === current)) select.value = current;
+  $("#rcloneExecutable").value = data.binary || "";
+  $("#cloudDirectoryPicker").classList.toggle("hidden", !data.imported);
+  renderCloudSources();
+}
+
+function renderCloudSources() {
+  const selection = state.cloudConfiguration?.selection || {};
+  const container = $("#cloudImageSources");
+  container.replaceChildren();
+  (selection.image_sources || []).forEach((path, index) => {
+    const row = document.createElement("div");
+    const name = document.createElement("span"); name.textContent = path;
+    const remove = document.createElement("button"); remove.type = "button";
+    remove.className = "ghost-button"; uiText(remove, "Remove");
+    remove.addEventListener("click", () => { selection.image_sources.splice(index, 1); renderCloudSources(); });
+    row.append(name, remove); container.append(row);
+  });
+  $("#cloudConceptSource").textContent = selection.concept_source || "—";
+  $("#saveCloudConfiguration").disabled = !selection.image_sources?.length || !selection.concept_source;
+  $("#addImageDirectory").disabled = !state.cloudBrowserPath;
+  $("#setConceptDirectory").disabled = !state.cloudBrowserPath;
+}
+
+async function loadCloudConfiguration() {
+  if (state.cloudConfigurationBusy) return;
+  const epoch = ++state.cloudConfigurationEpoch;
+  try {
+    const data = await api("/api/storage/config");
+    if (epoch !== state.cloudConfigurationEpoch) return;
+    renderCloudConfiguration(data);
+    if (data.enabled) await Promise.all([loadRemoteStorage(), loadBackup(), loadRestorePoints()]);
+  } catch (error) {
+    if (epoch !== state.cloudConfigurationEpoch) return;
+    $$("[data-cloud-storage]").forEach((panel) => panel.classList.add("hidden"));
+    $("#cloudConfigurationMessage").textContent = t(error.message);
+  }
+}
+
+async function cloudConfigurationAction(operation) {
+  if (state.cloudConfigurationBusy) return;
+  state.cloudConfigurationBusy = true;
+  state.cloudConfigurationEpoch++;
+  const controls = $$("#cloudConfigurationEditor button, #cloudConfigurationEditor input, #cloudConfigurationEditor select");
+  const disabled = controls.map((control) => control.disabled);
+  controls.forEach((control) => { control.disabled = true; });
+  uiText($("#cloudConfigurationMessage"), "Checking cloud configuration…");
+  try { await operation(); }
+  catch (error) { i18n.unbind($("#cloudConfigurationMessage")); $("#cloudConfigurationMessage").textContent = t(error.message); }
+  finally {
+    controls.forEach((control, index) => { control.disabled = disabled[index]; });
+    state.cloudConfigurationBusy = false;
+    renderCloudSources();
+  }
+}
+
+async function importCloudConnections(event) {
+  event.preventDefault();
+  await cloudConfigurationAction(async () => {
+    const file = $("#rcloneConfigFile").files?.[0];
+    if (!file || file.size > 45000) throw new Error(t("Choose a rclone.conf file smaller than 45 KB"));
+    const data = await api("/api/storage/config/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: await file.text() }) });
+    data.selection = { image_sources: [], concept_source: "" };
+    state.cloudBrowserPath = "";
+    $("#cloudBrowserPath").textContent = "";
+    $("#cloudDirectoryList").replaceChildren();
+    renderCloudConfiguration(data);
+    $("#rcloneConfigFile").value = "";
+    uiText($("#cloudConfigurationMessage"), "Connections imported. Choose your model directories.");
+  });
+}
+
+async function browseCloudDirectory(path) {
+  await cloudConfigurationAction(async () => {
+    const data = await api("/api/storage/config/browse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: state.cloudConfiguration.revision, path, binary: $("#rcloneExecutable").value.trim() }) });
+    state.cloudBrowserPath = data.path;
+    $("#cloudBrowserPath").textContent = data.path;
+    const list = $("#cloudDirectoryList"); list.replaceChildren();
+    data.directories.forEach((name) => {
+      const button = document.createElement("button"); button.type = "button";
+      button.className = "ghost-button"; button.textContent = name;
+      button.addEventListener("click", () => { void browseCloudDirectory(data.path + (data.path.endsWith(":") ? "" : "/") + name); });
+      list.append(button);
+    });
+    uiText($("#cloudConfigurationMessage"), "Choose a folder or use the current directory.");
+  });
+}
+
+async function saveCloudConfiguration() {
+  await cloudConfigurationAction(async () => {
+    const data = await api("/api/storage/config/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision: state.cloudConfiguration.revision, ...state.cloudConfiguration.selection, binary: $("#rcloneExecutable").value.trim() }) });
+    renderCloudConfiguration(data);
+    state.pathsLoaded = false;
+    state.remoteStorage = null;
+    $("#cloudConfigurationEditor").classList.add("hidden");
+    uiText($("#cloudConfigurationMessage"), "Cloud configuration saved and active.");
+    showNotice(t("Cloud configuration saved and active."), "success");
+    await Promise.all([loadRemoteStorage(true), loadBackup(), loadRestorePoints()]);
+  });
+}
+
 async function loadRemoteStorage(force = false) {
+  if (!state.cloudConfiguration?.enabled) return;
   if (state.remoteScanTimer) { window.clearTimeout(state.remoteScanTimer); state.remoteScanTimer = null; }
   try {
     if (force) uiText(elements.storageSummary, "Scanning remote model directories…");
@@ -569,7 +689,7 @@ async function loadRemoteStorage(force = false) {
       state.pathsLoaded = true;
     }
     if (scan.status !== "running") uiText(elements.storageSummary, data.enabled
-      ? "R2 is connected. Downloads are selective and never restore the legacy ComfyUI runtime."
+      ? "Cloud storage is connected. Downloads use the selected Forge nodes."
       : "Remote storage is disabled in local mode. Configure the rclone backend to enable it.");
     updateStorageButtons();
     const jobs = await api("/api/storage/jobs");
@@ -613,6 +733,7 @@ async function saveRemotePaths(event) {
 }
 
 async function loadBackup() {
+  if (!state.cloudConfiguration?.enabled) return;
   try {
     const data = await api("/api/backup/resources");
     elements.backupFiles.replaceChildren();
@@ -742,6 +863,7 @@ async function startBackup() {
 }
 
 async function loadRestorePoints() {
+  if (!state.cloudConfiguration?.enabled) return;
   try {
     const { points } = await api("/api/backup/restore-points");
     elements.restorePointSelect.replaceChildren();
@@ -1122,7 +1244,7 @@ function setView(name) {
   if (name === "runtime") loadRuntime();
   if (name === "machines") { nodeConnection.refresh(); loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
   if (name === "models") loadModelConnections();
-  if (name === "storage") Promise.all([loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadRestorePoints()]);
+  if (name === "storage") Promise.all([loadCloudConfiguration(), loadDirectDownload()]);
 }
 
 function machineMessage(message) {
@@ -2554,6 +2676,34 @@ function bindEvents() {
   elements.downloadDataButton.addEventListener("click", downloadDataArchive);
   elements.restoreDataButton.addEventListener("click", restoreDataArchive);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);
+  $("#configureCloudButton").addEventListener("click", () => {
+    $("#cloudConfigurationEditor").classList.toggle("hidden");
+  });
+  $("#cloudImportForm").addEventListener("submit", importCloudConnections);
+  $("#browseCloudRoot").addEventListener("click", () => { void browseCloudDirectory($("#cloudRemoteSelect").value + ":"); });
+  $("#cloudDirectoryUp").addEventListener("click", () => {
+    if (!state.cloudBrowserPath) return;
+    const separator = state.cloudBrowserPath.indexOf(":");
+    const remote = state.cloudBrowserPath.slice(0, separator);
+    const relative = state.cloudBrowserPath.slice(separator + 1);
+    void browseCloudDirectory(remote + ":" + relative.split("/").slice(0, -1).join("/"));
+  });
+  $("#cloudRemoteSelect").addEventListener("change", () => {
+    state.cloudBrowserPath = "";
+    $("#cloudBrowserPath").textContent = "";
+    $("#cloudDirectoryList").replaceChildren();
+    renderCloudSources();
+  });
+  $("#addImageDirectory").addEventListener("click", () => {
+    const selection = state.cloudConfiguration.selection;
+    if (state.cloudBrowserPath && !selection.image_sources.includes(state.cloudBrowserPath)) selection.image_sources.push(state.cloudBrowserPath);
+    renderCloudSources();
+  });
+  $("#setConceptDirectory").addEventListener("click", () => {
+    state.cloudConfiguration.selection.concept_source = state.cloudBrowserPath;
+    renderCloudSources();
+  });
+  $("#saveCloudConfiguration").addEventListener("click", saveCloudConfiguration);
   elements.refreshStorageButton.addEventListener("click", () => { void loadRemoteStorage(true); });
   $("#refreshBackupButton").addEventListener("click", loadBackup);
   elements.startBackupButton.addEventListener("click", startBackup);
@@ -2602,7 +2752,7 @@ async function initialize() {
   bindEvents();
   setMode("discuss");
   renderSelectedSubject();
-  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadImagePlugins(), loadRemoteStorage(), loadDirectDownload(), loadBackup(), loadModelConnections()]);
+  await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadImagePlugins(), loadCloudConfiguration(), loadDirectDownload(), loadModelConnections()]);
   await loadResources();
   setInterval(loadRuntime, 20000);
   setInterval(() => {

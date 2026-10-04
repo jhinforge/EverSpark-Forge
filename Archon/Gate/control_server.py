@@ -175,6 +175,10 @@ class ControlHandler(BaseHTTPRequestHandler):
             return
         if handle_nodes(self, self.server.node_manager, "POST", path):
             return
+        if path == "/storage/reconfigure":
+            if self._local_request():
+                self._send(200, {"ok": True})
+            return
         if path.startswith("/machines/"):
             if not self._local_request():
                 return

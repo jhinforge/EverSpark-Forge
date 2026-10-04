@@ -12,7 +12,7 @@ def execution_request(method):
     def wrapped(handler):
         path = urlsplit(handler.path).path
         bindings = handler.server.forge_bindings
-        execution = path.startswith("/api/") and not path.startswith("/api/machines/") and path != "/api/forge-bindings"
+        execution = path.startswith("/api/") and not path.startswith("/api/machines/") and path != "/api/forge-bindings" and not path.startswith("/api/storage/config")
         if not bindings or not execution:
             return method(handler)
         with bindings.request() as url:

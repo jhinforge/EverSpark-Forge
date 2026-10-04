@@ -462,3 +462,17 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .machine-credential .node-connection-error { color: #ff9a9a; font-weight: 600; }
 
 .machine-card .machine-deployment-error { color: #ff9a9a; white-space: pre-wrap; max-height: 220px; overflow-y: auto; font-size: 13px; }
+
+.cloud-picker-controls { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-top: 18px; }
+.cloud-picker-controls label { flex: 1; min-width: 180px; }
+.cloud-directory-list { display: flex; gap: 8px; flex-wrap: wrap; max-height: 240px; overflow: auto; padding: 10px 0; }
+.cloud-browser-path { overflow-wrap: anywhere; color: var(--muted); }
+.cloud-source-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; overflow-wrap: anywhere; }
+#cloudConfigurationEditor details { margin: 16px 0; }
+#cloudConfigurationEditor summary, [data-cloud-storage] summary { cursor: pointer; margin-bottom: 12px; }
+#cloudConfigurationMessage { color: var(--muted); overflow-wrap: anywhere; }
+
+#cloudConfigurationEditor label { display: grid; gap: 7px; min-width: 0; color: var(--muted); font-size: 12px; }
+#cloudConfigurationEditor input:not([type="file"]), #cloudConfigurationEditor select { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--text); background: var(--panel-solid); }
+#cloudConfigurationEditor input[type="file"] { max-width: 100%; color: var(--muted); }
+#cloudConfigurationEditor .backup-actions { flex-wrap: wrap; }

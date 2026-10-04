@@ -103,7 +103,26 @@ Use your real UUID and hostname. The credential JSON `TunnelID` must match. `CF_
 
 `.gitignore` excludes `.env`, private imports under `Archon/Vault/Import/`, and `Data/`. Ignored files are not backups; do not force-add them to a public repository. See [`Archon/Vault/README.md`](../Archon/Vault/README.md) for importer details and [`.env.example`](../.env.example) for optional fields.
 
-### Cloud model storage on a Windows host
+### Configure cloud storage in the WebUI
+
+Storage always shows direct URL model downloads and local character/Memory ZIP export and restore. Cloud operations appear after configuration is enabled.
+
+1. Click **Enable cloud storage**, select your local `rclone.conf`, and click **Import connections**. No `env.txt` or Cloudflare UUID credential is required.
+2. Select an imported connection and click **Browse connection**. Navigate to a model root and select **Use for image models** or **Use for Concept models**. Image models can use multiple roots.
+3. If rclone is missing, expand **rclone executable** and supply its path, such as `C:\rclone\rclone.exe`. Windows also checks this default location automatically.
+4. Click **Validate and enable**. EverSpark checks directory access, saves private configuration and updates the current runtime immediately. Cloud model scanning, pulling and backups become visible.
+
+One image source uses its original remote directly; multiple sources generate a read-only union. EverSpark fills the storage fields in `.env` while preserving other settings and original rclone connections. Changing model roots clears the corresponding old manual source mappings so models are rediscovered. Advanced upload and backup mappings remain available under **Advanced directory mappings**.
+
+Use **Manage cloud configuration** to edit settings. Imports remain drafts until validated and saved; a failed connection or save retains the active configuration. Wait for active tasks, scans and local backup operations before saving. Private files live under `Data/Configuration/rclone/`; API responses never return credential contents.
+
+The host still needs rclone for browsing and scanning. Model downloads run on the selected Forge nodes. Cloudflare named-tunnel credentials belong to the separate optional network integration.
+
+### Windows command-line import (optional)
+
+The existing importer remains supported; the WebUI flow above does not require these handwritten fields.
+
+
 
 Place `env.txt` and `rclone.conf` in `Archon/Vault/Import/`. Set `EVERSPARK_STORAGE_BACKEND=rclone` and the real `IMAGE_FORGE_RCLONE_REMOTE` and `CONCEPT_FORGE_RCLONE_REMOTE` paths in `env.txt`. If rclone is not on PATH, also set:
 
@@ -120,4 +139,4 @@ From PowerShell in the repository root:
 
 The importer creates the root `.env` and imports rclone credentials. The Windows launcher reads storage settings from `.env`. Stop the existing service and start it again after configuration changes. Existing process environment variables take precedence; use a new terminal if an earlier session contains stale overrides.
 
-The host needs its own rclone to scan cloud directories. Model downloads run on the relevant Forge node. The host's `RCLONE_BIN` is never sent with cloud credentials to nodes, which use their own rclone. Importing configuration does not install rclone. Storage shows scan progress or the specific failure when you click “Scan R2”.
+The host needs its own rclone to scan cloud directories. Model downloads run on the relevant Forge node. The host's `RCLONE_BIN` is never sent with cloud credentials to nodes, which use their own rclone. Importing configuration does not install rclone. Storage shows scan progress or the specific failure when you click “Scan cloud models”.

@@ -113,7 +113,26 @@ CF_LOCAL_PORT=8780
 
 更完整的导入细节见 [`Archon/Vault/README.md`](../Archon/Vault/README.md)，全部可选字段见 [`.env.example`](../.env.example)。
 
-### Windows 主机的云盘模型配置
+### 通过 WebUI 配置云端存储
+
+进入“存储”页面，直链模型下载始终显示。本地角色与 Memory 的 ZIP 导出、恢复也无需启用云端存储。
+
+1. 点击“启用云端存储”，选择本机的 `rclone.conf`，点击“导入连接”。无需准备 `env.txt` 或 Cloudflare 的 UUID 凭据。
+2. 选择已有云盘连接，点击“浏览连接”。进入目录后，分别点击“设为图片模型目录”或“设为 Concept 模型目录”。图片模型可选择多个根目录。
+3. 如果主机找不到 rclone，展开“rclone 程序位置”并指定路径，例如 `C:\rclone\rclone.exe`；Windows 也会自动检查此默认位置。
+4. 点击“验证并启用”。系统检查目录访问，保存私有配置，并立即更新当前运行时。扫描、云端模型拉取及云端备份区域随后显示。
+
+单个图片来源直接引用原 remote；多个来源自动生成只读 union。系统自动填写 `.env` 的存储字段，保留其他设置和原有 rclone 连接。改变模型根目录时，会清除对应旧的手动来源映射，以便重新发现模型；高级上传和备份映射仍保留，可在“高级目录映射”中调整。
+
+再次点击“管理云端配置”可修改。导入是草稿步骤，连接验证或保存失败不会替换当前有效配置。任务、扫描或本地备份正在执行时，请等待结束再保存。rclone 配置保存在 `Data/Configuration/rclone/`，不会在 API 响应中返回凭据。
+
+主机仍需要本机 rclone 浏览和扫描云盘，模型下载在所选 Forge 节点执行。Cloudflare 命名隧道配置属于独立的可选网络功能。
+
+### Windows 命令行导入（可选）
+
+以下原有导入方式继续支持；使用上述 WebUI 流程时不需要手动填写这些字段。
+
+
 
 将 `env.txt` 与 `rclone.conf` 放入 `Archon/Vault/Import/`。在 `env.txt` 中启用 `EVERSPARK_STORAGE_BACKEND=rclone`，设置真实的 `IMAGE_FORGE_RCLONE_REMOTE` 和 `CONCEPT_FORGE_RCLONE_REMOTE`。如果 rclone 不在 PATH 中，再添加：
 
@@ -130,4 +149,4 @@ RCLONE_BIN=C:\rclone\rclone.exe
 
 导入器会生成根目录 `.env` 并导入 rclone 凭据；Windows 启动入口读取 `.env` 中的存储设置。修改配置后，先停止旧服务再重新启动。进程已有的环境变量优先于 `.env`，如果以前在 PowerShell 手动设置过旧值，请使用新窗口启动。
 
-主机需要本机 rclone 扫描云盘目录；模型下载仍在对应的 Forge 节点执行。`RCLONE_BIN` 只指定本机程序，不会随云盘凭据发送给节点；节点使用自己的 rclone。仅放好配置文件不会安装 rclone。点击“扫描 R2”后，Storage 显示扫描状态或具体错误。
+主机需要本机 rclone 扫描云盘目录；模型下载仍在对应的 Forge 节点执行。`RCLONE_BIN` 只指定本机程序，不会随云盘凭据发送给节点；节点使用自己的 rclone。仅放好配置文件不会安装 rclone。点击“扫描云端模型”后，Storage 显示扫描状态或具体错误。

@@ -313,6 +313,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/storage/pull",
             "/storage/scan",
             "/storage/paths",
+            "/storage/reconfigure",
             "/backup/upload",
             "/backup/restore",
             "/data/archive",
@@ -418,6 +419,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                     str(payload.get("session_id", "")), str(payload.get("subject_id", ""))
                 )
                 self._send(200, {"ok": True, "document": subject})
+            elif request_path == "/storage/reconfigure":
+                import ipaddress
+                if not ipaddress.ip_address(self.client_address[0]).is_loopback:
+                    self._send(403, {"ok": False, "error": "Local request required"})
+                    return
+                self.server.application.storage.reconfigure(payload["values"])
+                self._send(200, {"ok": True})
             elif request_path == "/storage/scan":
                 self._send(202, {"ok": True, **self.server.application.start_storage_scan()})
             elif request_path == "/storage/pull":
