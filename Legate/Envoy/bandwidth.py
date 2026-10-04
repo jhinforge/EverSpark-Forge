@@ -1,29 +1,28 @@
 """One background download test per Node, independent of Forge execution."""
-import hashlib
-import io
 import json
 import math
+import re
+import threading
+import traceback
+from concurrent.futures import ThreadPoolExecutor
 import os
-import platform
 import secrets
 import subprocess
 import sys
-import tarfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import Request, build_opener, ProxyHandler
 
 from .executor.storage import save
-from .bandwidth_regions import discovery, RegionError
 
-POLICY = 2
-
-VERSION = "1.0.14"
-CHECKSUMS = {
-    "amd64": "89800767ac14085c78a20847ebea23340f6c14a78de0a15c2ac7db8b565c961f",
-    "arm64": "75e51a2494d03cb35a92ddbf862b40571a25a1526f3cf3dfa8b1d5d7bc622bd9",
-}
+POLICY = 3
+DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
+DURATION = 30
+CONCURRENT = 3
+REQUEST_BYTES = 100_000_000
+READ_BYTES = 256 * 1024
+TIMEOUT = 5
 
 
 def now():
@@ -92,51 +91,78 @@ def start(directory, force=False):
         return {"status": "failed", "error": "Could not start download test"}
 
 
-def install(directory):
-    architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(platform.machine())
-    if not architecture:
-        raise ValueError("Unsupported download test architecture")
-    binary = Path(directory) / ("librespeed-cli-" + VERSION)
-    # A verified binary plus its local hash avoids trusting an unversioned PATH tool.
-    marker = binary.with_suffix(".sha256")
-    if binary.is_file() and marker.is_file() and hashlib.sha256(binary.read_bytes()).hexdigest() == marker.read_text():
-        return binary
-    url = (f"https://github.com/librespeed/speedtest-cli/releases/download/v{VERSION}/"
-           f"librespeed-cli_{VERSION}_linux_{architecture}.tar.gz")
-    with build_opener(ProxyHandler({})).open(Request(url), timeout=20) as response:
-        archive = response.read(12 * 1024 * 1024 + 1)
-    if len(archive) > 12 * 1024 * 1024 or hashlib.sha256(archive).hexdigest() != CHECKSUMS[architecture]:
-        raise ValueError("Download tool checksum mismatch")
-    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as source:
-        member = next((item for item in source.getmembers()
-                       if item.isfile() and Path(item.name).name == "librespeed-cli"), None)
-        if not member or member.size > 30 * 1024 * 1024:
-            raise ValueError("Download tool archive invalid")
-        data = source.extractfile(member).read()
-    temporary = binary.with_suffix(".tmp")
-    temporary.write_bytes(data)
-    temporary.chmod(0o700)
-    temporary.replace(binary)
-    marker.write_text(hashlib.sha256(data).hexdigest())
-    return binary
+def measure(duration=DURATION, workers=CONCURRENT):
+    """Count streamed payload bytes within one shared wall-clock window."""
+    started = time.monotonic()
+    deadline = started + duration
+    lock = threading.Lock()
+    received = 0
+    colos = set()
+    errors = []
 
+    def download(worker):
+        nonlocal received
+        # Bypass the Agent's Tailscale proxy: measure the Pod's public egress.
+        opener = build_opener(ProxyHandler({}))
+        failures = 0
+        while time.monotonic() < deadline:
+            try:
+                request = Request(f"{DOWNLOAD_URL}?bytes={REQUEST_BYTES}&nonce={secrets.token_hex(8)}",
+                                  headers={"Accept-Encoding": "identity", "Cache-Control": "no-cache"})
+                with opener.open(request, timeout=max(.1, min(TIMEOUT, deadline-time.monotonic()))) as response:
+                    if response.status != 200:
+                        raise ValueError(f"Unexpected HTTP status {response.status}")
+                    if response.headers.get("Content-Encoding", "identity").lower() not in {"identity", ""}:
+                        raise ValueError("Compressed test response cannot measure payload bandwidth")
+                    content_type = response.headers.get("Content-Type", "application/octet-stream").split(";", 1)[0].strip().lower()
+                    if content_type != "application/octet-stream":
+                        raise ValueError(f"Unexpected download content type {content_type}")
+                    colo = response.headers.get("CF-Ray", "").rsplit("-", 1)[-1]
+                    if re.fullmatch(r"[A-Z]{3}", colo):
+                        with lock:
+                            colos.add(colo)
+                    request_received = 0
+                    while time.monotonic() < deadline:
+                        # read1 avoids waiting for a full buffer on a slow link.
+                        chunk = response.read1(READ_BYTES)
+                        if not chunk:
+                            break
+                        if time.monotonic() >= deadline:
+                            break
+                        with lock:
+                            received += len(chunk)
+                        request_received += len(chunk)
+                    if not request_received and time.monotonic() < deadline:
+                        raise ValueError("Download endpoint returned no payload")
+                    failures = 0
+            except (OSError, ValueError) as exc:
+                if time.monotonic() >= deadline:
+                    break
+                error = f"{type(exc).__name__}: {exc}"
+                print(f"[bandwidth] worker={worker} {error}", flush=True)
+                with lock:
+                    errors.append(error)
+                failures += 1
+                if failures >= 3:
+                    break
 
-def parse_result(output):
-    values = json.loads(output)
-    if not isinstance(values, list) or len(values) != 1 or not isinstance(values[0], dict):
-        raise ValueError("No download result")
-    result = values[0]
-    speed, received = result.get("download"), result.get("bytes_received")
-    # LibreSpeed v1.0.14 JSON uses decimal Mbps, NOT bits/s or MB/s.
-    if (isinstance(speed, bool) or not isinstance(speed, (int, float)) or not math.isfinite(speed) or speed < 0
-            or isinstance(received, bool) or not isinstance(received, int) or received <= 0):
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(download, range(workers)))
+    elapsed = min(duration, time.monotonic()-started)
+    if received <= 0 or elapsed < duration * .9:
+        detail = errors[-1] if errors else "No sustained download sample"
+        raise ValueError(f"Cloudflare download test unavailable: {detail}")
+    speed = received / elapsed / 1_000_000
+    if not math.isfinite(speed):
         raise ValueError("Invalid download measurement")
-    server = result.get("server")
-    if not isinstance(server, dict) or not isinstance(server.get("name"), str) or not isinstance(server.get("url"), str):
-        raise ValueError("Missing download test server")
-    return {"status": "completed", "download_mb_s": speed / 8,
-            "threshold_mb_s": 50, "qualified": speed >= 400,
-            "server_name": server["name"][:300], "server_url": server["url"][:300]}
+    edge = ", ".join(sorted(colos))
+    result = {"status": "completed", "method": "cloudflare_http", "download_mb_s": speed,
+              "bytes_received": received, "elapsed_seconds": elapsed,
+              "threshold_mb_s": 50, "qualified": speed >= 50,
+              "server_name": "Cloudflare" + (f" ({edge})" if edge else ""), "server_url": DOWNLOAD_URL}
+    if edge:
+        result["server_colo"] = edge
+    return result
 
 
 def run(directory, run_id):
@@ -148,29 +174,18 @@ def run(directory, run_id):
         if value.get("run_id") != run_id:
             return
         try:
-            # Stagger automatic workers instead of starting all new Pods together.
             time.sleep(secrets.randbelow(10))
-            binary = install(directory)
-            location, servers = discovery()
-            value.update(location, status="running")
-            local_servers = directory / "bandwidth-servers.json"
-            save(local_servers, servers)
+            value.update(status="running", policy=POLICY, method="cloudflare_http",
+                         server_name="Cloudflare", server_url=DOWNLOAD_URL)
             save(directory / "bandwidth.json", value)
-            done = subprocess.run([str(binary), "--no-upload", "--no-icmp", "--duration", "30",
-                "--concurrent", "3", "--timeout", "5", "--secure", "--json",
-                "--telemetry-level", "disabled", "--local-json", str(local_servers)], capture_output=True, text=True,
-                stdin=subprocess.DEVNULL, timeout=90, check=True)
-            measured = parse_result(done.stdout)
-            chosen = next((server for server in servers
-                           if server.get("server", "").rstrip("/") == measured["server_url"].rstrip("/")), None)
-            if not chosen:
-                raise RegionError("Speed test server region could not be verified")
-            measured.update(location, server_region=location["region"])
-        except RegionError as exc:
-            measured = {"status": "failed", "error": str(exc)}
-        except (OSError, ValueError, subprocess.SubprocessError, tarfile.TarError, StopIteration):
-            measured = {"status": "failed", "error": "Download test unavailable or interrupted; retry"}
-        (directory / "bandwidth-servers.json").unlink(missing_ok=True)
+            print(f"[bandwidth] started run_id={run_id} source=Cloudflare duration={DURATION}s connections={CONCURRENT}", flush=True)
+            measured = measure()
+            print(f"[bandwidth] completed speed={measured['download_mb_s']:.2f} MB/s bytes={measured['bytes_received']} elapsed={measured['elapsed_seconds']:.2f}s server={measured['server_name']}", flush=True)
+        except Exception as exc:
+            # Preserve the actual failure instead of silently replacing it with a
+            # generic message. No credentials or IP lookup responses are logged.
+            traceback.print_exc()
+            measured = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"[:300]}
         value.update(measured, finished_at=now())
         save(directory / "bandwidth.json", value)
 

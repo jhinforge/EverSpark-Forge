@@ -6,7 +6,7 @@ def validate(value):
     if not isinstance(value, dict) or value.get("status") not in {"pending", "running", "completed", "failed"}:
         return None
     result = {"status": value["status"]}
-    for key in ("started_at", "finished_at", "server_name", "server_url", "error", "region", "server_region", "country"):
+    for key in ("started_at", "finished_at", "server_name", "server_url", "error", "region", "server_region", "country", "method", "server_colo"):
         if key in value:
             if not isinstance(value[key], str) or len(value[key]) > 300:
                 return None
@@ -16,6 +16,14 @@ def validate(value):
         if isinstance(speed, bool) or not isinstance(speed, (int, float)) or not math.isfinite(speed) or speed < 0:
             return None
         regional = result.get("region") in {"AS", "EU", "NA", "SA", "AF", "OC"} and result.get("region") == result.get("server_region")
+        cloudflare = result.get("method") == "cloudflare_http" and result.get("server_url") == "https://speed.cloudflare.com/__down"
+        if cloudflare:
+            elapsed, received = value.get("elapsed_seconds"), value.get("bytes_received")
+            if (isinstance(elapsed, bool) or not isinstance(elapsed, (int, float))
+                    or not math.isfinite(elapsed) or not 27 <= elapsed <= 35
+                    or isinstance(received, bool) or not isinstance(received, int) or received <= 0):
+                return None
+            result.update(elapsed_seconds=elapsed, bytes_received=received)
         result.update(download_mb_s=speed, threshold_mb_s=50, regional=regional,
-                      qualified=(speed >= 50 if regional else None))
+                      qualified=(speed >= 50 if cloudflare or regional else None))
     return result

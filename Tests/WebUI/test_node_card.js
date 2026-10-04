@@ -58,3 +58,17 @@ test('unverified and cross-region speeds never suggest replacing the Pod', () =>
     assert.doesNotMatch(texts(panel), /consider replacing|qualified/);
   }
 });
+
+
+test('Cloudflare samples are assessed without inventing a server region, and disclose their source',()=>{
+  for(const speed of [49,50]) {
+    const panel=context.window.EverSparkNodeCard.render({status:'online',bandwidth:{
+      status:'completed',method:'cloudflare_http',server_url:'https://speed.cloudflare.com/__down',
+      server_name:'Cloudflare (ICN)',server_colo:'ICN',download_mb_s:speed
+    }},options);
+    assert.match(texts(panel),speed>=50 ? /qualified/ : /consider replacing/);
+    assert.match(texts(panel),/model sources may have different speeds/);
+    assert.match(texts(panel),/Cloudflare edge: ICN/);
+    assert.doesNotMatch(texts(panel),/region unverified/);
+  }
+});

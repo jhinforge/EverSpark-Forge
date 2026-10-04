@@ -599,6 +599,8 @@
     "Model connection test failed.": "模型连接测试失败。",
     "Invalid model connection test status.": "模型连接测试状态无效。",
     "Model connection test timed out.": "模型连接测试超时。",
+    "Cloudflare edge": "Cloudflare 接入节点",
+    "Measures downloads from Cloudflare; model sources may have different speeds.": "测量到 Cloudflare 的下载速度；实际模型来源的速度可能不同。",
     "Request failed (HTTP {status})": "请求失败（HTTP {status}）",
     "Turn ideas into images, audio, or both.": "将想法变成图像、音频，或两者结合。",
     "Audio results": "音频结果",
