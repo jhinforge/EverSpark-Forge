@@ -37,7 +37,8 @@ class DownloadTestTests(unittest.TestCase):
             request = opener.return_value.open.call_args.args[0]
             self.assertEqual(request.get_method(), 'GET')
             self.assertEqual(request.get_header('Accept-encoding'), 'identity')
-            self.assertTrue(request.full_url.startswith(module.DOWNLOAD_URL))
+            self.assertEqual(request.get_header('User-agent'), 'curl/8.5.0')
+            self.assertEqual(request.full_url, module.DOWNLOAD_URL + '?bytes=10000000')
 
     def test_auto_once_and_manual_retry_without_waiting(self):
         process = Mock(pid=os.getpid())
@@ -57,6 +58,29 @@ class DownloadTestTests(unittest.TestCase):
             module.start(self.directory, force=True)
             self.assertEqual(spawn.call_count, 2)
 
+    def test_completed_small_downloads_repeat_for_entire_sample(self):
+        clock = [0.0]
+        class Response:
+            status = 200
+            headers = {'Content-Type': 'application/octet-stream'}
+            def __init__(self): self.delivered = False
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def read1(self, count):
+                if self.delivered:
+                    clock[0] += .05
+                    return b''
+                self.delivered = True
+                clock[0] += 1
+                return b'x' * 10_000_000
+        with patch.object(module.time, 'monotonic', side_effect=lambda: clock[0]), patch.object(module, 'build_opener') as opener:
+            opener.return_value.open.side_effect = lambda *args, **kwargs: Response()
+            result = module.measure(duration=3, workers=1)
+        self.assertEqual(opener.return_value.open.call_count, 3)
+        self.assertEqual(result['elapsed_seconds'], 3)
+        self.assertEqual(result['bytes_received'], 20_000_000)
+        self.assertAlmostEqual(result['download_mb_s'], 20 / 3)
+
     def test_actual_http_streams_share_one_window_and_discard_payload(self):
         import threading
         import time
@@ -66,6 +90,9 @@ class DownloadTestTests(unittest.TestCase):
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args): pass
             def do_GET(self):
+                if self.path != '/down?bytes=10000000' or self.headers.get('User-Agent') != 'curl/8.5.0':
+                    self.send_error(403)
+                    return
                 with guard:
                     active[0] += 1
                     active[1] = max(active)
@@ -104,7 +131,7 @@ class DownloadTestTests(unittest.TestCase):
         with patch.object(module, 'measure', return_value=result), patch.object(module.time, 'sleep'):
             module.run(self.directory, 'fixture')
         saved = module.snapshot(self.directory)
-        self.assertEqual(saved['policy'],3)
+        self.assertEqual(saved['policy'],module.POLICY)
         self.assertEqual(saved['download_mb_s'],50)
         self.assertEqual(saved['method'],'cloudflare_http')
         self.assertNotIn('pid',saved)

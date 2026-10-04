@@ -16,11 +16,11 @@ from urllib.request import Request, build_opener, ProxyHandler
 
 from .executor.storage import save
 
-POLICY = 3
+POLICY = 4
 DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
 DURATION = 30
 CONCURRENT = 3
-REQUEST_BYTES = 100_000_000
+REQUEST_BYTES = 10_000_000
 READ_BYTES = 256 * 1024
 TIMEOUT = 5
 
@@ -107,8 +107,12 @@ def measure(duration=DURATION, workers=CONCURRENT):
         failures = 0
         while time.monotonic() < deadline:
             try:
-                request = Request(f"{DOWNLOAD_URL}?bytes={REQUEST_BYTES}&nonce={secrets.token_hex(8)}",
-                                  headers={"Accept-Encoding": "identity", "Cache-Control": "no-cache"})
+                # Keep each request at the 10 MB size verified on worker Pods;
+                # larger requests and urllib's default User-Agent can return 403.
+                # Repeat downloads for the shared window, without extra URL parameters.
+                request = Request(f"{DOWNLOAD_URL}?bytes={REQUEST_BYTES}",
+                                  headers={"User-Agent": "curl/8.5.0",
+                                           "Accept-Encoding": "identity", "Cache-Control": "no-cache"})
                 with opener.open(request, timeout=max(.1, min(TIMEOUT, deadline-time.monotonic()))) as response:
                     if response.status != 200:
                         raise ValueError(f"Unexpected HTTP status {response.status}")
