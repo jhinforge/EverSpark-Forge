@@ -1,6 +1,21 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Creation": "创作",
+    "Asset library": "资产库",
+    "Compute": "计算",
+    "Resources": "资源",
+    "Settings": "设置",
+    "WORKSPACE / CREATION": "工作区 / 创作",
+    "WORKSPACE / ASSET LIBRARY": "工作区 / 资产库",
+    "WORKSPACE / COMPUTE": "工作区 / 计算",
+    "WORKSPACE / RESOURCES": "工作区 / 资源",
+    "WORKSPACE / SETTINGS": "工作区 / 设置",
+    "Characters and generated media.": "角色与生成的图片、音频。",
+    "Machines and service readiness.": "机器与服务运行状态。",
+    "Model downloads and remote libraries.": "模型下载与远端模型库。",
+    "Model services and connection settings.": "模型服务与连接设置。",
+    "Back to section": "返回所属页面",
     "Generated rclone configuration exceeds 45 KB": "生成的 rclone 配置超过 45 KB，请减少导入连接或目录。",
     "CLOUD STORAGE": "云端存储",
     "CLOUD MODELS": "云端模型",

@@ -153,7 +153,11 @@ const elements = {
 };
 
 const viewCopy = {
-  forge: ["WORKSPACE / FORGE", "Turn an idea into an image."],
+  assets: ["WORKSPACE / ASSET LIBRARY", "Characters and generated media."],
+  compute: ["WORKSPACE / COMPUTE", "Machines and service readiness."],
+  resources: ["WORKSPACE / RESOURCES", "Model downloads and remote libraries."],
+  settings: ["WORKSPACE / SETTINGS", "Model services and connection settings."],
+  forge: ["WORKSPACE / CREATION", "Turn an idea into an image."],
   subjects: ["WORKSPACE / SUBJECTS", "Build identity that persists."],
   history: ["WORKSPACE / GALLERY", "Review the latest outputs."],
   storage: ["WORKSPACE / STORAGE", "Manage models and backups."],
@@ -1235,9 +1239,19 @@ async function testModelService() {
   finally { button.disabled = false; }
 }
 
+// Legacy pages remain intact and accessible while the new sections are built.
+const legacyViewSections = {
+  subjects: "assets", history: "assets", machines: "compute",
+  runtime: "compute", storage: "resources", models: "settings",
+};
+
 function setView(name) {
-  $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+  if (!viewCopy[name]) return;
+  const section = legacyViewSections[name] || name;
+  $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === section));
   $$("[data-view-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.viewPanel === name));
+  $("#legacyPageNavigation").classList.toggle("hidden", !legacyViewSections[name]);
+  $("#returnToSectionButton").dataset.viewLink = section;
   uiText($("#viewEyebrow"), viewCopy[name][0]);
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "history") loadHistory();
@@ -2622,6 +2636,7 @@ function bindEvents() {
     if (fallback) fallback.textContent = t("Checkpoint VAE");
   });
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewLink)));
   $("#newConversationButton").addEventListener("click", newConversation);
   elements.discussModeButton.addEventListener("click", () => setMode("discuss"));
   document.querySelector("#creationMode").addEventListener("change", updateCreationMode);

@@ -476,3 +476,6 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 #cloudConfigurationEditor input:not([type="file"]), #cloudConfigurationEditor select { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--text); background: var(--panel-solid); }
 #cloudConfigurationEditor input[type="file"] { max-width: 100%; color: var(--muted); }
 #cloudConfigurationEditor .backup-actions { flex-wrap: wrap; }
+
+.section-shortcuts { display: flex; gap: 12px; flex-wrap: wrap; }
+.legacy-page-navigation { max-width: 1440px; margin: 0 auto 18px; }

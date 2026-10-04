@@ -28,34 +28,25 @@
         </div>
 
         <nav class="nav" aria-label="Workspace navigation">
-          <button class="nav-item active" data-view="forge" type="button">
+          <button class="nav-item active" data-view="forge" aria-controls="forgeView" type="button">
             <span class="nav-icon">◇</span>
-            Forge
+            Creation
           </button>
-          <button class="nav-item" data-view="subjects" type="button">
+          <button class="nav-item" data-view="assets" aria-controls="assetsView" type="button">
             <span class="nav-icon">◎</span>
-            Subjects
-            <span class="nav-count" id="subjectCount">0</span>
+            Asset library
           </button>
-          <button class="nav-item" data-view="history" type="button">
-            <span class="nav-icon">↺</span>
-            Gallery
-          </button>
-          <button class="nav-item" data-view="machines" type="button">
+          <button class="nav-item" data-view="compute" aria-controls="computeView" type="button">
             <span class="nav-icon">▦</span>
-            Machines
+            Compute
           </button>
-          <button class="nav-item" data-view="storage" type="button">
+          <button class="nav-item" data-view="resources" aria-controls="resourcesView" type="button">
             <span class="nav-icon">▣</span>
-            Storage
+            Resources
           </button>
-          <button class="nav-item" data-view="runtime" type="button">
-            <span class="nav-icon">⌁</span>
-            Runtime
-          </button>
-          <button class="nav-item" data-view="models" type="button">
+          <button class="nav-item" data-view="settings" aria-controls="settingsView" type="button">
             <span class="nav-icon">✧</span>
-            Model services
+            Settings
           </button>
         </nav>
 
@@ -75,7 +66,7 @@
       <main class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow" id="viewEyebrow">WORKSPACE / FORGE</p>
+            <p class="eyebrow" id="viewEyebrow">WORKSPACE / CREATION</p>
             <h1 id="viewTitle">Turn an idea into an image.</h1>
           </div>
           <div class="top-actions">
@@ -99,7 +90,11 @@
           <button id="dismissNotice" type="button" aria-label="Dismiss">×</button>
         </div>
 
-        <section class="view active" id="forgeView" data-view-panel="forge">
+        <div class="legacy-page-navigation hidden" id="legacyPageNavigation">
+          <button class="ghost-button" id="returnToSectionButton" data-view-link="" type="button">Back to section</button>
+        </div>
+
+        <section class="view active" id="forgeView" data-view-panel="forge" data-primary-view>
           <div class="forge-layout">
             <section class="panel subject-rail">
               <div class="panel-heading">
@@ -228,6 +223,44 @@
                 </div>
               </div>
             </section>
+          </div>
+        </section>
+
+        <section class="view" id="assetsView" data-view-panel="assets" data-primary-view>
+          <div class="section-toolbar">
+            <div><h2>Asset library</h2><p class="section-copy">Characters and generated media.</p></div>
+          </div>
+          <div class="section-shortcuts">
+            <button class="secondary-button" data-view-link="subjects" type="button">Subjects <span class="nav-count" id="subjectCount">0</span></button>
+            <button class="secondary-button" data-view-link="history" type="button">Gallery</button>
+          </div>
+        </section>
+
+        <section class="view" id="computeView" data-view-panel="compute" data-primary-view>
+          <div class="section-toolbar">
+            <div><h2>Compute</h2><p class="section-copy">Machines and service readiness.</p></div>
+          </div>
+          <div class="section-shortcuts">
+            <button class="secondary-button" data-view-link="machines" type="button">Machines</button>
+            <button class="secondary-button" data-view-link="runtime" type="button">Runtime</button>
+          </div>
+        </section>
+
+        <section class="view" id="resourcesView" data-view-panel="resources" data-primary-view>
+          <div class="section-toolbar">
+            <div><h2>Resources</h2><p class="section-copy">Model downloads and remote libraries.</p></div>
+          </div>
+          <div class="section-shortcuts">
+            <button class="secondary-button" data-view-link="storage" type="button">Storage</button>
+          </div>
+        </section>
+
+        <section class="view" id="settingsView" data-view-panel="settings" data-primary-view>
+          <div class="section-toolbar">
+            <div><h2>Settings</h2><p class="section-copy">Model services and connection settings.</p></div>
+          </div>
+          <div class="section-shortcuts">
+            <button class="secondary-button" data-view-link="models" type="button">Model services</button>
           </div>
         </section>
 
