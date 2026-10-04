@@ -21,7 +21,7 @@ function setup(machine, language = null) {
   const list=new Element('div'), calls=[];
   const t=(key,args={})=>key.replace(/\{(\w+)\}/g,(_,name)=>args[name]?.i18nKey ? t(args[name].i18nKey,args[name]) : args[name]);
   const context={document:{createElement:tag=>new Element(tag)},window:{confirm:()=>true},t,
-    uiText(node,key,args){node.textContent=t(key,args);},state:{podJobs:{},destroyedPods:new Set()},
+    uiText(node,key,args){node.textContent=t(key,args);},state:{podJobs:{},destroyedPods:new Set(),expandedMachineDetails:new Set()},
     elements:{vastInstanceList:list},showNotice(){},machineMessage(){},
     api:async(path,options)=>{calls.push([path,JSON.parse(options.body)]);return {job:{status:'completed'}};},
     loadMachines:async()=>{},loadVastBalance:async()=>{},
@@ -180,4 +180,31 @@ test('all Forge status badges use one service name and a shared localized status
     const {card,context}=setup({...fixture,image_forge:null},language);
     assert.ok(text(card).includes(`Image Forge · ${context.i18n.t('Not deployed')}`));
   }
+});
+
+
+test('each machine preserves its own Details state through polling, manual redraw and closing',()=>{
+  const {context,list}=setup(fixture,'en');
+  context.elements.moreVastInstances={};
+  const app=fs.readFileSync('Archon/Portal/static/app.js','utf8');
+  vm.runInContext(app.slice(app.indexOf('function renderMachinesPage('),app.indexOf('async function saveVastKey(')),context);
+  const second={...fixture,id:43,label:'Second Pod'};
+  let data={instances:[fixture,second]};
+  context.renderMachinesPage(data);
+  const details=()=>list.children.map(card=>card.children.find(node=>node.tag==='details'));
+  const original=details()[0];
+  original.open=true;original.listeners.toggle();
+  assert.equal(details()[1].open,false);
+  // A heartbeat change causes the silent poll to rebuild the cards.
+  data={instances:[{...fixture,node:{...fixture.node,last_seen:'2026-10-04T02:00:00Z'}},second]};
+  context.renderMachinesPage(data,'',true);
+  assert.deepEqual(details().map(node=>node.open),[true,false]);
+  // A detached card's queued toggle must not overwrite the live machine state.
+  original.isConnected=false;original.open=false;original.listeners.toggle();
+  context.renderMachinesPage(data);
+  assert.deepEqual(details().map(node=>node.open),[true,false]);
+  details()[1].open=true;details()[1].listeners.toggle();
+  details()[0].open=false;details()[0].listeners.toggle();
+  context.renderMachinesPage(data);
+  assert.deepEqual(details().map(node=>node.open),[false,true]);
 });

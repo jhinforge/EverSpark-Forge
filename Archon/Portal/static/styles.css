@@ -348,6 +348,7 @@ textarea:focus, input:focus, select:focus { border-color: var(--border-accent); 
 .machine-credential { display: grid; gap: var(--ui-gap); margin-top: var(--spacing-lg); }
 .machine-credential h3 { margin: var(--spacing-sm) 0; font-size: var(--font-size-lg); }
 
+#vastInstanceList { align-items: start; }
 .machine-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--card-gap); margin: var(--spacing-lg) 0; }
 
 .machine-card h3 { font-size: var(--font-size-lg); overflow-wrap: anywhere; }

@@ -38,6 +38,7 @@ const state = {
   machineLoadPromise: null,
   lastMachineSignature: "",
   destroyedPods: new Set(),
+  expandedMachineDetails: new Set(),
 };
 localStorage.setItem("everspark.session", state.sessionId);
 
@@ -1543,6 +1544,14 @@ function renderMachine(machine) {
   const operationsGroup = group("operations", "Machine actions");
   const machineDetails = document.createElement("details");
   machineDetails.className = "ui-details";
+  const machineId = String(machine.id);
+  machineDetails.open = state.expandedMachineDetails.has(machineId);
+  machineDetails.addEventListener("toggle", () => {
+    // Ignore queued toggle events from cards replaced by the next refresh.
+    if (!machineDetails.isConnected) return;
+    if (machineDetails.open) state.expandedMachineDetails.add(machineId);
+    else state.expandedMachineDetails.delete(machineId);
+  });
   const detailsSummary = document.createElement("summary");
   uiText(detailsSummary, "Details");
   machineDetails.appendChild(detailsSummary);
@@ -1770,6 +1779,7 @@ function renderMachine(machine) {
         body: JSON.stringify({ instance_id: machine.id }),
       });
       state.destroyedPods.add(machine.id);
+      state.expandedMachineDetails.delete(machineId);
       delete state.podJobs[machine.id];
       card.remove();
       if (!elements.vastInstanceList.childElementCount) machineMessage("No Vast instances found.");
