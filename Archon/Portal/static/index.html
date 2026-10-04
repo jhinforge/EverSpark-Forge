@@ -229,10 +229,59 @@
         <section class="view" id="assetsView" data-view-panel="assets" data-primary-view>
           <div class="section-toolbar">
             <div><h2>Asset library</h2><p class="section-copy">Characters and generated media.</p></div>
+            <button class="ghost-button hidden" id="refreshHistoryButton" type="button">Refresh media</button>
           </div>
-          <div class="section-shortcuts">
-            <button class="secondary-button" data-view-link="subjects" type="button">Subjects <span class="nav-count" id="subjectCount">0</span></button>
-            <button class="secondary-button" data-view-link="history" type="button">Gallery</button>
+          <div class="asset-tabs" role="tablist" aria-label="Asset library sections">
+            <button class="secondary-button active" id="assetCharactersTab" data-asset-tab="characters" type="button" role="tab" aria-controls="subjectsView" aria-selected="true">Characters <span class="nav-count" id="subjectCount">0</span></button>
+            <button class="secondary-button" id="assetImagesTab" data-asset-tab="images" type="button" role="tab" aria-controls="historyView" aria-selected="false" tabindex="-1">Images</button>
+            <button class="secondary-button" id="assetAudioTab" data-asset-tab="audio" type="button" role="tab" aria-controls="assetAudioView" aria-selected="false" tabindex="-1">Audio</button>
+          </div>
+          <div class="asset-tab-panel active" id="subjectsView" data-asset-panel="characters" role="tabpanel" aria-labelledby="assetCharactersTab">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">STRUCTURED STATE</p>
+              <h2>Character subjects</h2>
+              <p class="section-copy">Each character has four JSON documents. Ask Concept Forge to revise a selected group, or choose Use in Forge to work with it in this conversation.</p>
+            </div>
+          </div>
+          <div class="subject-grid" id="subjectGrid"></div>
+          <div class="storage-panel" id="localDataPanel">
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">LOCAL DATA</p>
+                <h3>Character and Memory ZIP</h3>
+                <p class="section-copy">Download the four JSON documents for every character with a consistent Memory SQLite snapshot. Choose a ZIP below and click Validate and restore to upload, verify and place its data. Current data is saved in Data/Recovery; restart EverSpark after restoring.</p>
+              </div>
+              <button class="ghost-button" id="downloadDataButton" type="button">Download data ZIP</button>
+            </div>
+            <div class="backup-actions local-import-actions">
+              <input id="localDataFile" type="file" accept=".zip,application/zip" aria-label="Choose EverSpark data ZIP">
+              <button class="secondary-button" id="restoreDataButton" type="button">Validate and restore</button>
+            </div>
+          </div>
+          </div>
+          <div class="asset-tab-panel" id="historyView" data-asset-panel="images" role="tabpanel" aria-labelledby="assetImagesTab">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">IMAGE FORGE OUTPUT</p>
+              <h2>Recent gallery</h2>
+              <p class="section-copy">Recent images reported by the configured image execution adapter.</p>
+            </div>
+            <div class="toolbar-actions">
+              <button class="ghost-button" id="downloadOutputsButton" type="button">Download outputs ZIP</button>
+            </div>
+          </div>
+          <div class="gallery-grid" id="galleryGrid"></div>
+          </div>
+          <div class="asset-tab-panel" id="assetAudioView" data-asset-panel="audio" role="tabpanel" aria-labelledby="assetAudioTab">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">AUDIO FORGE OUTPUT</p>
+              <h2>音频结果</h2>
+              <p class="section-copy">已生成的人声音频，可播放或下载 WAV。点击刷新图库可同时刷新音频。</p>
+            </div>
+          </div>
+          <div class="gallery-grid" id="audioHistoryGrid"></div>
           </div>
         </section>
 
@@ -264,39 +313,9 @@
           </div>
         </section>
 
-        <section class="view" id="subjectsView" data-view-panel="subjects">
-          <div class="section-toolbar">
-            <div>
-              <p class="section-kicker">STRUCTURED STATE</p>
-              <h2>Character subjects</h2>
-              <p class="section-copy">Each character has four JSON documents. Ask Concept Forge to revise a selected group, or choose Use in Forge to work with it in this conversation.</p>
-            </div>
-          </div>
-          <div class="subject-grid" id="subjectGrid"></div>
-        </section>
 
-        <section class="view" id="historyView" data-view-panel="history">
-          <div class="section-toolbar">
-            <div>
-              <p class="section-kicker">IMAGE FORGE OUTPUT</p>
-              <h2>Recent gallery</h2>
-              <p class="section-copy">Recent images reported by the configured image execution adapter.</p>
-            </div>
-            <div class="toolbar-actions">
-              <button class="ghost-button" id="downloadOutputsButton" type="button">Download outputs ZIP</button>
-              <button class="ghost-button" id="refreshHistoryButton" type="button">Refresh gallery</button>
-            </div>
-          </div>
-          <div class="gallery-grid" id="galleryGrid"></div>
-          <div class="section-toolbar">
-            <div>
-              <p class="section-kicker">AUDIO FORGE OUTPUT</p>
-              <h2>音频结果</h2>
-              <p class="section-copy">已生成的人声音频，可播放或下载 WAV。点击刷新图库可同时刷新音频。</p>
-            </div>
-          </div>
-          <div class="gallery-grid" id="audioHistoryGrid"></div>
-        </section>
+
+
 
         <section class="view" id="machinesView" data-view-panel="machines">
           <div class="section-toolbar">
@@ -633,20 +652,6 @@
               <button class="secondary-button" type="submit">Save mapping and scan</button>
             </form>
             </details>
-          </div>
-          <div class="storage-panel" id="localDataPanel">
-            <div class="storage-heading">
-              <div>
-                <p class="section-kicker">LOCAL DATA</p>
-                <h3>Character and Memory ZIP</h3>
-                <p class="section-copy">Download the four JSON documents for every character with a consistent Memory SQLite snapshot. Choose a ZIP below and click Validate and restore to upload, verify and place its data. Current data is saved in Data/Recovery; restart EverSpark after restoring.</p>
-              </div>
-              <button class="ghost-button" id="downloadDataButton" type="button">Download data ZIP</button>
-            </div>
-            <div class="backup-actions local-import-actions">
-              <input id="localDataFile" type="file" accept=".zip,application/zip" aria-label="Choose EverSpark data ZIP">
-              <button class="secondary-button" id="restoreDataButton" type="button">Validate and restore</button>
-            </div>
           </div>
           <div class="storage-panel hidden" id="backupPanel" data-cloud-storage>
             <div class="storage-heading">

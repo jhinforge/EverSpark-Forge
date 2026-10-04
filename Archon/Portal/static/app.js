@@ -5,6 +5,7 @@ const uiAttr = (node, property, key, args) => i18n.bind(node, key, args, propert
 
 const state = {
   subjects: [],
+  assetTab: "characters",
   selectedSubject: null,
   selectingSubject: false,
   mode: "discuss",
@@ -1245,7 +1246,27 @@ const legacyViewSections = {
   runtime: "compute", storage: "resources", models: "settings",
 };
 
+function setAssetTab(name) {
+  if (!["characters", "images", "audio"].includes(name)) return;
+  state.assetTab = name;
+  $$("[data-asset-tab]").forEach((button) => {
+    const active = button.dataset.assetTab === name;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  $$("[data-asset-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.assetPanel === name));
+  $("#refreshHistoryButton").classList.toggle("hidden", name === "characters");
+  if (name === "characters") void loadSubjects();
+  else void loadHistory();
+}
+
 function setView(name) {
+  // Old callers still reach the relocated functions through these aliases.
+  if (name === "subjects" || name === "history") {
+    state.assetTab = name === "subjects" ? "characters" : "images";
+    name = "assets";
+  }
   if (!viewCopy[name]) return;
   const section = legacyViewSections[name] || name;
   $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === section));
@@ -1254,6 +1275,7 @@ function setView(name) {
   $("#returnToSectionButton").dataset.viewLink = section;
   uiText($("#viewEyebrow"), viewCopy[name][0]);
   uiText($("#viewTitle"), viewCopy[name][1]);
+  if (name === "assets") setAssetTab(state.assetTab);
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
   if (name === "machines") { nodeConnection.refresh(); loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
@@ -2637,6 +2659,20 @@ function bindEvents() {
   });
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   $$("[data-view-link]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewLink)));
+  $$("[data-asset-tab]").forEach((button) => {
+    button.addEventListener("click", () => setAssetTab(button.dataset.assetTab));
+    button.addEventListener("keydown", (event) => {
+      const tabs = $$("[data-asset-tab]");
+      const index = tabs.indexOf(button);
+      const next = event.key === "ArrowRight" ? (index + 1) % tabs.length
+        : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
+        : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+      if (next < 0) return;
+      event.preventDefault();
+      setAssetTab(tabs[next].dataset.assetTab);
+      tabs[next].focus();
+    });
+  });
   $("#newConversationButton").addEventListener("click", newConversation);
   elements.discussModeButton.addEventListener("click", () => setMode("discuss"));
   document.querySelector("#creationMode").addEventListener("change", updateCreationMode);

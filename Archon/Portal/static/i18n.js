@@ -1,6 +1,11 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Characters": "角色",
+    "Images": "图像",
+    "Audio": "音频",
+    "Asset library sections": "资产库分类",
+    "Refresh media": "刷新图像与音频",
     "Creation": "创作",
     "Asset library": "资产库",
     "Compute": "计算",

@@ -479,3 +479,8 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 
 .section-shortcuts { display: flex; gap: 12px; flex-wrap: wrap; }
 .legacy-page-navigation { max-width: 1440px; margin: 0 auto 18px; }
+
+.asset-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+.asset-tabs .active { border-color: var(--ember); background: var(--ember-soft); }
+.asset-tab-panel { display: none; }
+.asset-tab-panel.active { display: block; }
