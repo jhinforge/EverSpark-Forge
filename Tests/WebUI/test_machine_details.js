@@ -168,3 +168,16 @@ test('silent machine rendering does not reuse a signature from another language'
   assert.notEqual(list.children[0],original);
   assert.ok(text(list.children[0]).includes('部署 Audio Forge'));
 });
+
+
+test('all Forge status badges use one service name and a shared localized status, including missing Image data',()=>{
+  for(const language of ['en','zh-CN']) {
+    for(const [status,key] of [['not_deployed','Not deployed'],['ready','Ready'],['deploying','Deployment in progress'],['deployment_failed','Deployment failed']]) {
+      const {card,context}=setup({...fixture,forge:{status},image_forge:{status},audio_forge:{status}},language);
+      const texts=all(card).filter(node=>node.className==='status-badge').map(node=>node.textContent);
+      for(const forge of ['Concept Forge','Image Forge','Audio Forge']) assert.ok(texts.includes(`${forge} · ${context.i18n.t(key)}`));
+    }
+    const {card,context}=setup({...fixture,image_forge:null},language);
+    assert.ok(text(card).includes(`Image Forge · ${context.i18n.t('Not deployed')}`));
+  }
+});

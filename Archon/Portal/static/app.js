@@ -1586,10 +1586,10 @@ function renderMachine(machine) {
   forge.className = "status-badge";
   forge.dataset.status = machine.forge?.status || "not_deployed";
   const labels = {not_deployed: "Not deployed", deploying: "Deployment in progress",
-    ready: "Concept Forge ready", deployment_failed: "Deployment failed",
+    ready: "Ready", deployment_failed: "Deployment failed",
     deployment_unknown: "Deployment outcome unknown; check Pod",
-    verification_required: "Concept Forge needs verification",
-    verifying: "Verifying Concept Forge",
+    verification_required: "Verification required",
+    verifying: "Verifying",
     source_updated: "Source updated; deploy again",
     updating: "Source updating", update_failed: "Source update failed",
     update_unknown: "Source update outcome unknown; check Pod"};
@@ -1607,13 +1607,13 @@ function renderMachine(machine) {
     const imageForge = document.createElement("p");
     imageForge.className = "status-badge";
     imageForge.dataset.status = machine.image_forge.status;
-    const imageLabels = {ready: "Image Forge ready", deploying: "Image Forge deploying",
+    const imageLabels = {ready: "Ready", deploying: "Deployment in progress",
       recovering: "Recovering previous task result",
-      verifying: "Verifying Image Forge",
-      deployment_failed: "Image Forge deployment failed", not_deployed: "Image Forge not deployed",
-      verification_required: "Image Forge needs verification",
-      deployment_unknown: "Image Forge deployment outcome unknown"};
-    uiText(imageForge, "{forge} · {status}", { forge: "Image Forge", status: { i18nKey: imageLabels[machine.image_forge.status] || "Image Forge not deployed" } });
+      verifying: "Verifying",
+      deployment_failed: "Deployment failed", not_deployed: "Not deployed",
+      verification_required: "Verification required",
+      deployment_unknown: "Deployment outcome unknown; check Pod"};
+    uiText(imageForge, "{forge} · {status}", { forge: "Image Forge", status: { i18nKey: imageLabels[machine.image_forge.status] || "Not deployed" } });
     if (machine.image_forge.revision) {
       const revision = document.createElement("p");
       revision.textContent = `Image Forge · ${machine.image_forge.revision}`;
@@ -1628,7 +1628,7 @@ function renderMachine(machine) {
     const imageStatus = document.createElement("p");
     imageStatus.className = "status-badge";
     imageStatus.dataset.status = "not_deployed";
-    uiText(imageStatus, "Image Forge not deployed");
+    uiText(imageStatus, "{forge} · {status}", { forge: "Image Forge", status: { i18nKey: "Not deployed" } });
     forgeGroup.appendChild(imageStatus);
   }
   const audioStatus = document.createElement("p");

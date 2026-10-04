@@ -88,3 +88,12 @@ test("translation keys are unique and Offline has one consistent meaning", () =>
   assert.equal(i18n.t("Offline"),"离线");
   assert.equal(i18n.t("{value}",{value:{i18nKey:"{count} cores",count:8}}),"8 核");
 });
+
+
+test("Forge node selection labels use the same wording for all three roles",()=>{
+  const {i18n}=setup('zh-CN');
+  for(const role of ['Concept','Image','Audio']) {
+    assert.equal(i18n.t(`Use for ${role} Forge`),`选为 ${role} 节点`);
+    assert.equal(i18n.t(`Selected ${role} Node`),`当前 ${role} 节点`);
+  }
+});
