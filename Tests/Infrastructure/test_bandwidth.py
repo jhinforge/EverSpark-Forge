@@ -15,149 +15,176 @@ class DownloadTestTests(unittest.TestCase):
         self.directory = Path(self.temp.name)
         self.addCleanup(self.temp.cleanup)
 
-    def source(self):
-        return module.download_source()
+    def payload(self):
+        return {'type':'result','download':{'bandwidth':97372229,'bytes':668774728,'elapsed':6902},
+                'upload':{'bandwidth':95521432,'bytes':1376105189,'elapsed':15010},
+                'ping':{'latency':8.655,'jitter':.216},'packetLoss':0,
+                'server':{'id':5249,'name':'Fixture','location':'Seoul','country':'South Korea','ip':'private-server-ip'},
+                'interface':{'externalIp':'private-public-ip','macAddr':'private-mac'},'isp':'private-isp',
+                'result':{'url':'private-result-url'}}
 
-    def test_source_reuses_manifest_without_installing_models(self):
-        from dataclasses import replace
-        spec = next(spec for spec in module.load_specs() if spec.id == 'image-default')
-        with patch.object(module, 'load_specs', return_value=[replace(spec, repo_id='Example/Model', revision='revision name', filename='nested/model.safetensors')]):
-            source = module.download_source()
-        self.assertEqual(source['server_url'], 'https://huggingface.co/Example/Model/resolve/revision%20name/nested/model.safetensors')
-        self.assertEqual(source['model_filename'], 'nested/model.safetensors')
-        with patch.object(module, 'load_specs', return_value=[]):
-            with self.assertRaisesRegex(ValueError, 'unavailable'): module.download_source()
-
-    def test_deadline_timeout_with_payload_is_success_using_wall_clock(self):
-        clock = [0.0]
-        def transfer(args, **kwargs):
-            clock[0] = 30.02
-            return Mock(returncode=28, stdout='200 30.02 88536085')
-        with patch.object(module.time, 'monotonic', side_effect=lambda: clock[0]), patch.object(module.subprocess, 'run', side_effect=transfer) as curl:
-            result = module.measure()
-        self.assertAlmostEqual(result['download_mb_s'], 88536085 / 30.02 / 1_000_000)
-        self.assertFalse(result['qualified'])
-        self.assertEqual(result['method'], 'default_model_http')
-        self.assertTrue(validate(result)['download_mb_s'] > 0)
-        args = curl.call_args.args[0]
-        self.assertEqual(args[0], 'curl')
-        self.assertEqual(args[args.index('-o')+1], os.devnull)
-        self.assertEqual(args[args.index('--noproxy')+1], '*')
-        self.assertEqual(args[-1], self.source()['server_url'])
-        self.assertEqual(list(self.directory.iterdir()), [])
-
-    def test_auto_once_and_manual_retry_without_waiting(self):
-        process = Mock(pid=os.getpid())
-        with patch.dict(os.environ, {"EVERSPARK_NODE_BANDWIDTH": "1", "EVERSPARK_NODE_JOIN_TOKEN": "secret"}), patch.object(module.subprocess, 'Popen', return_value=process) as spawn:
-            self.assertEqual(module.start(self.directory)['status'], 'pending')
-            module.start(self.directory)
-            module.start(self.directory, force=True)
-            self.assertEqual(spawn.call_count, 1)
-            self.assertNotIn('EVERSPARK_NODE_JOIN_TOKEN', spawn.call_args.kwargs['env'])
-            value = module._read(self.directory)
-            value['status'] = 'completed'
-            value['policy'] = module.POLICY
-            value['download_mb_s'] = 70
-            module.save(self.directory/'bandwidth.json', value)
-            module.start(self.directory)
-            self.assertEqual(spawn.call_count, 1)
-            module.start(self.directory, force=True)
-            self.assertEqual(spawn.call_count, 2)
-
-    def test_completed_file_repeats_until_window_ends(self):
-        clock = [0.0]
-        def transfer(args, **kwargs):
-            clock[0] += 10
-            return Mock(returncode=0, stdout='206 10 500000000')
-        with patch.object(module.time, 'monotonic', side_effect=lambda: clock[0]), patch.object(module.subprocess, 'run', side_effect=transfer) as curl:
-            result = module.measure()
-        self.assertEqual(curl.call_count, 3)
-        self.assertEqual([float(call.args[0][call.args[0].index('--max-time')+1]) for call in curl.call_args_list], [30,20,10])
-        self.assertEqual(result['elapsed_seconds'], 30)
-        self.assertEqual(result['bytes_received'], 1_500_000_000)
-        self.assertEqual(result['download_mb_s'], 50)
+    def test_result_units_server_location_and_privacy(self):
+        result = module.parse_result(self.payload())
+        self.assertEqual(result['download_mb_s'], 97.372229)
+        self.assertEqual(result['upload_mb_s'], 95.521432)
+        self.assertEqual(result['elapsed_seconds'],6.902)
+        self.assertEqual(result['latency_ms'],8.655)
+        self.assertEqual(result['server_country'],'South Korea')
+        self.assertNotIn('region',result)
         self.assertTrue(result['qualified'])
+        self.assertNotIn('private-',json.dumps(result))
+        self.assertTrue(validate(result)['qualified'])
+        slow=self.payload();slow['download']['bandwidth']=223826
+        slow['packetLoss']=2.0066889632107023
+        measured=module.parse_result(slow)
+        self.assertEqual(measured['status'],'completed')
+        self.assertAlmostEqual(measured['download_mb_s'],.223826)
+        self.assertFalse(validate(measured)['qualified'])
+        slow['packetLoss']=None
+        self.assertNotIn('packet_loss_percent',module.parse_result(slow))
 
-    def test_actual_curl_discards_payload_and_accepts_sample_timeout(self):
-        import shutil
-        import threading
-        import time
-        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-        if not shutil.which('curl'): self.skipTest('curl unavailable')
-        class Handler(BaseHTTPRequestHandler):
-            def log_message(self, *args): pass
-            def do_GET(self):
-                try:
-                    self.send_response(200)
-                    self.send_header('Content-Length', '10000000')
-                    self.end_headers()
-                    for _ in range(100):
-                        self.wfile.write(b'x' * 8192)
-                        self.wfile.flush()
-                        time.sleep(.01)
-                except (BrokenPipeError, ConnectionResetError): pass
-        server = ThreadingHTTPServer(('127.0.0.1',0), Handler)
-        thread = threading.Thread(target=server.serve_forever,daemon=True)
-        thread.start()
-        try:
-            result = module.measure(duration=.3, source={**self.source(), 'server_url':f'http://127.0.0.1:{server.server_port}/model'})
-            self.assertGreater(result['bytes_received'], 0)
-            self.assertGreaterEqual(result['elapsed_seconds'], .27)
-            self.assertEqual(result['method'], 'default_model_http')
-            self.assertEqual(list(self.directory.iterdir()), [])
-        finally:
-            server.shutdown(); server.server_close(); thread.join()
+    def test_incomplete_nonfinite_and_error_results_cannot_be_measurements(self):
+        for section,key,value in [('download','bandwidth',True),('download','bandwidth',float('nan')),
+                                  ('upload','bytes',0),('download','elapsed',0),('ping','latency',-1),
+                                  ('server','id',True),('server','country','')]:
+            payload=self.payload();payload[section][key]=value
+            with self.assertRaises(ValueError):module.parse_result(payload)
+        payload=self.payload();payload['packetLoss']=101
+        with self.assertRaises(ValueError):module.parse_result(payload)
+        for payload in [None,{}, {'type':'error'}, {'type':'result','download':[]}]:
+            with self.assertRaises(ValueError):module.parse_result(payload)
 
-    def test_worker_stores_source_and_measurement_without_credentials(self):
-        module.save(self.directory/'bandwidth.json', {'status':'pending','run_id':'fixture','policy':2})
-        result = {'status':'completed', 'method':'default_model_http', 'download_mb_s':50,
-                  'elapsed_seconds':30, 'bytes_received':1_500_000_000,
-                  'server_name':'Hugging Face', 'server_url':self.source()['server_url']}
-        with patch.object(module, 'measure', return_value=result), patch.object(module.time, 'sleep'):
-            module.run(self.directory, 'fixture')
-        saved = module.snapshot(self.directory)
-        self.assertEqual(saved['policy'],module.POLICY)
-        self.assertEqual(saved['download_mb_s'],50)
-        self.assertEqual(saved['method'],'default_model_http')
-        self.assertNotIn('pid',saved)
-        self.assertTrue(validate(saved)['qualified'])
+    def test_cli_command_default_selection_no_implicit_terms_acceptance(self):
+        with patch.object(module.subprocess,'run',return_value=Mock(returncode=0,stdout=json.dumps(self.payload()))) as execute:
+            module.measure(Path('/fixture/speedtest'))
+        self.assertEqual(execute.call_args.args[0],['/fixture/speedtest','--format=json','--progress=no'])
+        self.assertEqual(execute.call_args.kwargs['timeout'],90)
+        self.assertEqual(execute.call_args.kwargs['stdin'],module.subprocess.DEVNULL)
 
-    def test_failure_logs_cause_and_never_becomes_zero_speed(self):
-        module.save(self.directory/'bandwidth.json', {'status':'pending','run_id':'fixture'})
-        with patch.object(module, 'measure', side_effect=OSError('HTTP 503 fixture')), patch.object(module.time, 'sleep'), patch('sys.stderr',new_callable=io.StringIO) as log:
-            module.run(self.directory,'fixture')
-        result=module.snapshot(self.directory)
-        self.assertEqual(result['status'],'failed')
-        self.assertNotIn('download_mb_s',result)
-        self.assertIn('HTTP 503 fixture',result['error'])
-        self.assertIn('HTTP 503 fixture',log.getvalue())
+    def test_failure_retries_once_but_terms_do_not_retry(self):
+        success=Mock(returncode=0,stdout=json.dumps(self.payload()),stderr='')
+        failure=Mock(returncode=1,stdout='{"type":"error","message":"No servers available"}',stderr='')
+        with patch.object(module.subprocess,'run',side_effect=[failure,success]) as execute,patch.object(module.time,'sleep'):
+            self.assertEqual(module.measure('fixture')['status'],'completed')
+            self.assertEqual(execute.call_count,2)
+        with patch.object(module.subprocess,'run',return_value=failure) as execute,patch.object(module.time,'sleep'):
+            with self.assertRaisesRegex(ValueError,'No servers available'):module.measure('fixture')
+            self.assertEqual(execute.call_count,2)
+        terms=Mock(returncode=1,stdout='You must accept the license',stderr='')
+        with patch.object(module.subprocess,'run',return_value=terms) as execute:
+            with self.assertRaises(module.TermsRequired):module.measure('fixture')
+            self.assertEqual(execute.call_count,1)
+        for error in [module.subprocess.TimeoutExpired('fixture',90),FileNotFoundError('fixture missing')]:
+            with patch.object(module.subprocess,'run',side_effect=error) as execute,patch.object(module.time,'sleep'):
+                with self.assertRaises(type(error)):module.measure('fixture')
+                self.assertEqual(execute.call_count,2)
 
-    def test_invalid_http_exit_and_statistics_never_produce_speed(self):
-        for code, stats, elapsed in [(22,'403 1 0',1), (0,'200 1 0',1),
-                                      (7,'200 1 1000',1), (28,'200 1 1000',1),
-                                      (0,'200 nan 1000',1), (0,'malformed',1)]:
-            clock = [0.0]
-            def transfer(*args, **kwargs):
-                clock[0] = elapsed
-                return Mock(returncode=code, stdout=stats)
-            with patch.object(module.time,'monotonic',side_effect=lambda:clock[0]), patch.object(module.subprocess,'run',side_effect=transfer):
-                with self.assertRaises(ValueError): module.measure()
-        for exc in [FileNotFoundError('curl missing'), module.subprocess.TimeoutExpired('curl', 35)]:
-            with patch.object(module.subprocess,'run',side_effect=exc):
-                with self.assertRaises(type(exc)): module.measure()
+    def test_actual_subprocess_can_be_repeated_without_shell_or_raw_data_storage(self):
+        import sys
+        binary=self.directory/'speedtest'
+        binary.write_text('#!'+sys.executable+'\nimport json\nprint('+repr(json.dumps(self.payload()))+')\n')
+        binary.chmod(0o700)
+        for _ in range(3):
+            self.assertEqual(module.measure(binary)['server_id'],5249)
+        self.assertEqual(list(self.directory.iterdir()),[binary])
 
-    def test_controller_validates_model_sample_and_keeps_old_methods(self):
-        value={'status':'completed','method':'default_model_http','server_url':self.source()['server_url'],
-               'elapsed_seconds':30,'bytes_received':1_500_000_000,'download_mb_s':50}
-        self.assertTrue(validate(value)['qualified'])
-        self.assertFalse(validate({**value,'download_mb_s':49,'bytes_received':1_470_000_000})['qualified'])
-        for field, invalid in [('elapsed_seconds',.5),('elapsed_seconds',True),('bytes_received',0),
-                               ('download_mb_s',float('nan')),('download_mb_s',51),('server_url','https://untrusted.test/model')]:
-            self.assertIsNone(validate({**value,field:invalid}))
-        self.assertIsNone(validate({'status':'completed','download_mb_s':True}))
-        self.assertTrue(validate({'status':'completed','download_mb_s':50,'region':'AS','server_region':'AS'})['qualified'])
-        old={**value,'method':'cloudflare_http','server_url':'https://speed.cloudflare.com/__down'}
+    def test_actual_background_worker_and_manual_retest_replace_state(self):
+        import sys
+        architecture={'x86_64':'x86_64','aarch64':'aarch64'}.get(module.platform.machine().lower())
+        if architecture is None or sys.platform != 'linux': self.skipTest('Linux worker architecture required')
+        binary=self.directory/f'ookla-speedtest-{module.VERSION}-{architecture}'/'speedtest'
+        binary.parent.mkdir()
+        binary.write_text('#!'+sys.executable+'\nimport sys\nprint("Speedtest by Ookla 1.2.0" if "--version" in sys.argv else '+repr(json.dumps(self.payload()))+')\n')
+        binary.chmod(0o700)
+        previous=None
+        with patch.dict(os.environ, {'EVERSPARK_NODE_BANDWIDTH':'1'}):
+            for _ in range(2):
+                pending=module.start(self.directory,force=True)
+                self.assertEqual(pending['status'],'pending')
+                value=module._read(self.directory)
+                self.assertNotEqual(value['run_id'],previous)
+                previous=value['run_id']
+                deadline=module.time.monotonic()+25
+                while module._read(self.directory).get('status') in {'pending','running'} and module.time.monotonic()<deadline:
+                    module.time.sleep(.05)
+                completed=module.snapshot(self.directory)
+                self.assertEqual(completed['status'],'completed',completed)
+                self.assertAlmostEqual(completed['download_mb_s'],97.372229)
+                self.assertTrue(validate(completed)['qualified'])
+                self.assertNotIn('private-',json.dumps(completed))
+                value=module._read(self.directory);value['finished_at']='2020-01-01T00:00:00+00:00'
+                module.save(self.directory/'bandwidth.json',value)
+
+    def test_private_install_extracts_only_regular_expected_files(self):
+        import tarfile
+        def install(args,**kwargs):
+            archive=Path(args[args.index('-o')+1])
+            with tarfile.open(archive,'w:gz') as package:
+                for name in ['speedtest','speedtest.md','speedtest.5']:
+                    data=b'fixture';member=tarfile.TarInfo(name);member.size=len(data)
+                    package.addfile(member,io.BytesIO(data))
+            return Mock(returncode=0)
+        with patch.object(module.platform,'machine',return_value='x86_64'),patch.object(module.shutil,'which',return_value=None),patch.object(module.subprocess,'run',side_effect=install):
+            binary=module.cli(self.directory)
+        self.assertEqual(binary.read_bytes(),b'fixture')
+        self.assertTrue(os.access(binary,os.X_OK))
+        with patch.object(module.platform,'machine',return_value='x86_64'),patch.object(module.subprocess,'run',return_value=Mock(returncode=0,stdout='Speedtest by Ookla 1.2.0')) as command:
+            self.assertEqual(module.cli(self.directory),binary)
+            self.assertEqual(command.call_count,1)
+        with patch.object(module.platform,'machine',return_value='unknown'):
+            with self.assertRaisesRegex(ValueError,'architecture'):module.cli(self.directory)
+
+    def test_installer_rejects_archive_symlink(self):
+        import tarfile
+        def install(args,**kwargs):
+            with tarfile.open(args[args.index('-o')+1],'w:gz') as package:
+                member=tarfile.TarInfo('speedtest');member.type=tarfile.SYMTYPE;member.linkname='/etc/passwd'
+                package.addfile(member)
+            return Mock(returncode=0)
+        with patch.object(module.platform,'machine',return_value='x86_64'),patch.object(module.shutil,'which',return_value=None),patch.object(module.subprocess,'run',side_effect=install):
+            with self.assertRaisesRegex(ValueError,'archive'):module.cli(self.directory)
+
+    def test_auto_once_no_concurrent_worker_and_manual_cooldown(self):
+        with patch.dict(os.environ, {'EVERSPARK_NODE_BANDWIDTH':'1','EVERSPARK_NODE_JOIN_TOKEN':'secret'}),patch.object(module.subprocess,'Popen',return_value=Mock(pid=os.getpid())) as spawn:
+            self.assertEqual(module.start(self.directory)['method'],'ookla_cli')
+            module.start(self.directory);module.start(self.directory,force=True)
+            self.assertEqual(spawn.call_count,1)
+            self.assertNotIn('EVERSPARK_NODE_JOIN_TOKEN',spawn.call_args.kwargs['env'])
+            value=module._read(self.directory);value.update(status='completed',finished_at=module.now())
+            module.save(self.directory/'bandwidth.json',value)
+            module.start(self.directory);module.start(self.directory,force=True)
+            self.assertEqual(spawn.call_count,1)
+            value['finished_at']='2020-01-01T00:00:00+00:00';module.save(self.directory/'bandwidth.json',value)
+            module.start(self.directory,force=True)
+            self.assertEqual(spawn.call_count,2)
+
+    def test_worker_saves_result_and_failure_is_not_zero_speed(self):
+        for failure in [None,OSError('Network unavailable'),module.TermsRequired('Confirm terms')]:
+            module.save(self.directory/'bandwidth.json',{'status':'pending','run_id':'fixture'})
+            with patch.object(module,'cli',return_value='fixture'),patch.object(module,'measure',side_effect=failure,return_value=module.parse_result(self.payload())),patch.object(module.time,'sleep'),patch('sys.stderr',new_callable=io.StringIO) as log:
+                module.run(self.directory,'fixture')
+            result=module.snapshot(self.directory)
+            self.assertEqual(result['policy'],module.POLICY)
+            self.assertEqual(result['method'],'ookla_cli')
+            self.assertNotIn('private-',json.dumps(result))
+            if failure:
+                self.assertEqual(result['status'],'failed')
+                self.assertNotIn('download_mb_s',result)
+                self.assertIn(str(failure),log.getvalue())
+                if isinstance(failure,module.TermsRequired):self.assertEqual(result['error_code'],'terms_required')
+            else:self.assertTrue(validate(result)['qualified'])
+
+    def test_controller_validates_optional_metrics_and_preserves_old_sources(self):
+        result=module.parse_result(self.payload())
+        for key,value in [('latency_ms',True),('upload_mb_s',float('inf')),('packet_loss_percent',101),
+                          ('elapsed_seconds',0),('server_id',0),('bytes_received',0),('server_country','')]:
+            self.assertIsNone(validate({**result,key:value}))
+        old={'status':'completed','method':'default_model_http',
+             'server_url':'https://huggingface.co/fixture/model/resolve/main/model.safetensors',
+             'elapsed_seconds':30,'bytes_received':1_500_000_000,'download_mb_s':50}
         self.assertTrue(validate(old)['qualified'])
+        self.assertTrue(validate({**old,'method':'cloudflare_http','server_url':'https://speed.cloudflare.com/__down'})['qualified'])
+        self.assertIsNone(validate({**old,'elapsed_seconds':1}))
 
 
 class RegionalDiscoveryTests(unittest.TestCase):

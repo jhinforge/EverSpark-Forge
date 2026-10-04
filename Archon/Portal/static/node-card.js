@@ -51,7 +51,11 @@
         const regional = ["AS", "EU", "NA", "SA", "AF", "OC"].includes(speed.region) && speed.region === speed.server_region;
         const cloudflare = speed.method === "cloudflare_http" && speed.server_url === "https://speed.cloudflare.com/__down";
         const modelSource = speed.method === "default_model_http";
-        const key = modelSource ? (speed.download_mb_s >= 50
+        const ookla = speed.method === "ookla_cli";
+        const key = ookla ? (speed.download_mb_s >= 50
+          ? "Network download speed: {speed} MB/s; meets the 50 MB/s reference target."
+          : "Network download speed: {speed} MB/s; this measurement is below the 50 MB/s reference target.")
+          : modelSource ? (speed.download_mb_s >= 50
           ? "Default model source download speed: {speed} MB/s; meets the 50 MB/s target."
           : "Default model source download speed: {speed} MB/s; below the 50 MB/s target.")
           : !regional && !cloudflare ? "Download speed: {speed} MB/s; region unverified, for reference only." : speed.download_mb_s >= 50
@@ -60,6 +64,22 @@
         bind(note, key, { speed: speed.download_mb_s.toFixed(2) });
         panel.appendChild(note);
         field("Test server", speed.server_name || (cloudflare ? "Cloudflare" : "LibreSpeed"));
+        if (ookla) {
+          const source = document.createElement("p");
+          bind(source, "Ookla network test; model and cloud storage download speeds may differ.");
+          panel.appendChild(source);
+          const location = document.createElement("p");
+          bind(location, "Test location: {location}", { location: [speed.server_location, speed.server_country].filter(Boolean).join(" / ") });
+          panel.appendChild(location);
+          const metrics = document.createElement("p");
+          bind(metrics, "Latency: {latency} ms · Packet loss: {loss}", {
+            latency: Number.isFinite(speed.latency_ms) ? speed.latency_ms.toFixed(2) : "—",
+            loss: Number.isFinite(speed.packet_loss_percent) ? `${speed.packet_loss_percent.toFixed(2)}%` : "—" });
+          panel.appendChild(metrics);
+          if (Number.isFinite(speed.upload_mb_s)) field("Upload speed (MB/s)", speed.upload_mb_s.toFixed(2));
+          if (Number.isFinite(speed.jitter_ms)) field("Jitter (ms)", speed.jitter_ms.toFixed(2));
+          if (speed.server_id) field("Test server ID", speed.server_id);
+        }
         if (modelSource) {
           const source = document.createElement("p");
           bind(source, "Measures downloads from the default Hugging Face model source; R2 and other sources may have different speeds.");
@@ -73,7 +93,10 @@
         }
         if (speed.server_colo) field("Cloudflare edge", speed.server_colo);
       } else {
-        bind(note, speed.status === "failed" ? "Download speed test failed. Please retry." : "Testing download speed… (30-second download)");
+        bind(note, speed.error_code === "terms_required" ? "Confirm Ookla CLI terms on the Pod before testing."
+          : speed.status === "failed" ? "Unable to measure network speed this time; this does not mean the machine is slow."
+          : speed.method === "ookla_cli" ? "Testing network speed… (download and upload; one retry at most)"
+          : "Testing download speed… (30-second download)");
         panel.appendChild(note);
       }
       if (speed.region) {

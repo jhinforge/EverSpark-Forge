@@ -1655,7 +1655,7 @@ function renderMachine(machine) {
       try {
         await api("/api/nodes/bandwidth", {method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({node_id: machine.node.node_id})});
-        showNotice(t("Download speed test started."), "info");
+        showNotice(t("Network speed test requested."), "info");
         await loadMachines();
       } catch (error) { showNotice(error.message); }
       finally { button.disabled = false; }

@@ -1,6 +1,11 @@
-"""One background download test per Node, independent of Forge execution."""
+"""One optional background network test per Node, independent of Forge execution."""
 import json
 import math
+import platform
+import shutil
+import tarfile
+import tempfile
+import threading
 import traceback
 import os
 import secrets
@@ -9,14 +14,13 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote
-
-from Legate.Crucible.Models.model_manager import load_specs
 
 from .executor.storage import save
 
-POLICY = 5
-DURATION = 30
+POLICY = 6
+VERSION = "1.2.0"
+TEST_TIMEOUT = 90
+COOLDOWN = 20
 
 
 def now():
@@ -42,7 +46,7 @@ def _alive(value):
         stat = Path(f"/proc/{pid}/stat")
         if stat.exists() and stat.read_text().rsplit(")", 1)[1].split()[0] == "Z":
             return False
-        return time.time() - value.get("created", 0) < 240
+        return time.time() - value.get("created", 0) < 360
     except (OSError, TypeError):
         return False
 
@@ -70,6 +74,13 @@ def start(directory, force=False):
             value = _read(directory)
             if value and (_alive(value) or (not force and value.get("policy") == POLICY)):
                 return snapshot(directory)
+            if force and value.get("status") == "completed":
+                try:
+                    finished = datetime.fromisoformat(value["finished_at"]).timestamp()
+                    if 0 <= time.time() - finished < COOLDOWN:
+                        return snapshot(directory)
+                except (KeyError, TypeError, ValueError):
+                    pass
             run_id = secrets.token_hex(16)
             with (directory / "bandwidth.log").open("ab") as log:
                 # The child only needs its private directory, never join/API credentials.
@@ -78,68 +89,134 @@ def start(directory, force=False):
                 process = subprocess.Popen([sys.executable, "-m", "Legate.Envoy.bandwidth", str(directory), run_id],
                     cwd=Path(__file__).resolve().parents[2], env=env, stdin=subprocess.DEVNULL,
                     stdout=log, stderr=log, start_new_session=True)
+                # Reap completed workers without blocking the Agent request loop.
+                threading.Thread(target=process.wait, daemon=True).start()
             save(directory / "bandwidth.json", {"status": "pending", "pid": process.pid,
-                 "run_id": run_id, "created": time.time(), "started_at": now(), "policy": POLICY})
+                 "run_id": run_id, "created": time.time(), "started_at": now(), "policy": POLICY, "method": "ookla_cli"})
         return snapshot(directory)
     except OSError:
         return {"status": "failed", "error": "Could not start download test"}
 
 
-def download_source():
-    """Reuse the managed Image Forge model source; never invoke model installation."""
-    spec = next((spec for spec in load_specs() if spec.id == "image-default"), None)
-    if spec is None:
-        raise ValueError("Default Image Forge model source is unavailable")
-    url = (f"https://huggingface.co/{quote(spec.repo_id, safe='/')}/resolve/"
-           f"{quote(spec.revision, safe='')}/{quote(spec.filename, safe='/')}")
-    return {"method": "default_model_http", "server_name": "Hugging Face",
-            "server_url": url, "model_filename": spec.filename}
+class TermsRequired(ValueError):
+    pass
 
 
-def measure(duration=DURATION, source=None):
-    """Use the curl request verified on Pods, counting bytes without writing files."""
-    source = source or download_source()
-    started = time.monotonic()
-    deadline = started + duration
-    received = 0
-    while time.monotonic() < deadline:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            break
-        process = subprocess.run([
-            "curl", "--noproxy", "*", "-fL", "--silent", "--show-error",
-            "--connect-timeout", "5", "--max-time", str(remaining),
-            "-o", os.devnull, "-w", "%{http_code} %{time_total} %{size_download}",
-            source["server_url"],
-        ], stdin=subprocess.DEVNULL, capture_output=True, text=True,
-           timeout=remaining + 5)
+def cli(directory):
+    """Use an official CLI or install a private copy from Ookla, never pip speedtest-cli."""
+    architecture = {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}.get(platform.machine().lower())
+    if architecture is None:
+        raise ValueError("Unsupported architecture for Ookla CLI")
+    directory = Path(directory)
+    target = directory / f"ookla-speedtest-{VERSION}-{architecture}" / "speedtest"
+    for candidate in [target, Path("/tmp/everspark-ookla-test/speedtest"), shutil.which("speedtest")]:
+        if candidate and Path(candidate).is_file():
+            try:
+                version = subprocess.run([str(candidate), "--version"], stdin=subprocess.DEVNULL,
+                                         capture_output=True, text=True, timeout=5)
+                if version.returncode == 0 and "Ookla" in version.stdout and VERSION in version.stdout:
+                    return Path(candidate)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=directory) as temporary:
+        archive = Path(temporary) / "speedtest.tgz"
+        url = f"https://install.speedtest.net/app/cli/ookla-speedtest-{VERSION}-linux-{architecture}.tgz"
+        process = subprocess.run(["curl", "-q", "--noproxy", "*", "-fL", "--silent", "--show-error",
+                                  "--connect-timeout", "10", "--max-time", "60", "--max-filesize", "16777216",
+                                  "-o", str(archive), url], stdin=subprocess.DEVNULL,
+                                 capture_output=True, text=True, timeout=65)
+        if process.returncode != 0:
+            raise ValueError(f"Could not download official Ookla CLI (curl exit {process.returncode})")
+        with tarfile.open(archive, "r:gz") as package:
+            # Extract only known regular files, without archive paths or symlinks.
+            for name in ["speedtest", "speedtest.md", "speedtest.5"]:
+                member = package.getmember(name)
+                if not member.isfile() or not 0 < member.size <= 16 * 1024 * 1024:
+                    raise ValueError("Invalid official Ookla CLI archive")
+                content = package.extractfile(member)
+                if content is None:
+                    raise ValueError("Invalid official Ookla CLI archive")
+                with content:
+                    (Path(temporary) / name).write_bytes(content.read())
+            executable = Path(temporary) / "speedtest"
+            executable.chmod(0o700)
+            for name in ["speedtest.md", "speedtest.5", "speedtest"]:
+                os.replace(Path(temporary) / name, target.parent / name)
+    return target
+
+
+def finite(value, positive=False):
+    return (not isinstance(value, bool) and isinstance(value, (int, float))
+            and math.isfinite(value) and (value > 0 if positive else value >= 0))
+
+
+def parse_result(payload):
+    """Keep only measurement fields: never persist IP, MAC, ISP or the raw result."""
+    if not isinstance(payload, dict) or payload.get("type") != "result":
+        raise ValueError("Ookla CLI returned no completed result")
+    download, upload, ping, server = [payload.get(key) for key in ["download", "upload", "ping", "server"]]
+    if not all(isinstance(item, dict) for item in [download, upload, ping, server]):
+        raise ValueError("Ookla CLI result is incomplete")
+    for transfer in [download, upload]:
+        if (not finite(transfer.get("bandwidth")) or not finite(transfer.get("elapsed"), positive=True)
+                or not isinstance(transfer.get("bytes"), int) or isinstance(transfer.get("bytes"), bool)
+                or transfer["bytes"] <= 0):
+            raise ValueError("Ookla CLI returned invalid transfer measurements")
+    if not finite(ping.get("latency")):
+        raise ValueError("Ookla CLI returned invalid latency")
+    result = {"status": "completed", "method": "ookla_cli",
+              "download_mb_s": download["bandwidth"] / 1_000_000,
+              "upload_mb_s": upload["bandwidth"] / 1_000_000,
+              "bytes_received": download["bytes"], "elapsed_seconds": download["elapsed"] / 1000,
+              "latency_ms": ping["latency"], "threshold_mb_s": 50,
+              "qualified": download["bandwidth"] >= 50_000_000}
+    for source, destination in [("id", "server_id"), ("name", "server_name"),
+                                ("location", "server_location"), ("country", "server_country")]:
+        value = server.get(source)
+        if source == "id":
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError("Ookla CLI returned an invalid server ID")
+            result[destination] = value
+        elif not isinstance(value, str) or not value or len(value) > 300:
+            raise ValueError("Ookla CLI returned invalid server metadata")
+        else:
+            result[destination] = value
+    for value, key in [(ping.get("jitter"), "jitter_ms"), (payload.get("packetLoss"), "packet_loss_percent")]:
+        if value is not None:
+            if not finite(value) or (key == "packet_loss_percent" and value > 100):
+                raise ValueError("Ookla CLI returned invalid network measurements")
+            result[key] = value
+    return result
+
+
+def measure(binary):
+    """Let Ookla choose the server and test durations; retry once on execution failure."""
+    for attempt in range(2):
         try:
-            status, transfer_time, size = process.stdout.strip().split()
-            status, transfer_time, size = int(status), float(transfer_time), int(size)
-        except (ValueError, TypeError) as exc:
-            raise ValueError("curl did not return valid download statistics") from exc
-        if status not in {200, 206}:
-            raise ValueError(f"Default model download returned HTTP {status}")
-        if (process.returncode not in {0, 28} or not math.isfinite(transfer_time)
-                or transfer_time <= 0 or size <= 0):
-            raise ValueError(f"Default model download failed (curl exit {process.returncode})")
-        received += size
-        if process.returncode == 28:
-            # A timeout is expected only at the end of the sampling window;
-            # connection / stalled partial downloads must never become a speed result.
-            if time.monotonic() < deadline - .1:
-                raise ValueError("Default model download timed out before the sample ended")
-            break
-        # A fast connection may finish the model; repeat to fill the same window.
-    elapsed = time.monotonic() - started
-    if received <= 0 or not duration * .9 <= elapsed <= duration + 5:
-        raise ValueError("Default model download did not produce a sustained sample")
-    speed = received / elapsed / 1_000_000
-    if not math.isfinite(speed):
-        raise ValueError("Invalid download measurement")
-    return {**source, "status": "completed", "download_mb_s": speed,
-            "bytes_received": received, "elapsed_seconds": elapsed,
-            "threshold_mb_s": 50, "qualified": speed >= 50}
+            process = subprocess.run([str(binary), "--format=json", "--progress=no"],
+                                     stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                     timeout=TEST_TIMEOUT)
+            # No --accept-license/--accept-gdpr: respect confirmation recorded by the user.
+            if process.returncode != 0 or not process.stdout.lstrip().startswith("{"):
+                message = (process.stderr + " " + process.stdout).lower()
+                if any(word in message for word in ["license", "gdpr", "eula", "privacy", "terms"]):
+                    raise TermsRequired(f"Confirm Ookla CLI terms over SSH by running {binary}, then retry")
+                try:
+                    error = json.loads(process.stdout).get("message", "")
+                except (ValueError, AttributeError):
+                    error = ""
+                raise ValueError(f"Ookla CLI failed (exit {process.returncode})" + (f": {str(error)[:160]}" if error else ""))
+            result = parse_result(json.loads(process.stdout))
+            print(f"[bandwidth] attempt={attempt+1} completed server={result['server_id']}", flush=True)
+            return result
+        except TermsRequired:
+            raise
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+            print(f"[bandwidth] attempt={attempt+1} {type(exc).__name__}: {exc}", flush=True)
+            if attempt:
+                raise
+            time.sleep(2)
 
 
 def run(directory, run_id):
@@ -152,17 +229,17 @@ def run(directory, run_id):
             return
         try:
             time.sleep(secrets.randbelow(10))
-            source = download_source()
-            value.update(source, status="running", policy=POLICY)
+            value.update(status="running", policy=POLICY, method="ookla_cli")
             save(directory / "bandwidth.json", value)
-            print(f"[bandwidth] started run_id={run_id} source=default_model duration={DURATION}s", flush=True)
-            measured = measure(source=source)
+            print(f"[bandwidth] started run_id={run_id} source=Ookla timeout={TEST_TIMEOUT}s attempts=2", flush=True)
+            measured = measure(cli(directory))
             print(f"[bandwidth] completed speed={measured['download_mb_s']:.2f} MB/s bytes={measured['bytes_received']} elapsed={measured['elapsed_seconds']:.2f}s server={measured['server_name']}", flush=True)
         except Exception as exc:
             # Preserve the actual failure instead of silently replacing it with a
             # generic message. No credentials or IP lookup responses are logged.
             traceback.print_exc()
-            measured = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"[:300]}
+            measured = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"[:300],
+                        **({"error_code": "terms_required"} if isinstance(exc, TermsRequired) else {})}
         value.update(measured, finished_at=now())
         save(directory / "bandwidth.json", value)
 

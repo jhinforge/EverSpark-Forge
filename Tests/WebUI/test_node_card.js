@@ -46,7 +46,7 @@ test('download result uses MB/s and the inclusive 50 MB/s threshold', () => {
     assert.match(texts(panel), /Fixture/);
   }
   const failed = context.window.EverSparkNodeCard.render({status: 'online', bandwidth: {status: 'failed'}}, options);
-  assert.match(texts(failed), /failed/);
+  assert.match(texts(failed), /Unable to measure/);
   assert.doesNotMatch(texts(failed), /consider replacing/);
 });
 test('unverified and cross-region speeds never suggest replacing the Pod', () => {
@@ -85,4 +85,32 @@ test('default model downloads disclose scope and compare the target without judg
     assert.match(texts(panel), /Test model: Illustrious-XL-v1.0.safetensors/);
     assert.doesNotMatch(texts(panel), /consider replacing|region unverified/);
   }
+});
+
+test('Ookla results show network scope, actual server location, latency and optional loss', () => {
+  for (const speed of [.223826, 97.372229]) {
+    const panel = context.window.EverSparkNodeCard.render({status:'online',bandwidth:{
+      status:'completed',method:'ookla_cli',download_mb_s:speed,upload_mb_s:95.52,
+      latency_ms:8.655,packet_loss_percent:0,jitter_ms:.216,server_id:5249,
+      server_name:'Fixture',server_location:'Seoul',server_country:'South Korea'
+    }}, options);
+    assert.match(texts(panel), /Network download speed/);
+    assert.match(texts(panel), speed >= 50 ? /meets the 50 MB\/s reference target/ : /below the 50 MB\/s reference target/);
+    assert.match(texts(panel), /Seoul \/ South Korea/);
+    assert.match(texts(panel), /Latency: 8.65 ms · Packet loss: 0.00%/);
+    assert.match(texts(panel), /model and cloud storage download speeds may differ/);
+    assert.doesNotMatch(texts(panel), /consider replacing|region unverified|Node egress country/);
+  }
+  const unknown = context.window.EverSparkNodeCard.render({status:'online',bandwidth:{
+    status:'completed',method:'ookla_cli',download_mb_s:1,latency_ms:102
+  }}, options);
+  assert.match(texts(unknown), /Packet loss: —/);
+});
+
+test('new network test states do not promise a 30-second download or label failure as slow', () => {
+  const running=context.window.EverSparkNodeCard.render({status:'online',bandwidth:{status:'running',method:'ookla_cli'}}, options);
+  assert.match(texts(running), /download and upload/);
+  assert.doesNotMatch(texts(running), /30-second/);
+  const terms=context.window.EverSparkNodeCard.render({status:'online',bandwidth:{status:'failed',method:'ookla_cli',error_code:'terms_required'}}, options);
+  assert.match(texts(terms), /Confirm Ookla CLI terms/);
 });
