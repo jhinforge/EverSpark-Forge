@@ -8,7 +8,7 @@ const navigation = source.slice(source.indexOf('const legacyViewSections ='),sou
 function setup() {
   const classes = (initial=[]) => {const values=new Set(initial);return {toggle(key,on){on?values.add(key):values.delete(key);},contains(key){return values.has(key);}};};
   const primary=['forge','assets','compute','resources','settings'];
-  const legacy=['machine-configuration','storage','models'];
+  const legacy=['machine-configuration','storage-configuration','models'];
   const buttons=primary.map(view=>({dataset:{view},classList:classes()}));
   const panels=[...primary,...legacy].map(viewPanel=>({dataset:{viewPanel},classList:classes()}));
   const assetButtons=['characters','images','audio'].map(assetTab=>({dataset:{assetTab},classList:classes(),setAttribute(key,value){this[key]=value;}}));
@@ -31,10 +31,10 @@ test('five primary sections display their own containers without starting unrela
     assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),[name]);
     assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
   }
-  assert.deepEqual(calls,['loadSubjects','nodeConnection','loadMachines','loadVastBalance','loadVastOffers','loadVastGpuNames']);
+  assert.deepEqual(calls,['loadSubjects','nodeConnection','loadMachines','loadVastBalance','loadVastOffers','loadVastGpuNames','loadCloudConfiguration','loadDirectDownload']);
 });
 test('legacy shortcuts retain page loaders, parent highlighting and a return target',()=>{
-  const cases={'machine-configuration':['compute',['nodeConnection','loadMachines']],storage:['resources',['loadCloudConfiguration','loadDirectDownload']],models:['settings',['loadModelConnections']]};
+  const cases={'machine-configuration':['compute',['nodeConnection','loadMachines']],'storage-configuration':['resources',['loadCloudConfiguration','loadDirectDownload']],models:['settings',['loadModelConnections']]};
   for(const [name,[parent,expected]] of Object.entries(cases)) {
     const {context,buttons,panels,nodes,calls}=setup();
     context.setView(name);
@@ -52,7 +52,7 @@ test('HTML keeps five primary entries and every old page accessible',()=>{
   const nav=html.slice(html.indexOf('<nav class="nav"'),html.indexOf('</nav>'));
   assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(m=>m[1]),['forge','assets','compute','resources','settings']);
   assert.equal([...html.matchAll(/data-primary-view/g)].length,5);
-  for(const name of ['machine-configuration','storage','models']) {
+  for(const name of ['machine-configuration','storage-configuration','models']) {
     assert.ok(html.includes(`data-view-panel="${name}"`));
     assert.ok(html.includes(`data-view-link="${name}"`));
   }
@@ -126,4 +126,35 @@ test('Compute retains operational IDs while credentials stay outside its contain
   }
   assert.ok(!html.includes('data-view-panel="machines"'));
   assert.ok(!html.includes('data-view-panel="runtime"'));
+});
+
+
+test('Resources and the old Storage alias reuse configuration and download loaders',()=>{
+  for(const name of ['resources','storage']) {
+    const {context,buttons,panels,nodes,calls}=setup();
+    context.setView(name);
+    assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),['resources']);
+    assert.deepEqual(buttons.filter(b=>b.classList.contains('active')).map(b=>b.dataset.view),['resources']);
+    assert.deepEqual(calls,['loadCloudConfiguration','loadDirectDownload']);
+    assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
+  }
+});
+test('Resources contains every download and remote model control, leaving configuration and backup outside',()=>{
+  const html=fs.readFileSync('Archon/Portal/static/index.html','utf8');
+  const resources=html.slice(html.indexOf('<section class="view" id="resourcesView"'),html.indexOf('<section class="view" id="settingsView"'));
+  const config=html.slice(html.indexOf('<section class="view" id="storageView"'),html.indexOf('</main>'));
+  const ids=['modelDownloadTargets','imageDownloadForm','loraDownloadForm','vaeDownloadForm','conceptDownloadForm','directDownloadProgress','cancelDirectDownload','retryDirectDownload','storageResourceGrid','remoteCheckpointSelect','remoteDiffusionSelect','remoteLoraSelect','remoteVaeSelect','remoteConceptSelect','storageProgress','refreshStorageButton'];
+  for(const id of ids) {
+    assert.ok(resources.includes(`id="${id}"`),id);
+    assert.ok(!config.includes(`id="${id}"`),id);
+    assert.equal([...html.matchAll(new RegExp(`id="${id}"`,'g'))].length,1,id);
+  }
+  for(const id of ['cloudConfigurationPanel','rcloneConfigFile','rcloneExecutable','remotePathsForm','conceptUploadPath','dataBackupPath','backupPanel','backupMemory','restorePointSelect','startRestoreButton']) {
+    assert.ok(config.includes(`id="${id}"`),id);
+    assert.ok(!resources.includes(`id="${id}"`),id);
+  }
+  assert.ok(resources.indexOf('id="imageDownloadForm"')<resources.indexOf('id="storageResourceGrid"'));
+  assert.ok(resources.includes('data-cloud-storage'));
+  assert.ok(config.includes('data-cloud-storage'));
+  assert.ok(!html.includes('data-view-panel="storage"'));
 });

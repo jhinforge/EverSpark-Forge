@@ -1,6 +1,10 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Cloud storage configuration": "云端存储配置",
+    "Configure cloud storage to enable the remote model library.": "完成云端存储配置后即可使用远端模型库。",
+    "Storage configuration and cloud backups remain here until the next migration.": "存储配置与云端备份暂时保留在此，等待后续迁移。",
+
     "Compute sections": "计算分类",
     "Machines and Nodes": "机器与节点",
     "Vast / Tailscale configuration": "Vast / Tailscale 配置",

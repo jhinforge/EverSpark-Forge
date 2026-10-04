@@ -365,102 +365,11 @@
 
         <section class="view" id="resourcesView" data-view-panel="resources" data-primary-view>
           <div class="section-toolbar">
-            <div><h2>Resources</h2><p class="section-copy">Model downloads and remote libraries.</p></div>
-          </div>
-          <div class="section-shortcuts">
-            <button class="secondary-button" data-view-link="storage" type="button">Storage</button>
-          </div>
-        </section>
-
-        <section class="view" id="settingsView" data-view-panel="settings" data-primary-view>
-          <div class="section-toolbar">
-            <div><h2>Settings</h2><p class="section-copy">Model services and connection settings.</p></div>
-          </div>
-          <div class="section-shortcuts">
-            <button class="secondary-button" data-view-link="models" type="button">Model services</button>
-          </div>
-        </section>
-
-
-
-
-
-        <section class="view" id="machineConfigurationView" data-view-panel="machine-configuration">
-          <div class="section-toolbar">
-            <div><h2>Vast / Tailscale configuration</h2><p class="section-copy">Connection credentials remain here until they move to Settings.</p></div>
-          </div>
-          <form class="storage-panel machine-credential" id="vastCredentialForm">
-            <div>
-              <p class="section-kicker">VAST ACCOUNT</p>
-              <h3>Vast API connection</h3>
-              <p class="section-copy" id="vastCredentialStatus">Checking local credential…</p>
-              <p class="section-copy">The key is saved in this Windows user's Credential Manager. EverSpark never displays it again.</p>
-            </div>
-            <label for="vastApiKey">Vast API Key</label>
-            <input id="vastApiKey" type="password" autocomplete="new-password" spellcheck="false" required placeholder="Enter or replace API Key">
-            <div class="machine-actions">
-              <button class="primary-button" id="saveVastKey" type="submit">Verify and save</button>
-              <button class="ghost-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
-            </div>
-          </form>
-          <form class="storage-panel machine-credential" id="nodeConnectionForm">
-            <div><p class="section-kicker">NODE CONNECTION</p><h3>Automatic Node connection</h3>
-              <p class="section-copy" id="nodeConnectionStatus">Checking Node connection…</p>
-              <p class="section-copy">Connect Tailscale on this Windows host, then enter a fresh auth key. EverSpark automatically joins the rented machine and starts its Agent. Choose the key mode to match Tailscale. The key is kept only for this Archon session.</p></div>
-            <label for="nodeConnectionKey">Tailscale auth key</label>
-            <input id="nodeConnectionKey" type="password" autocomplete="new-password" spellcheck="false" required>
-            <label for="nodeConnectionReusable">Key usage</label>
-            <select id="nodeConnectionReusable"><option value="once">Single use (one-off key)</option><option value="reusable">Long-term use (Reusable key)</option></select>
-            <p class="section-copy">Long expiry does not mean reusable. Enable Reusable in Tailscale to use this key for multiple rentals.</p>
-            <p class="section-copy" id="nodeConnectionFeedback" role="status" aria-live="polite"></p>
-            <button class="primary-button" type="submit">Configure automatic connection</button>
-          </form>
-        </section>
-
-
-        <section class="view" id="modelsView" data-view-panel="models">
-          <div class="section-toolbar">
-            <div>
-              <p class="section-kicker">CONCEPT FORGE</p>
-              <h2>Model services</h2>
-              <p class="section-copy">Connect an OpenAI Compatible service and choose its model in Forge.</p>
-            </div>
-            <button class="ghost-button" id="refreshModelServices" type="button">Refresh connections</button>
-          </div>
-          <div class="model-service-list" id="modelServiceList"></div>
-          <form class="storage-panel model-service-form" id="modelServiceForm">
-            <div class="storage-heading">
-              <div>
-                <p class="section-kicker">OPENAI COMPATIBLE</p>
-                <h3 id="modelServiceFormTitle">Add model service</h3>
-                <p class="section-copy">Use the exact base URL and model ID from your provider. API keys stay on this server and are never shown again.</p>
-              </div>
-            </div>
-            <input id="modelServiceId" type="hidden">
-            <button class="secondary-button" id="useDeepSeekPreset" type="button">Fill DeepSeek settings</button>
-            <div class="model-service-fields">
-              <label>Connection name <input id="modelServiceName" required maxlength="80" placeholder="My API"></label>
-              <label>API base URL <input id="modelServiceUrl" type="url" required placeholder="https://example.com/v1"></label>
-              <label>Model ID <input id="modelServiceModel" required maxlength="200" placeholder="provider-model-id"></label>
-              <label>API Key <input id="modelServiceKey" type="password" autocomplete="new-password" placeholder="Enter or replace API Key"></label>
-            </div>
-            <p class="section-copy">EverSpark handles Chat Completions response modes automatically. Selected upstream HTTP errors may trigger a retry with another response mode.</p>
-            <div class="model-service-actions">
-              <button class="secondary-button" id="testModelService" type="button">Test connection</button>
-              <button class="primary-button" id="saveModelService" type="submit">Save connection</button>
-              <button class="ghost-button hidden" id="cancelModelServiceEdit" type="button">Cancel edit</button>
-            </div>
-          </form>
-        </section>
-
-        <section class="view" id="storageView" data-view-panel="storage">
-          <div class="section-toolbar">
-            <div>
-              <p class="section-kicker">MODELS & DATA</p>
-              <h2>Storage</h2>
-              <p class="section-copy">Install models, pull from remote storage, and back up local data.</p>
+            <div><h2>Resources</h2><p class="section-copy">Model downloads and remote libraries.</p>
               <p class="section-copy" id="modelDownloadTargets">Model downloads use the selected Forge nodes.</p>
+              <p class="section-copy">Configure cloud storage to enable the remote model library.</p>
             </div>
+            <button class="ghost-button" data-view-link="storage-configuration" type="button">Cloud storage configuration</button>
           </div>
           <div class="storage-panel direct-download-panel">
             <div class="storage-heading">
@@ -555,41 +464,6 @@
               </div>
             </div>
           </div>
-          <div class="storage-panel" id="cloudConfigurationPanel">
-            <div class="storage-heading">
-              <div><p class="section-kicker">CLOUD STORAGE</p><h3>Cloud storage</h3>
-                <p class="section-copy" id="cloudConfigurationSummary">Import your rclone connections and choose model directories to enable cloud operations.</p></div>
-              <button class="secondary-button" id="configureCloudButton" type="button">Enable cloud storage</button>
-            </div>
-            <div id="cloudConfigurationEditor" class="hidden">
-              <form id="cloudImportForm" class="backup-actions">
-                <label>rclone configuration <input id="rcloneConfigFile" type="file" accept=".conf,text/plain" required></label>
-                <button class="secondary-button" type="submit">Import connections</button>
-              </form>
-              <details><summary>rclone executable</summary>
-                <label>Executable path <input id="rcloneExecutable" placeholder="C:\rclone\rclone.exe"></label>
-                <p class="section-copy">Leave empty to detect rclone automatically.</p>
-              </details>
-              <div id="cloudDirectoryPicker" class="hidden">
-                <div class="cloud-picker-controls">
-                  <label>Connection <select id="cloudRemoteSelect"></select></label>
-                  <button class="ghost-button" id="browseCloudRoot" type="button">Browse connection</button>
-                  <button class="ghost-button" id="cloudDirectoryUp" type="button">Parent directory</button>
-                </div>
-                <p id="cloudBrowserPath" class="cloud-browser-path"></p>
-                <div id="cloudDirectoryList" class="cloud-directory-list"></div>
-                <div class="backup-actions">
-                  <button class="secondary-button" id="addImageDirectory" type="button">Use for image models</button>
-                  <button class="secondary-button" id="setConceptDirectory" type="button">Use for Concept models</button>
-                </div>
-                <h4>Image model directories</h4><div id="cloudImageSources" class="cloud-source-list"></div>
-                <h4>Concept model directory</h4><p id="cloudConceptSource" class="cloud-browser-path"></p>
-                <p class="section-copy">Select the model roots. EverSpark generates and saves the configuration for you.</p>
-                <button class="primary-button" id="saveCloudConfiguration" type="button">Validate and enable</button>
-              </div>
-              <p id="cloudConfigurationMessage" role="status" aria-live="polite"></p>
-            </div>
-          </div>
           <div class="storage-panel hidden" data-cloud-storage>
             <div class="storage-heading">
               <div>
@@ -632,6 +506,132 @@
                 <span id="storageJobStatus"></span>
                 <span id="storageProgressDetail"></span>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="settingsView" data-view-panel="settings" data-primary-view>
+          <div class="section-toolbar">
+            <div><h2>Settings</h2><p class="section-copy">Model services and connection settings.</p></div>
+          </div>
+          <div class="section-shortcuts">
+            <button class="secondary-button" data-view-link="models" type="button">Model services</button>
+          </div>
+        </section>
+
+
+
+
+
+        <section class="view" id="machineConfigurationView" data-view-panel="machine-configuration">
+          <div class="section-toolbar">
+            <div><h2>Vast / Tailscale configuration</h2><p class="section-copy">Connection credentials remain here until they move to Settings.</p></div>
+          </div>
+          <form class="storage-panel machine-credential" id="vastCredentialForm">
+            <div>
+              <p class="section-kicker">VAST ACCOUNT</p>
+              <h3>Vast API connection</h3>
+              <p class="section-copy" id="vastCredentialStatus">Checking local credential…</p>
+              <p class="section-copy">The key is saved in this Windows user's Credential Manager. EverSpark never displays it again.</p>
+            </div>
+            <label for="vastApiKey">Vast API Key</label>
+            <input id="vastApiKey" type="password" autocomplete="new-password" spellcheck="false" required placeholder="Enter or replace API Key">
+            <div class="machine-actions">
+              <button class="primary-button" id="saveVastKey" type="submit">Verify and save</button>
+              <button class="ghost-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
+            </div>
+          </form>
+          <form class="storage-panel machine-credential" id="nodeConnectionForm">
+            <div><p class="section-kicker">NODE CONNECTION</p><h3>Automatic Node connection</h3>
+              <p class="section-copy" id="nodeConnectionStatus">Checking Node connection…</p>
+              <p class="section-copy">Connect Tailscale on this Windows host, then enter a fresh auth key. EverSpark automatically joins the rented machine and starts its Agent. Choose the key mode to match Tailscale. The key is kept only for this Archon session.</p></div>
+            <label for="nodeConnectionKey">Tailscale auth key</label>
+            <input id="nodeConnectionKey" type="password" autocomplete="new-password" spellcheck="false" required>
+            <label for="nodeConnectionReusable">Key usage</label>
+            <select id="nodeConnectionReusable"><option value="once">Single use (one-off key)</option><option value="reusable">Long-term use (Reusable key)</option></select>
+            <p class="section-copy">Long expiry does not mean reusable. Enable Reusable in Tailscale to use this key for multiple rentals.</p>
+            <p class="section-copy" id="nodeConnectionFeedback" role="status" aria-live="polite"></p>
+            <button class="primary-button" type="submit">Configure automatic connection</button>
+          </form>
+        </section>
+
+
+        <section class="view" id="modelsView" data-view-panel="models">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">CONCEPT FORGE</p>
+              <h2>Model services</h2>
+              <p class="section-copy">Connect an OpenAI Compatible service and choose its model in Forge.</p>
+            </div>
+            <button class="ghost-button" id="refreshModelServices" type="button">Refresh connections</button>
+          </div>
+          <div class="model-service-list" id="modelServiceList"></div>
+          <form class="storage-panel model-service-form" id="modelServiceForm">
+            <div class="storage-heading">
+              <div>
+                <p class="section-kicker">OPENAI COMPATIBLE</p>
+                <h3 id="modelServiceFormTitle">Add model service</h3>
+                <p class="section-copy">Use the exact base URL and model ID from your provider. API keys stay on this server and are never shown again.</p>
+              </div>
+            </div>
+            <input id="modelServiceId" type="hidden">
+            <button class="secondary-button" id="useDeepSeekPreset" type="button">Fill DeepSeek settings</button>
+            <div class="model-service-fields">
+              <label>Connection name <input id="modelServiceName" required maxlength="80" placeholder="My API"></label>
+              <label>API base URL <input id="modelServiceUrl" type="url" required placeholder="https://example.com/v1"></label>
+              <label>Model ID <input id="modelServiceModel" required maxlength="200" placeholder="provider-model-id"></label>
+              <label>API Key <input id="modelServiceKey" type="password" autocomplete="new-password" placeholder="Enter or replace API Key"></label>
+            </div>
+            <p class="section-copy">EverSpark handles Chat Completions response modes automatically. Selected upstream HTTP errors may trigger a retry with another response mode.</p>
+            <div class="model-service-actions">
+              <button class="secondary-button" id="testModelService" type="button">Test connection</button>
+              <button class="primary-button" id="saveModelService" type="submit">Save connection</button>
+              <button class="ghost-button hidden" id="cancelModelServiceEdit" type="button">Cancel edit</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="view" id="storageView" data-view-panel="storage-configuration">
+          <div class="section-toolbar">
+            <div>
+              <p class="section-kicker">MODELS & DATA</p>
+              <h2>Cloud storage configuration</h2>
+              <p class="section-copy">Storage configuration and cloud backups remain here until the next migration.</p>
+            </div>
+          </div>
+          <div class="storage-panel" id="cloudConfigurationPanel">
+            <div class="storage-heading">
+              <div><p class="section-kicker">CLOUD STORAGE</p><h3>Cloud storage</h3>
+                <p class="section-copy" id="cloudConfigurationSummary">Import your rclone connections and choose model directories to enable cloud operations.</p></div>
+              <button class="secondary-button" id="configureCloudButton" type="button">Enable cloud storage</button>
+            </div>
+            <div id="cloudConfigurationEditor" class="hidden">
+              <form id="cloudImportForm" class="backup-actions">
+                <label>rclone configuration <input id="rcloneConfigFile" type="file" accept=".conf,text/plain" required></label>
+                <button class="secondary-button" type="submit">Import connections</button>
+              </form>
+              <details><summary>rclone executable</summary>
+                <label>Executable path <input id="rcloneExecutable" placeholder="C:\rclone\rclone.exe"></label>
+                <p class="section-copy">Leave empty to detect rclone automatically.</p>
+              </details>
+              <div id="cloudDirectoryPicker" class="hidden">
+                <div class="cloud-picker-controls">
+                  <label>Connection <select id="cloudRemoteSelect"></select></label>
+                  <button class="ghost-button" id="browseCloudRoot" type="button">Browse connection</button>
+                  <button class="ghost-button" id="cloudDirectoryUp" type="button">Parent directory</button>
+                </div>
+                <p id="cloudBrowserPath" class="cloud-browser-path"></p>
+                <div id="cloudDirectoryList" class="cloud-directory-list"></div>
+                <div class="backup-actions">
+                  <button class="secondary-button" id="addImageDirectory" type="button">Use for image models</button>
+                  <button class="secondary-button" id="setConceptDirectory" type="button">Use for Concept models</button>
+                </div>
+                <h4>Image model directories</h4><div id="cloudImageSources" class="cloud-source-list"></div>
+                <h4>Concept model directory</h4><p id="cloudConceptSource" class="cloud-browser-path"></p>
+                <p class="section-copy">Select the model roots. EverSpark generates and saves the configuration for you.</p>
+                <button class="primary-button" id="saveCloudConfiguration" type="button">Validate and enable</button>
+              </div>
+              <p id="cloudConfigurationMessage" role="status" aria-live="polite"></p>
             </div>
           </div>
           <div class="storage-panel hidden" data-cloud-storage>

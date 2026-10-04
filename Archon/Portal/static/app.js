@@ -163,6 +163,7 @@ const viewCopy = {
   subjects: ["WORKSPACE / SUBJECTS", "Build identity that persists."],
   history: ["WORKSPACE / GALLERY", "Review the latest outputs."],
   storage: ["WORKSPACE / STORAGE", "Manage models and backups."],
+  "storage-configuration": ["WORKSPACE / STORAGE", "Cloud storage configuration"],
   runtime: ["WORKSPACE / RUNTIME", "Know what is ready."],
   models: ["WORKSPACE / MODEL SERVICES", "Connect language models."],
   machines: ["WORKSPACE / MACHINES", "Manage your machines."],
@@ -1245,7 +1246,7 @@ async function testModelService() {
 // Legacy pages remain intact and accessible while the new sections are built.
 const legacyViewSections = {
   subjects: "assets", history: "assets", machines: "compute",
-  "machine-configuration": "compute", runtime: "compute", storage: "resources", models: "settings",
+  "machine-configuration": "compute", runtime: "compute", storage: "resources", "storage-configuration": "resources", models: "settings",
 };
 
 function setAssetTab(name) {
@@ -1291,6 +1292,7 @@ function setView(name) {
     state.computeTab = name;
     name = "compute";
   }
+  if (name === "storage") name = "resources";
   if (!viewCopy[name]) return;
   const section = legacyViewSections[name] || name;
   $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === section));
@@ -1306,7 +1308,7 @@ function setView(name) {
   if (name === "runtime") loadRuntime();
   if (name === "machines") { nodeConnection.refresh(); loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
   if (name === "models") loadModelConnections();
-  if (name === "storage") Promise.all([loadCloudConfiguration(), loadDirectDownload()]);
+  if (name === "storage" || name === "resources" || name === "storage-configuration") Promise.all([loadCloudConfiguration(), loadDirectDownload()]);
 }
 
 function machineMessage(message) {
