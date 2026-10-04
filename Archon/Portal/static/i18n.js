@@ -1,6 +1,10 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Machine overview": "机器概览",
+    "Resources and network": "资源与网络",
+    "Machine actions": "机器操作",
+
     "Details": "详细信息",
     "Verifying": "正在验证",
     "Verification required": "需要验证",

@@ -1524,6 +1524,20 @@ async function deployImageForge(instanceId, action = "deploy-image") {
 function renderMachine(machine) {
   const card = document.createElement("article");
   card.className = "machine-card";
+  function group(name, label) {
+    const section = document.createElement("section");
+    section.className = "machine-section";
+    section.dataset.machineSection = name;
+    const heading = document.createElement("h4");
+    uiText(heading, label);
+    section.appendChild(heading);
+    card.appendChild(section);
+    return section;
+  }
+  const overviewGroup = group("overview", "Machine overview");
+  const resourcesGroup = group("resources", "Resources and network");
+  const forgeGroup = group("forge", "Forge");
+  const operationsGroup = group("operations", "Machine actions");
   const machineDetails = document.createElement("details");
   const detailsSummary = document.createElement("summary");
   uiText(detailsSummary, "Details");
@@ -1534,7 +1548,7 @@ function renderMachine(machine) {
     summary.className = "machine-deployment-error";
     const firstLine = full.split(/\r?\n/)[0];
     summary.textContent = `${role}: ${firstLine.length > 240 ? firstLine.slice(0, 240) + "…" : firstLine}`;
-    card.appendChild(summary);
+    forgeGroup.appendChild(summary);
     const detail = document.createElement("p");
     detail.className = "machine-deployment-error";
     detail.textContent = `${role}: ${full}`;
@@ -1550,11 +1564,11 @@ function renderMachine(machine) {
   gpu.textContent = `${machine.num_gpus || 0} × ${machine.gpu_name || "GPU unknown"}`;
   const place = document.createElement("p");
   place.textContent = machine.geolocation || "Location unknown";
-  card.append(title, status, gpu, place);
+  overviewGroup.append(title, status, gpu, place);
   if (machine.dph_total != null && Number.isFinite(Number(machine.dph_total))) {
     const price = document.createElement("p");
     price.textContent = `$${Number(machine.dph_total).toFixed(3)} / hour`;
-    card.appendChild(price);
+    overviewGroup.appendChild(price);
   }
   if (machine.ssh_host) {
     const address = document.createElement("p");
@@ -1576,7 +1590,7 @@ function renderMachine(machine) {
     revision.textContent = `Concept Forge · ${machine.forge.revision}`;
     machineDetails.appendChild(revision);
   }
-  card.appendChild(forge);
+  forgeGroup.appendChild(forge);
   if (machine.forge?.detail) {
     deploymentFailure(machine.forge, "Concept Forge");
   }
@@ -1594,7 +1608,7 @@ function renderMachine(machine) {
       revision.textContent = `Image Forge · ${machine.image_forge.revision}`;
       machineDetails.appendChild(revision);
     }
-    card.appendChild(imageForge);
+    forgeGroup.appendChild(imageForge);
     if (machine.image_forge.detail) {
       deploymentFailure(machine.image_forge, "Image Forge");
     }
@@ -1602,16 +1616,16 @@ function renderMachine(machine) {
   if (!machine.image_forge) {
     const imageStatus = document.createElement("p");
     uiText(imageStatus, "Image Forge not deployed");
-    card.appendChild(imageStatus);
+    forgeGroup.appendChild(imageStatus);
   }
   const audioStatus = document.createElement("p");
   const audioLabels = { not_deployed: "Not deployed", ready: "Ready", deploying: "Deployment in progress",
     deployment_failed: "Deployment failed", deployment_unknown: "Deployment outcome unknown; check Pod",
     verifying: "Verifying", verification_required: "Verification required", recovering: "Recovering previous task result" };
   audioStatus.textContent = `Audio Forge · ${t(audioLabels[machine.audio_forge?.status] || machine.audio_forge?.status || "Not deployed")}`;
-  card.appendChild(audioStatus);
+  forgeGroup.appendChild(audioStatus);
   if (machine.audio_forge?.detail) deploymentFailure(machine.audio_forge, "Audio Forge");
-  card.appendChild(window.EverSparkNodeCard.render(machine.node, { t, bind: uiText, details: machineDetails,
+  resourcesGroup.appendChild(window.EverSparkNodeCard.render(machine.node, { t, bind: uiText, details: machineDetails,
     speedtest: async (button) => {
       button.disabled = true;
       try {
@@ -1639,7 +1653,7 @@ function renderMachine(machine) {
     const progress = document.createElement("p");
     progress.dataset.podProgress = String(machine.id);
     progress.textContent = `${t("Task stage")}: ${deploymentText}`;
-    card.appendChild(progress);
+    forgeGroup.appendChild(progress);
   }
   if (machine.actual_status === "running" &&
       (machine.ssh_host || (machine.node && machine.node.status !== "unconfigured"))) {
@@ -1667,7 +1681,7 @@ function renderMachine(machine) {
       });
       actions.appendChild(button);
     }
-    card.appendChild(actions);
+    forgeGroup.appendChild(actions);
     if (machine.node?.status === "online") {
       const deployImage = document.createElement("button");
       deployImage.type = "button";
@@ -1723,9 +1737,9 @@ function renderMachine(machine) {
       });
       actions.appendChild(button);
     }
-    card.appendChild(actions);
+    forgeGroup.appendChild(actions);
   }
-  card.appendChild(forgeNodes.render(machine));
+  forgeGroup.appendChild(forgeNodes.render(machine));
   const destroy = document.createElement("button");
   destroy.type = "button";
   destroy.className = "ghost-button";
@@ -1748,7 +1762,7 @@ function renderMachine(machine) {
     } catch (error) { showNotice(error.message); }
     finally { destroy.disabled = false; }
   });
-  card.appendChild(destroy);
+  operationsGroup.appendChild(destroy);
   card.appendChild(machineDetails);
   elements.vastInstanceList.appendChild(card);
 }

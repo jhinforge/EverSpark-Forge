@@ -92,3 +92,20 @@ test('active deployment keeps progress visible and disables duplicate deployment
     assert.equal(button.disabled,true,label);
   }
 });
+test('four machine groups contain the corresponding information and keep Details separate',()=>{
+  const {card}=setup({...fixture,forge:{...fixture.forge,detail:'concept-error',job:{status:'running',stage:'installing_runtime'}}});
+  const groups=card.children.filter(node=>node.dataset.machineSection);
+  assert.deepEqual(groups.map(node=>node.dataset.machineSection),['overview','resources','forge','operations']);
+  const [overview,resources,forge,operations]=groups;
+  for(const value of ['My Pod','Vast #42','running','RTX 3090','JP','$0.250']) assert.ok(text(overview).includes(value),value);
+  for(const value of ['Node Agent: Online','CPU','Memory','Disk','24.0 GiB','qualified','Retest download speed']) assert.ok(text(resources).includes(value),value);
+  for(const value of ['Concept Forge','Image Forge','Audio Forge','Forge bindings','concept-error','Installing runtime and dependencies','Deploy Concept Forge','Deploy Image Forge','部署 Audio Forge']) assert.ok(text(forge).includes(value),value);
+  assert.deepEqual(all(operations).filter(node=>node.tag==='button').map(node=>node.textContent),['Destroy Pod']);
+  assert.ok(!text(overview).includes('Deploy Concept Forge'));
+  assert.ok(!text(resources).includes('Forge bindings'));
+  assert.ok(!text(forge).includes('Retest download speed'));
+  const details=card.children.find(node=>node.tag==='details');
+  assert.ok(details);assert.equal(details.open,false);
+  assert.ok(text(details).includes('internal-node'));
+  assert.ok(!groups.some(group=>all(group).includes(details)));
+});
