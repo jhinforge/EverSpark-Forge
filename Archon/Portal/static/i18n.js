@@ -1,6 +1,10 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Details": "详细信息",
+    "Verifying": "正在验证",
+    "Verification required": "需要验证",
+    "Node stage": "节点内部阶段",
     "Runtime status": "运行状态",
     "My machines": "我的机器",
     "Rent GPU": "租用 GPU",

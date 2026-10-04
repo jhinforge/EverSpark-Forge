@@ -4,7 +4,7 @@
     if (value == null || !Number.isFinite(Number(value)) || Number(value) < 0) return "—";
     return `${(Number(value) / 1024 ** 3).toFixed(1)} GiB`;
   }
-  function render(raw, { t, bind, diagnose, speedtest }) {
+  function render(raw, { t, bind, diagnose, speedtest, details: detailsContainer }) {
     const node = raw || { status: "unconfigured" };
     const panel = document.createElement("section");
     panel.className = "node-inventory";
@@ -14,10 +14,16 @@
     heading.className = "node-state";
     bind(heading, "Node Agent: {status}", { status: { i18nKey: labels[node.status] || "Unknown" } });
     panel.appendChild(heading);
+    const details = detailsContainer || document.createElement("details");
+    if (!detailsContainer) {
+      const summary = document.createElement("summary");
+      bind(summary, "Details");
+      details.appendChild(summary);
+    }
     function field(label, value) {
       const row = document.createElement("p");
       bind(row, "{label}: {value}", { label: { i18nKey: label }, value });
-      panel.appendChild(row);
+      details.appendChild(row);
     }
     if (node.node_id) field("Node ID", node.node_id);
     if (node.hostname) field("Hostname", node.hostname);
@@ -27,9 +33,10 @@
     const messages = { unconfigured: "No Agent registration is associated with this machine. SSH deployment does not verify Node registration.",
       joining: "Waiting for Pod startup and agent registration", unhealthy: "Agent reported an unhealthy Node.",
       removed: "This Node identity has been revoked." };
-    if (messages[node.status]) { const note = document.createElement("p"); bind(note, messages[node.status]); panel.appendChild(note); }
+    if (messages[node.status]) { const note = document.createElement("p"); bind(note, messages[node.status]); details.appendChild(note); }
     const stages = { agent_disconnected: "Heartbeat expired", pod_stopped: "Pod stopped", join_expired_or_revoked: "Join token expired or revoked" };
-    if (node.stage && stages[node.stage]) { const note = document.createElement("p"); bind(note, stages[node.stage]); panel.appendChild(note); }
+    if (node.stage && stages[node.stage]) { const note = document.createElement("p"); bind(note, stages[node.stage]); details.appendChild(note); }
+    if (node.stage && !stages[node.stage]) field("Node stage", node.stage);
     const speed = node.bandwidth;
     if (speed) {
       const note = document.createElement("p");
@@ -50,7 +57,7 @@
         field("Node test region", t(regions[speed.region] || "Unknown"));
       }
       if (speed.country) field("Node egress country", speed.country);
-      if (speed.error) { const detail = document.createElement("p"); bind(detail, speed.error); panel.appendChild(detail); }
+      if (speed.error) { const detail = document.createElement("p"); bind(detail, speed.error); details.appendChild(detail); }
       if (speed.finished_at) field("Test time", new Date(speed.finished_at).toLocaleString());
     }
     if (node.status === "online" && speedtest) {
@@ -85,8 +92,10 @@
     }
     if (["joining", "offline", "unhealthy"].includes(node.status) && diagnose) {
       const button = document.createElement("button"); button.type = "button"; button.className = "ghost-button";
-      bind(button, "View startup diagnostics"); button.addEventListener("click", () => diagnose(button)); panel.appendChild(button);
+      bind(button, "View startup diagnostics"); button.addEventListener("click", () => diagnose(button));
+      // Retain the diagnostics handler without exposing a user-facing entry.
     }
+    if (!detailsContainer) panel.appendChild(details);
     return panel;
   }
   window.EverSparkNodeCard = { render, bytes };

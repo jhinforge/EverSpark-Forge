@@ -1524,6 +1524,23 @@ async function deployImageForge(instanceId, action = "deploy-image") {
 function renderMachine(machine) {
   const card = document.createElement("article");
   card.className = "machine-card";
+  const machineDetails = document.createElement("details");
+  const detailsSummary = document.createElement("summary");
+  uiText(detailsSummary, "Details");
+  machineDetails.appendChild(detailsSummary);
+  function deploymentFailure(deployment, role) {
+    const full = window.EverSparkDeploymentProgress.failure(deployment);
+    const summary = document.createElement("p");
+    summary.className = "machine-deployment-error";
+    const firstLine = full.split(/\r?\n/)[0];
+    summary.textContent = `${role}: ${firstLine.length > 240 ? firstLine.slice(0, 240) + "…" : firstLine}`;
+    card.appendChild(summary);
+    const detail = document.createElement("p");
+    detail.className = "machine-deployment-error";
+    detail.textContent = `${role}: ${full}`;
+    machineDetails.appendChild(detail);
+  }
+
   const title = document.createElement("h3");
   title.textContent = machine.label || `Vast #${machine.id}`;
   const status = document.createElement("p");
@@ -1542,7 +1559,7 @@ function renderMachine(machine) {
   if (machine.ssh_host) {
     const address = document.createElement("p");
     address.textContent = `SSH: ${machine.ssh_host}:${machine.ssh_port || "?"}`;
-    card.appendChild(address);
+    machineDetails.appendChild(address);
   }
   const forge = document.createElement("p");
   const labels = {not_deployed: "Not deployed", deploying: "Deployment in progress",
@@ -1553,14 +1570,15 @@ function renderMachine(machine) {
     source_updated: "Source updated; deploy again",
     updating: "Source updating", update_failed: "Source update failed",
     update_unknown: "Source update outcome unknown; check Pod"};
-  forge.textContent = t(labels[machine.forge?.status] || "Not deployed") +
-    (machine.forge?.revision ? ` · ${machine.forge.revision}` : "");
+  forge.textContent = `Concept Forge · ${t(labels[machine.forge?.status] || "Not deployed")}`;
+  if (machine.forge?.revision) {
+    const revision = document.createElement("p");
+    revision.textContent = `Concept Forge · ${machine.forge.revision}`;
+    machineDetails.appendChild(revision);
+  }
   card.appendChild(forge);
   if (machine.forge?.detail) {
-    const detail = document.createElement("p");
-    detail.className = "machine-deployment-error";
-    detail.textContent = window.EverSparkDeploymentProgress.failure(machine.forge);
-    card.appendChild(detail);
+    deploymentFailure(machine.forge, "Concept Forge");
   }
   if (machine.image_forge) {
     const imageForge = document.createElement("p");
@@ -1570,17 +1588,30 @@ function renderMachine(machine) {
       deployment_failed: "Image Forge deployment failed", not_deployed: "Image Forge not deployed",
       verification_required: "Image Forge needs verification",
       deployment_unknown: "Image Forge deployment outcome unknown"};
-    imageForge.textContent = t(imageLabels[machine.image_forge.status] || "Image Forge not deployed") +
-      (machine.image_forge.revision ? ` · ${machine.image_forge.revision}` : "");
+    imageForge.textContent = `Image Forge · ${t(imageLabels[machine.image_forge.status] || "Image Forge not deployed")}`;
+    if (machine.image_forge.revision) {
+      const revision = document.createElement("p");
+      revision.textContent = `Image Forge · ${machine.image_forge.revision}`;
+      machineDetails.appendChild(revision);
+    }
     card.appendChild(imageForge);
     if (machine.image_forge.detail) {
-      const detail = document.createElement("p");
-      detail.className = "machine-deployment-error";
-      detail.textContent = window.EverSparkDeploymentProgress.failure(machine.image_forge);
-      card.appendChild(detail);
+      deploymentFailure(machine.image_forge, "Image Forge");
     }
   }
-  card.appendChild(window.EverSparkNodeCard.render(machine.node, { t, bind: uiText,
+  if (!machine.image_forge) {
+    const imageStatus = document.createElement("p");
+    uiText(imageStatus, "Image Forge not deployed");
+    card.appendChild(imageStatus);
+  }
+  const audioStatus = document.createElement("p");
+  const audioLabels = { not_deployed: "Not deployed", ready: "Ready", deploying: "Deployment in progress",
+    deployment_failed: "Deployment failed", deployment_unknown: "Deployment outcome unknown; check Pod",
+    verifying: "Verifying", verification_required: "Verification required", recovering: "Recovering previous task result" };
+  audioStatus.textContent = `Audio Forge · ${t(audioLabels[machine.audio_forge?.status] || machine.audio_forge?.status || "Not deployed")}`;
+  card.appendChild(audioStatus);
+  if (machine.audio_forge?.detail) deploymentFailure(machine.audio_forge, "Audio Forge");
+  card.appendChild(window.EverSparkNodeCard.render(machine.node, { t, bind: uiText, details: machineDetails,
     speedtest: async (button) => {
       button.disabled = true;
       try {
@@ -1618,6 +1649,8 @@ function renderMachine(machine) {
                                     ["verify", "Verify Concept Forge"],
                                     ["update-source", "Update source"],
                                     ["discuss", "Test discussion"]]) {
+      // Keep debug action implementations; only deployment is exposed in the user UI.
+      if (action !== "deploy") continue;
       const button = document.createElement("button");
       button.type = "button";
       button.className = "ghost-button";
@@ -1658,13 +1691,14 @@ function renderMachine(machine) {
         deployImageForge(machine.id, "verify-image").catch((error) => showNotice(error.message))
           .finally(() => { verifyImage.disabled = false; });
       });
-      actions.appendChild(verifyImage);
+      // Verify handler remains available in source, without a user-facing button.
     }
   }
   if (machine.node?.status === "online" && machine.actual_status === "running") {
     const actions = document.createElement("div");
     actions.className = "machine-actions";
     for (const [action, label] of [["deploy-audio", "部署 Audio Forge"], ["verify-audio", "验证 Audio Forge"]]) {
+      if (action !== "deploy-audio") continue;
       const button = document.createElement("button");
       button.type = "button";
       button.className = "ghost-button";
@@ -1689,9 +1723,6 @@ function renderMachine(machine) {
       });
       actions.appendChild(button);
     }
-    const status = document.createElement("span");
-    status.textContent = `Audio Forge · ${machine.audio_forge?.status || "not_deployed"}`;
-    actions.appendChild(status);
     card.appendChild(actions);
   }
   card.appendChild(forgeNodes.render(machine));
@@ -1718,6 +1749,7 @@ function renderMachine(machine) {
     finally { destroy.disabled = false; }
   });
   card.appendChild(destroy);
+  card.appendChild(machineDetails);
   elements.vastInstanceList.appendChild(card);
 }
 
