@@ -13,11 +13,11 @@ function setup() {
   const panels=[...primary,...legacy].map(viewPanel=>({dataset:{viewPanel},classList:classes()}));
   const assetButtons=['characters','images','audio'].map(assetTab=>({dataset:{assetTab},classList:classes(),setAttribute(key,value){this[key]=value;}}));
   const assetPanels=['characters','images','audio'].map(assetPanel=>({dataset:{assetPanel},classList:classes()}));
-  const computeButtons=['machines','runtime'].map(computeTab=>({dataset:{computeTab},classList:classes(),setAttribute(key,value){this[key]=value;}}));
-  const computePanels=['machines','runtime'].map(computePanel=>({dataset:{computePanel},classList:classes()}));
+  const computeButtons=['machines','offers','runtime'].map(computeTab=>({dataset:{computeTab},classList:classes(),setAttribute(key,value){this[key]=value;}}));
+  const computePanels=['machines','offers','runtime'].map(computePanel=>({dataset:{computePanel},classList:classes()}));
   const settingsButtons=['models','connections','storage'].map(settingsTab=>({dataset:{settingsTab},classList:classes(),setAttribute(key,value){this[key]=value;}}));
   const settingsPanels=['models','connections','storage'].map(settingsPanel=>({dataset:{settingsPanel},classList:classes()}));
-  const nodes={'#computeView':panels.find(p=>p.dataset.viewPanel==='compute'),'#machinesView':computePanels[0],'#runtimeView':computePanels[1],'#refreshHistoryButton':{classList:classes()},'#legacyPageNavigation':{classList:classes(['hidden'])},'#returnToSectionButton':{dataset:{}},'#viewEyebrow':{},'#viewTitle':{}};
+  const nodes={'#computeView':panels.find(p=>p.dataset.viewPanel==='compute'),'#machinesView':computePanels[0],'#offersView':computePanels[1],'#runtimeView':computePanels[2],'#refreshHistoryButton':{classList:classes()},'#legacyPageNavigation':{classList:classes(['hidden'])},'#returnToSectionButton':{dataset:{}},'#viewEyebrow':{},'#viewTitle':{}};
   const calls=[];
   const context={state:{assetTab:'characters',computeTab:'machines',settingsTab:'models'},$$:selector=>selector==='.nav-item'?buttons:selector==='[data-asset-tab]'?assetButtons:selector==='[data-asset-panel]'?assetPanels:selector==='[data-compute-tab]'?computeButtons:selector==='[data-compute-panel]'?computePanels:selector==='[data-settings-tab]'?settingsButtons:selector==='[data-settings-panel]'?settingsPanels:panels,$:selector=>nodes[selector],uiText(node,text){node.textContent=text;},Promise,
     nodeConnection:{refresh(){calls.push('nodeConnection');}}};
@@ -33,7 +33,7 @@ test('five primary sections display their own containers without starting unrela
     assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),[name]);
     assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
   }
-  assert.deepEqual(calls,['loadSubjects','loadCloudConfiguration','nodeConnection','loadMachines','loadVastBalance','loadVastOffers','loadVastGpuNames','loadCloudConfiguration','loadDirectDownload','loadModelConnections']);
+  assert.deepEqual(calls,['loadSubjects','loadCloudConfiguration','nodeConnection','loadMachines','loadVastBalance','loadCloudConfiguration','loadDirectDownload','loadModelConnections']);
 });
 test('configuration shortcuts now open matching Settings tabs with original loaders',()=>{
   const cases={'machine-configuration':['connections',['nodeConnection','loadMachines']],'storage-configuration':['storage',['loadCloudConfiguration']],models:['models',['loadModelConnections']]};
@@ -85,7 +85,7 @@ test('asset tabs reuse character/media loaders and preserve the selected tab whe
 
 
 test('Machines and Runtime aliases select compute tabs and reuse their existing loaders',()=>{
-  for(const [name,expected] of [['machines',['nodeConnection','loadMachines','loadVastBalance','loadVastOffers','loadVastGpuNames']],['runtime',['loadRuntime']]]) {
+  for(const [name,expected] of [['machines',['nodeConnection','loadMachines','loadVastBalance']],['runtime',['loadRuntime']]]) {
     const {context,panels,nodes,calls,computePanels,computeButtons}=setup();
     context.setView(name);
     assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),['compute']);
@@ -187,4 +187,37 @@ test('Settings retains unique configuration IDs, while all backup operations bel
     assert.ok(assets.includes(`id="${id}"`),id);
   }
   assert.ok(assets.indexOf('id="backupPanel"')<assets.indexOf('id="historyView"'));
+});
+
+
+test('My machines and Rent GPU activate separate panels and start only their corresponding loaders',()=>{
+  const {context,calls,computePanels}=setup();
+  context.setView('compute');
+  assert.deepEqual(calls,['nodeConnection','loadMachines','loadVastBalance']);
+  calls.length=0;
+  context.setComputeTab('offers');
+  assert.deepEqual(computePanels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.computePanel),['offers']);
+  assert.ok(context.computePanelVisible('offers'));
+  assert.ok(!context.computePanelVisible('machines'));
+  assert.deepEqual(calls,['nodeConnection','loadVastBalance','loadVastOffers','loadVastGpuNames']);
+  context.setView('forge');context.setView('compute');
+  assert.equal(context.state.computeTab,'offers');
+});
+test('Rental form and offers are separated from instance management, with original IDs preserved',()=>{
+  const html=fs.readFileSync('Archon/Portal/static/index.html','utf8');
+  const machines=html.slice(html.indexOf('<div class="compute-tab-panel active" id="machinesView"'),html.indexOf('<div class="compute-tab-panel" id="offersView"'));
+  const offers=html.slice(html.indexOf('<div class="compute-tab-panel" id="offersView"'),html.indexOf('<div class="compute-tab-panel" id="runtimeView"'));
+  for(const id of ['vastInstanceList','moreVastInstances','refreshMachines','forgeNodeSummary']) {
+    assert.ok(machines.includes(`id="${id}"`),id);
+    assert.ok(!offers.includes(`id="${id}"`),id);
+    assert.equal([...html.matchAll(new RegExp(`id="${id}"`,'g'))].length,1,id);
+  }
+  for(const id of ['vastOfferForm','vastOfferList','vastOffersPanel','toggleVastOffers','searchVastOffers','vastGpuNames']) {
+    assert.ok(offers.includes(`id="${id}"`),id);
+    assert.ok(!machines.includes(`id="${id}"`),id);
+    assert.equal([...html.matchAll(new RegExp(`id="${id}"`,'g'))].length,1,id);
+  }
+  for(const name of ['gpu_name','num_gpus','min_gpu_ram_gb','country','max_hourly_usd','min_reliability','disk_gb','sort']) assert.ok(offers.includes(`name="${name}"`),name);
+  assert.deepEqual([...html.matchAll(/data-compute-tab="([^"]+)"/g)].map(m=>m[1]),['machines','offers','runtime']);
+  assert.ok(!machines.includes('Search live Vast offers'));
 });

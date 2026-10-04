@@ -320,27 +320,34 @@
             <div><h2>Compute</h2><p class="section-copy">Machines and service readiness.</p></div>
             <button class="ghost-button" data-view-link="machine-configuration" type="button">Vast / Tailscale configuration</button>
           </div>
+          <aside class="vast-credit-card" aria-label="Vast available credit">
+            <p class="section-kicker">Vast available credit</p>
+            <p class="vast-credit-amount" id="vastBalance" aria-live="polite">Unavailable</p>
+          </aside>
           <div class="compute-tabs" role="tablist" aria-label="Compute sections">
-            <button class="secondary-button active" id="computeMachinesTab" data-compute-tab="machines" role="tab" aria-selected="true" aria-controls="machinesView" type="button">Machines and Nodes</button>
-            <button class="secondary-button" id="computeRuntimeTab" data-compute-tab="runtime" role="tab" aria-selected="false" aria-controls="runtimeView" tabindex="-1" type="button">Service readiness</button>
+            <button class="secondary-button active" id="computeMachinesTab" data-compute-tab="machines" role="tab" aria-selected="true" aria-controls="machinesView" type="button">My machines</button>
+            <button class="secondary-button" id="computeOffersTab" data-compute-tab="offers" role="tab" aria-selected="false" aria-controls="offersView" tabindex="-1" type="button">Rent GPU</button>
+            <button class="secondary-button" id="computeRuntimeTab" data-compute-tab="runtime" role="tab" aria-selected="false" aria-controls="runtimeView" tabindex="-1" type="button">Runtime status</button>
           </div>
           <div class="compute-tab-panel active" id="machinesView" data-compute-panel="machines" role="tabpanel" aria-labelledby="computeMachinesTab">
           <div class="section-toolbar">
             <div>
               <p class="section-kicker">ARCHON / STEWARD</p>
-              <h2>Machines</h2>
-              <p class="section-copy">Search live Vast offers and view your existing instances. Legate connectivity is separate.</p>
+              <h2>My machines</h2>
+              <p class="section-copy">Manage existing instances, connected Nodes and Forge deployments.</p>
             </div>
             <button class="ghost-button" id="refreshMachines" type="button">Refresh instances</button>
           </div>
-          <aside class="vast-credit-card" aria-label="Vast available credit">
-            <p class="section-kicker">Vast available credit</p>
-            <p class="vast-credit-amount" id="vastBalance" aria-live="polite">Unavailable</p>
-          </aside>
+
           <div class="storage-panel machine-credential">
             <h3>Remote Forge connections</h3>
             <p class="section-copy" id="forgeNodeSummary" role="status" aria-live="polite">Select the ready Concept and Image machines below to connect generation.</p>
           </div>
+          <div class="section-toolbar machine-heading"><div><p class="section-kicker">MY PODS</p><h3>Existing instances</h3></div></div>
+          <div class="machine-list" id="vastInstanceList" aria-live="polite"></div>
+          <button class="secondary-button" id="moreVastInstances" type="button" hidden>Load more</button>
+        </div>
+          <div class="compute-tab-panel" id="offersView" data-compute-panel="offers" role="tabpanel" aria-labelledby="computeOffersTab">
           <div class="section-toolbar machine-heading"><h3>Search Vast offers</h3><button class="ghost-button" id="toggleVastOffers" type="button" aria-expanded="true">Collapse</button></div>
           <div id="vastOffersPanel">
           <form class="storage-panel offer-search" id="vastOfferForm">
@@ -364,10 +371,7 @@
           </form>
           <div class="machine-list" id="vastOfferList" aria-live="polite"></div>
           </div>
-          <div class="section-toolbar machine-heading"><div><p class="section-kicker">MY PODS</p><h3>Existing instances</h3></div></div>
-          <div class="machine-list" id="vastInstanceList" aria-live="polite"></div>
-          <button class="secondary-button" id="moreVastInstances" type="button" hidden>Load more</button>
-        </div>
+          </div>
           <div class="compute-tab-panel" id="runtimeView" data-compute-panel="runtime" role="tabpanel" aria-labelledby="computeRuntimeTab">
           <div class="section-toolbar">
             <div>

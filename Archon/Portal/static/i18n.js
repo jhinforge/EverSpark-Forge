@@ -1,6 +1,11 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Runtime status": "运行状态",
+    "My machines": "我的机器",
+    "Rent GPU": "租用 GPU",
+    "Manage existing instances, connected Nodes and Forge deployments.": "管理已租用实例、已连接节点与 Forge 部署。",
+
     "Settings sections": "设置分类",
     "Accounts and Nodes": "账户与节点",
     "Configure cloud connections and model paths.": "配置云端连接与模型目录路径。",

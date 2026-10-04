@@ -1266,7 +1266,7 @@ function setAssetTab(name) {
 }
 
 function setComputeTab(name) {
-  if (!["machines", "runtime"].includes(name)) return;
+  if (!["machines", "offers", "runtime"].includes(name)) return;
   state.computeTab = name;
   $$("[data-compute-tab]").forEach((button) => {
     const active = button.dataset.computeTab === name;
@@ -1276,7 +1276,8 @@ function setComputeTab(name) {
   });
   $$("[data-compute-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.computePanel === name));
   if (name === "runtime") loadRuntime();
-  if (name === "machines") { nodeConnection.refresh(); loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
+  if (name === "machines") { nodeConnection.refresh(); loadMachines(); loadVastBalance(); }
+  if (name === "offers") { nodeConnection.refresh(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
 }
 
 function computePanelVisible(name) {
@@ -2782,7 +2783,8 @@ function bindEvents() {
     hideNotice();
     await Promise.all([loadSubjects(), loadRuntime(), loadImagePlugins(), loadRemoteStorage()]);
     await loadResources();
-    if (computePanelVisible("machines")) await Promise.all([loadMachines(), loadVastBalance(), loadVastOffers()]);
+    if (computePanelVisible("machines")) await Promise.all([loadMachines(), loadVastBalance()]);
+    if (computePanelVisible("offers")) await Promise.all([loadVastBalance(), loadVastOffers()]);
   });
   $("#vastCredentialForm").addEventListener("submit", saveVastKey);
   $("#vastOfferForm").addEventListener("submit", loadVastOffers);
@@ -2888,7 +2890,7 @@ async function initialize() {
     if (!document.hidden && computePanelVisible("machines")) void loadMachines("", true);
   }, 10000);
   setInterval(() => {
-    if (!document.hidden && computePanelVisible("machines")) void loadVastBalance();
+    if (!document.hidden && (computePanelVisible("machines") || computePanelVisible("offers"))) void loadVastBalance();
   }, 60000);
 }
 
