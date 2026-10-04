@@ -7,6 +7,7 @@ const state = {
   subjects: [],
   assetTab: "characters",
   computeTab: "machines",
+  settingsTab: "models",
   selectedSubject: null,
   selectingSubject: false,
   mode: "discuss",
@@ -1260,7 +1261,7 @@ function setAssetTab(name) {
   });
   $$("[data-asset-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.assetPanel === name));
   $("#refreshHistoryButton").classList.toggle("hidden", name === "characters");
-  if (name === "characters") void loadSubjects();
+  if (name === "characters") { void loadSubjects(); void loadCloudConfiguration(); }
   else void loadHistory();
 }
 
@@ -1282,6 +1283,21 @@ function computePanelVisible(name) {
   return $("#computeView").classList.contains("active") && $(`#${name}View`).classList.contains("active");
 }
 
+function setSettingsTab(name) {
+  if (!["models", "connections", "storage"].includes(name)) return;
+  state.settingsTab = name;
+  $$("[data-settings-tab]").forEach((button) => {
+    const active = button.dataset.settingsTab === name;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  $$("[data-settings-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.settingsPanel === name));
+  if (name === "models") loadModelConnections();
+  if (name === "connections") { nodeConnection.refresh(); loadMachines(); }
+  if (name === "storage") void loadCloudConfiguration();
+}
+
 function setView(name) {
   // Old callers still reach the relocated functions through these aliases.
   if (name === "subjects" || name === "history") {
@@ -1293,6 +1309,11 @@ function setView(name) {
     name = "compute";
   }
   if (name === "storage") name = "resources";
+  const settingsAliases = { models: "models", "machine-configuration": "connections", "storage-configuration": "storage" };
+  if (settingsAliases[name]) {
+    state.settingsTab = settingsAliases[name];
+    name = "settings";
+  }
   if (!viewCopy[name]) return;
   const section = legacyViewSections[name] || name;
   $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === section));
@@ -1303,6 +1324,7 @@ function setView(name) {
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "assets") setAssetTab(state.assetTab);
   if (name === "compute") setComputeTab(state.computeTab);
+  if (name === "settings") setSettingsTab(state.settingsTab);
   if (name === "machine-configuration") { nodeConnection.refresh(); loadMachines(); }
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
@@ -2712,6 +2734,20 @@ function bindEvents() {
       if (next < 0) return;
       event.preventDefault();
       setComputeTab(tabs[next].dataset.computeTab);
+      tabs[next].focus();
+    });
+  });
+  $$("[data-settings-tab]").forEach((button) => {
+    button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab));
+    button.addEventListener("keydown", (event) => {
+      const tabs = $$("[data-settings-tab]");
+      const index = tabs.indexOf(button);
+      const next = event.key === "ArrowRight" ? (index + 1) % tabs.length
+        : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
+        : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+      if (next < 0) return;
+      event.preventDefault();
+      setSettingsTab(tabs[next].dataset.settingsTab);
       tabs[next].focus();
     });
   });

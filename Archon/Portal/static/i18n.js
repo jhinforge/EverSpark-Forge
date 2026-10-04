@@ -1,6 +1,10 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Settings sections": "设置分类",
+    "Accounts and Nodes": "账户与节点",
+    "Configure cloud connections and model paths.": "配置云端连接与模型目录路径。",
+
     "Cloud storage configuration": "云端存储配置",
     "Configure cloud storage to enable the remote model library.": "完成云端存储配置后即可使用远端模型库。",
     "Storage configuration and cloud backups remain here until the next migration.": "存储配置与云端备份暂时保留在此，等待后续迁移。",

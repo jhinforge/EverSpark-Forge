@@ -489,3 +489,8 @@ textarea:focus, input:focus, select:focus { border-color: rgba(242, 139, 69, .48
 .compute-tabs .active { border-color: var(--ember); background: var(--ember-soft); }
 .compute-tab-panel { display: none; }
 .compute-tab-panel.active { display: block; }
+
+.settings-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+.settings-tabs .active { border-color: var(--ember); background: var(--ember-soft); }
+.settings-tab-panel { display: none; }
+.settings-tab-panel.active { display: block; }
