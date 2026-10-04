@@ -109,3 +109,12 @@ test('four machine groups contain the corresponding information and keep Details
   assert.ok(text(details).includes('internal-node'));
   assert.ok(!groups.some(group=>all(group).includes(details)));
 });
+test('danger styling and status badges retain the underlying machine and Forge states',()=>{
+  const {card}=setup({...fixture,forge:{status:'deployment_failed'},image_forge:{status:'deploying'},audio_forge:{status:'not_deployed'}});
+  const nodes=all(card);
+  const destroy=nodes.find(node=>node.tag==='button' && node.textContent==='Destroy Pod');
+  assert.ok(destroy.className.split(' ').includes('danger-button'));
+  const badges=nodes.filter(node=>node.className?.split(' ').includes('status-badge'));
+  assert.deepEqual(badges.map(node=>node.dataset.status).sort(),['running','online','deployment_failed','deploying','not_deployed'].sort());
+  assert.equal(nodes.find(node=>node.tag==='details').open,false);
+});

@@ -231,7 +231,7 @@
             <div><h2>Asset library</h2><p class="section-copy">Characters and generated media.</p></div>
             <button class="ghost-button hidden" id="refreshHistoryButton" type="button">Refresh media</button>
           </div>
-          <div class="asset-tabs" role="tablist" aria-label="Asset library sections">
+          <div class="asset-tabs ui-tabs" role="tablist" aria-label="Asset library sections">
             <button class="secondary-button active" id="assetCharactersTab" data-asset-tab="characters" type="button" role="tab" aria-controls="subjectsView" aria-selected="true">Characters <span class="nav-count" id="subjectCount">0</span></button>
             <button class="secondary-button" id="assetImagesTab" data-asset-tab="images" type="button" role="tab" aria-controls="historyView" aria-selected="false" tabindex="-1">Images</button>
             <button class="secondary-button" id="assetAudioTab" data-asset-tab="audio" type="button" role="tab" aria-controls="assetAudioView" aria-selected="false" tabindex="-1">Audio</button>
@@ -256,7 +256,7 @@
             </div>
             <div class="backup-actions local-import-actions">
               <input id="localDataFile" type="file" accept=".zip,application/zip" aria-label="Choose EverSpark data ZIP">
-              <button class="secondary-button" id="restoreDataButton" type="button">Validate and restore</button>
+              <button class="secondary-button danger-button" id="restoreDataButton" type="button">Validate and restore</button>
             </div>
           </div>
           <div class="storage-panel hidden" id="backupPanel" data-cloud-storage>
@@ -286,7 +286,7 @@
             </div>
             <div class="backup-actions">
               <select id="restorePointSelect" aria-label="Data restore point"></select>
-              <button class="secondary-button" id="startRestoreButton" type="button">Restore selected batch</button>
+              <button class="secondary-button danger-button" id="startRestoreButton" type="button">Restore selected batch</button>
             </div>
           </div>
                   </div>
@@ -324,7 +324,7 @@
             <p class="section-kicker">Vast available credit</p>
             <p class="vast-credit-amount" id="vastBalance" aria-live="polite">Unavailable</p>
           </aside>
-          <div class="compute-tabs" role="tablist" aria-label="Compute sections">
+          <div class="compute-tabs ui-tabs" role="tablist" aria-label="Compute sections">
             <button class="secondary-button active" id="computeMachinesTab" data-compute-tab="machines" role="tab" aria-selected="true" aria-controls="machinesView" type="button">My machines</button>
             <button class="secondary-button" id="computeOffersTab" data-compute-tab="offers" role="tab" aria-selected="false" aria-controls="offersView" tabindex="-1" type="button">Rent GPU</button>
             <button class="secondary-button" id="computeRuntimeTab" data-compute-tab="runtime" role="tab" aria-selected="false" aria-controls="runtimeView" tabindex="-1" type="button">Runtime status</button>
@@ -548,7 +548,7 @@
           <div class="section-toolbar">
             <div><h2>Settings</h2><p class="section-copy">Model services and connection settings.</p></div>
           </div>
-          <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+          <div class="settings-tabs ui-tabs" role="tablist" aria-label="Settings sections">
             <button class="secondary-button active" id="settingsModelsTab" data-settings-tab="models" role="tab" aria-selected="true" aria-controls="modelsView" type="button">Model services</button>
             <button class="secondary-button" id="settingsConnectionsTab" data-settings-tab="connections" role="tab" aria-selected="false" aria-controls="machineConfigurationView" tabindex="-1" type="button">Accounts and Nodes</button>
             <button class="secondary-button" id="settingsStorageTab" data-settings-tab="storage" role="tab" aria-selected="false" aria-controls="storageView" tabindex="-1" type="button">Cloud storage configuration</button>
@@ -602,7 +602,7 @@
             <input id="vastApiKey" type="password" autocomplete="new-password" spellcheck="false" required placeholder="Enter or replace API Key">
             <div class="machine-actions">
               <button class="primary-button" id="saveVastKey" type="submit">Verify and save</button>
-              <button class="ghost-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
+              <button class="ghost-button danger-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
             </div>
           </form>
           <form class="storage-panel machine-credential" id="nodeConnectionForm">
@@ -637,7 +637,7 @@
                 <label>rclone configuration <input id="rcloneConfigFile" type="file" accept=".conf,text/plain" required></label>
                 <button class="secondary-button" type="submit">Import connections</button>
               </form>
-              <details><summary>rclone executable</summary>
+              <details class="ui-details"><summary>rclone executable</summary>
                 <label>Executable path <input id="rcloneExecutable" placeholder="C:\rclone\rclone.exe"></label>
                 <p class="section-copy">Leave empty to detect rclone automatically.</p>
               </details>
@@ -662,7 +662,7 @@
             </div>
           </div>
           <div class="storage-panel hidden" data-cloud-storage>
-            <details><summary>Advanced directory mappings</summary>
+            <details class="ui-details"><summary>Advanced directory mappings</summary>
             <div class="storage-heading">
               <div>
                 <p class="section-kicker">REMOTE PATHS</p>

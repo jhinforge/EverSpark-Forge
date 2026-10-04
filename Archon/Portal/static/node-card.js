@@ -11,11 +11,13 @@
     panel.dataset.nodeStatus = node.status;
     const labels = { joining: "Joining", online: "Online", offline: "Offline", unhealthy: "Unhealthy", removed: "Removed", unconfigured: "Not configured" };
     const heading = document.createElement("p");
-    heading.className = "node-state";
+    heading.className = "node-state status-badge";
+    heading.dataset.status = node.status;
     bind(heading, "Node Agent: {status}", { status: { i18nKey: labels[node.status] || "Unknown" } });
     panel.appendChild(heading);
     const details = detailsContainer || document.createElement("details");
     if (!detailsContainer) {
+      details.className = "ui-details";
       const summary = document.createElement("summary");
       bind(summary, "Details");
       details.appendChild(summary);

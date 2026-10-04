@@ -201,6 +201,7 @@ function transientApiError(error) {
 function showNotice(message, type = "error") {
   elements.noticeText.textContent = message;
   elements.notice.classList.toggle("error", type === "error");
+  elements.notice.classList.toggle("success", type === "success");
   elements.notice.classList.remove("hidden");
 }
 
@@ -1171,7 +1172,7 @@ function renderModelConnections() {
       });
       const remove = document.createElement("button");
       remove.type = "button";
-      remove.className = "ghost-button";
+      remove.className = "ghost-button danger-button";
       uiText(remove, "Remove connection");
       remove.addEventListener("click", async () => {
         if (!window.confirm(t("Remove this model connection?"))) return;
@@ -1334,16 +1335,16 @@ function setView(name) {
   if (name === "storage" || name === "resources" || name === "storage-configuration") Promise.all([loadCloudConfiguration(), loadDirectDownload()]);
 }
 
-function machineMessage(message) {
+function machineMessage(message, style = "") {
   const empty = document.createElement("p");
-  empty.className = "machine-empty";
+  empty.className = `machine-empty ${style}`.trim();
   uiText(empty, message);
   elements.vastInstanceList.replaceChildren(empty);
 }
 
-function offerMessage(message) {
+function offerMessage(message, style = "") {
   const empty = document.createElement("p");
-  empty.className = "machine-empty";
+  empty.className = `machine-empty ${style}`.trim();
   uiText(empty, message);
   elements.vastOfferList.replaceChildren(empty);
 }
@@ -1432,7 +1433,7 @@ async function loadVastOffers(event) {
   const requestId = ++state.vastOfferRequest;
   const button = $("#searchVastOffers");
   button.disabled = true;
-  offerMessage("Searching available Pods…");
+  offerMessage("Searching available Pods…", "ui-loading");
   try {
     const credential = await api("/api/machines/vast/credential");
     if (!credential.configured) {
@@ -1460,7 +1461,7 @@ async function loadVastOffers(event) {
       count: (result.offers || []).length, disk: result.disk_gb, time: fetched,
     });
   } catch (error) {
-    if (requestId === state.vastOfferRequest) offerMessage(error.message);
+    if (requestId === state.vastOfferRequest) offerMessage(error.message, "ui-error");
   } finally {
     if (requestId === state.vastOfferRequest) button.disabled = false;
   }
@@ -1539,6 +1540,7 @@ function renderMachine(machine) {
   const forgeGroup = group("forge", "Forge");
   const operationsGroup = group("operations", "Machine actions");
   const machineDetails = document.createElement("details");
+  machineDetails.className = "ui-details";
   const detailsSummary = document.createElement("summary");
   uiText(detailsSummary, "Details");
   machineDetails.appendChild(detailsSummary);
@@ -1558,7 +1560,8 @@ function renderMachine(machine) {
   const title = document.createElement("h3");
   title.textContent = machine.label || `Vast #${machine.id}`;
   const status = document.createElement("p");
-  status.className = "machine-state";
+  status.className = "machine-state status-badge";
+  status.dataset.status = machine.actual_status || "unknown";
   status.textContent = `Vast #${machine.id} · ${machine.actual_status || "unknown"}`;
   const gpu = document.createElement("p");
   gpu.textContent = `${machine.num_gpus || 0} × ${machine.gpu_name || "GPU unknown"}`;
@@ -1576,6 +1579,8 @@ function renderMachine(machine) {
     machineDetails.appendChild(address);
   }
   const forge = document.createElement("p");
+  forge.className = "status-badge";
+  forge.dataset.status = machine.forge?.status || "not_deployed";
   const labels = {not_deployed: "Not deployed", deploying: "Deployment in progress",
     ready: "Concept Forge ready", deployment_failed: "Deployment failed",
     deployment_unknown: "Deployment outcome unknown; check Pod",
@@ -1596,6 +1601,8 @@ function renderMachine(machine) {
   }
   if (machine.image_forge) {
     const imageForge = document.createElement("p");
+    imageForge.className = "status-badge";
+    imageForge.dataset.status = machine.image_forge.status;
     const imageLabels = {ready: "Image Forge ready", deploying: "Image Forge deploying",
       recovering: "Recovering previous task result",
       verifying: "Verifying Image Forge",
@@ -1615,10 +1622,14 @@ function renderMachine(machine) {
   }
   if (!machine.image_forge) {
     const imageStatus = document.createElement("p");
+    imageStatus.className = "status-badge";
+    imageStatus.dataset.status = "not_deployed";
     uiText(imageStatus, "Image Forge not deployed");
     forgeGroup.appendChild(imageStatus);
   }
   const audioStatus = document.createElement("p");
+  audioStatus.className = "status-badge";
+  audioStatus.dataset.status = machine.audio_forge?.status || "not_deployed";
   const audioLabels = { not_deployed: "Not deployed", ready: "Ready", deploying: "Deployment in progress",
     deployment_failed: "Deployment failed", deployment_unknown: "Deployment outcome unknown; check Pod",
     verifying: "Verifying", verification_required: "Verification required", recovering: "Recovering previous task result" };
@@ -1742,7 +1753,7 @@ function renderMachine(machine) {
   forgeGroup.appendChild(forgeNodes.render(machine));
   const destroy = document.createElement("button");
   destroy.type = "button";
-  destroy.className = "ghost-button";
+  destroy.className = "ghost-button danger-button";
   uiText(destroy, "Destroy Pod");
   destroy.addEventListener("click", async () => {
     if (!window.confirm(t("Destroy Vast Pod #{id}? All data on this Pod will be permanently deleted.",
@@ -1796,7 +1807,7 @@ async function loadVastBalance() {
 function loadMachines(cursor = "", silent = false) {
   if (state.machineLoadPromise) return state.machineLoadPromise;
   state.machineLoadPromise = (async () => {
-    if (!cursor && !silent) machineMessage("Loading machines…");
+    if (!cursor && !silent) machineMessage("Loading machines…", "ui-loading");
     try {
       const credential = await api("/api/machines/vast/credential");
       uiText(elements.vastCredentialStatus, credential.configured
@@ -1813,7 +1824,7 @@ function loadMachines(cursor = "", silent = false) {
       await forgeNodes.refresh();
       renderMachinesPage(await api(url), cursor, silent);
     } catch (error) {
-      if (!silent && !cursor) machineMessage(error.message);
+      if (!silent && !cursor) machineMessage(error.message, "ui-error");
       else if (!silent) showNotice(error.message);
     }
   })().finally(() => { state.machineLoadPromise = null; });
@@ -2615,7 +2626,7 @@ function loadHistory() {
 async function loadImageHistory() {
   elements.galleryGrid.replaceChildren();
   const loading = document.createElement("div");
-  loading.className = "empty-collection";
+  loading.className = "empty-collection ui-loading";
   uiText(loading, "Loading Image Forge history...");
   elements.galleryGrid.appendChild(loading);
   try {
@@ -2705,7 +2716,8 @@ function runtimeCard(title, online, copy, args = {}) {
   const name = document.createElement("h3");
   uiText(name, title);
   const dot = document.createElement("span");
-  dot.className = `runtime-status ${online ? "online" : "offline"}`;
+  dot.className = `runtime-status status-indicator ${online ? "online" : "offline"}`;
+  dot.dataset.status = online ? "online" : "offline";
   const detail = document.createElement("p");
   uiText(detail, copy, args);
   head.append(name, dot);
