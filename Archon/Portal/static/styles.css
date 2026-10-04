@@ -612,3 +612,7 @@ input[type="file"]::file-selector-button { margin-right: var(--spacing-md); padd
   #forgeView .creation-task-option { padding: var(--spacing-sm); font-size: var(--font-size-sm); }
   #forgeView .creation-settings { margin-inline: var(--spacing-lg); }
 }
+
+/* Character assets stay primary; backup controls share a secondary disclosure. */
+#subjectsView .asset-data-management { margin-top: var(--section-gap); padding: var(--spacing-lg); }
+#subjectsView .asset-data-management > summary { font-size: var(--font-size-base); }

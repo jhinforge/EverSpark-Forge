@@ -1,6 +1,7 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Data management / Backup": "数据管理 / 备份",
     "Creation workspace mode": "创作工作模式",
     "What would you like to create?": "生成什么？",
     "Image": "图像",
