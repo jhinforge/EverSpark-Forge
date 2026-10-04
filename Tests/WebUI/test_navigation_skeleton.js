@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('Archon/Portal/static/app.js','utf8');
 const copy = source.slice(source.indexOf('const viewCopy ='),source.indexOf('async function api('));
-const navigation = source.slice(source.indexOf('const legacyViewSections ='),source.indexOf('function machineMessage('));
+const navigation = source.slice(source.indexOf('function setAssetTab('),source.indexOf('function machineMessage('));
 function setup() {
   const classes = (initial=[]) => {const values=new Set(initial);return {toggle(key,on){on?values.add(key):values.delete(key);},contains(key){return values.has(key);}};};
   const primary=['forge','assets','compute','resources','settings'];
@@ -17,7 +17,7 @@ function setup() {
   const computePanels=['machines','offers','runtime'].map(computePanel=>({dataset:{computePanel},classList:classes()}));
   const settingsButtons=['models','connections','storage'].map(settingsTab=>({dataset:{settingsTab},classList:classes(),setAttribute(key,value){this[key]=value;}}));
   const settingsPanels=['models','connections','storage'].map(settingsPanel=>({dataset:{settingsPanel},classList:classes()}));
-  const nodes={'#computeView':panels.find(p=>p.dataset.viewPanel==='compute'),'#machinesView':computePanels[0],'#offersView':computePanels[1],'#runtimeView':computePanels[2],'#refreshHistoryButton':{classList:classes()},'#legacyPageNavigation':{classList:classes(['hidden'])},'#returnToSectionButton':{dataset:{}},'#viewEyebrow':{},'#viewTitle':{}};
+  const nodes={'#computeView':panels.find(p=>p.dataset.viewPanel==='compute'),'#machinesView':computePanels[0],'#offersView':computePanels[1],'#runtimeView':computePanels[2],'#refreshHistoryButton':{classList:classes()},'#viewEyebrow':{},'#viewTitle':{}};
   const calls=[];
   const context={state:{assetTab:'characters',computeTab:'machines',settingsTab:'models'},$$:selector=>selector==='.nav-item'?buttons:selector==='[data-asset-tab]'?assetButtons:selector==='[data-asset-panel]'?assetPanels:selector==='[data-compute-tab]'?computeButtons:selector==='[data-compute-panel]'?computePanels:selector==='[data-settings-tab]'?settingsButtons:selector==='[data-settings-panel]'?settingsPanels:panels,$:selector=>nodes[selector],uiText(node,text){node.textContent=text;},Promise,
     nodeConnection:{refresh(){calls.push('nodeConnection');}}};
@@ -31,7 +31,6 @@ test('five primary sections display their own containers without starting unrela
     context.setView(name);
     assert.deepEqual(buttons.filter(b=>b.classList.contains('active')).map(b=>b.dataset.view),[name]);
     assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),[name]);
-    assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
   }
   assert.deepEqual(calls,['loadSubjects','loadCloudConfiguration','nodeConnection','loadMachines','loadVastBalance','loadCloudConfiguration','loadDirectDownload','loadModelConnections']);
 });
@@ -44,7 +43,6 @@ test('configuration shortcuts now open matching Settings tabs with original load
     assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),['settings']);
     assert.deepEqual(settingsPanels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.settingsPanel),[tab]);
     assert.deepEqual(calls,expected);
-    assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
   }
 });
 test('HTML has only five page containers and all configuration shortcuts resolve through Settings',()=>{
@@ -66,7 +64,6 @@ test('Subjects and Gallery aliases open the matching asset tab without a legacy 
     assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),['assets']);
     assert.deepEqual(assetPanels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.assetPanel),[tab]);
     assert.deepEqual(calls,name==='subjects'?[loader,'loadCloudConfiguration']:[loader]);
-    assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
   }
 });
 test('asset tabs reuse character/media loaders and preserve the selected tab when returning',()=>{
@@ -92,7 +89,6 @@ test('Machines and Runtime aliases select compute tabs and reuse their existing 
     assert.deepEqual(computePanels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.computePanel),[name]);
     assert.equal(computeButtons.find(b=>b.dataset.computeTab===name)['aria-selected'],'true');
     assert.deepEqual(calls,expected);
-    assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
   }
 });
 test('compute tab selection persists, and polling visibility stops when leaving Compute',()=>{
@@ -136,7 +132,6 @@ test('Resources and the old Storage alias reuse configuration and download loade
     assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),['resources']);
     assert.deepEqual(buttons.filter(b=>b.classList.contains('active')).map(b=>b.dataset.view),['resources']);
     assert.deepEqual(calls,['loadCloudConfiguration','loadDirectDownload']);
-    assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
   }
 });
 test('Resources contains every download and remote model control, leaving configuration and backup outside',()=>{

@@ -256,7 +256,6 @@
     "Selected Image Node": "当前 Image 节点",
     "Remote Forge connections": "远端 Forge 连接",
     "Remote Forge Node selected.": "已选择远端 Forge 节点。",
-    "Remote Concept and Image Nodes are connected. Open Create to generate.": "远端 Concept 与 Image 节点已接入，可前往创作页面生成图片。",
     "Select the ready Concept and Image machines below to connect generation.": "请在下方选择已就绪的 Concept 和 Image 机器，接通绘图链路。",
     "Select a ready Concept machine to complete the generation connection.": "请选择已就绪的 Concept 机器，完成绘图连接。",
     "Select a ready Image machine to complete the generation connection.": "请选择已就绪的 Image 机器，完成绘图连接。",
@@ -337,7 +336,6 @@
     "Load more": "加载更多",
     "Vast connection verified and saved.": "Vast 连接已验证并保存。",
     "Remove the saved Vast API Key from this machine?": "从本机删除已保存的 Vast API Key？",
-    "Turn an idea into an image.": "把想法变成图像。",
     "Build identity that persists.": "建立可持续使用的角色形象。",
     "Review the latest outputs.": "查看最近生成的图像。",
     "Manage models and backups.": "管理模型与备份。",
@@ -368,7 +366,6 @@
     "Waiting for image service": "正在等待绘图服务",
     "Enable tool": "启动工具",
     "Not installed": "未安装",
-    "Offline": "未运行",
     "Installing tool": "正在安装工具",
     "Enabling tool": "正在启动工具",
     "Concept LLM": "Concept LLM",
@@ -550,7 +547,6 @@
     "Remote download failed": "远端下载失败",
     "Registering {name} with Ollama": "正在向 Ollama 注册 {name}",
     "Direct download job disappeared": "直链下载任务已不存在",
-    "No persistent subject": "暂无角色主体",
     "Identity ready": "主体形象已就绪",
     "{name} · revision {revision}": "{name} · 第 {revision} 版",
     "No subjects yet. Start a conversation and EverSpark will extract one automatically.": "尚无角色。开始对话后，EverSpark 会自动提取。",
@@ -604,6 +600,38 @@
     "Invalid model connection test status.": "模型连接测试状态无效。",
     "Model connection test timed out.": "模型连接测试超时。",
     "Request failed (HTTP {status})": "请求失败（HTTP {status}）",
+    "Turn ideas into images, audio, or both.": "将想法变成图像、音频，或两者结合。",
+    "Audio results": "音频结果",
+    "Generated voice audio. Play or download WAV files; refresh history to update audio too.": "已生成的人声音频，可播放或下载 WAV；刷新历史记录也会更新音频。",
+    "Deploy Audio Forge": "部署 Audio Forge",
+    "Verify Audio Forge": "验证 Audio Forge",
+    "Audio Forge ready": "Audio Forge 就绪",
+    "Download WAV": "下载 WAV",
+    "Voice requirements: {description}": "声音要求：{description}",
+    "Loading audio results…": "正在读取音频结果…",
+    "No audio results yet. Select an Audio Forge node and generate audio first.": "暂无音频结果；请先选择 Audio Forge 节点并生成音频。",
+    "Concept Forge is preparing task input": "Concept Forge 正在生成任务输入",
+    "{forge} Forge is generating": "{forge} Forge 正在生成",
+    "Use for Audio Forge": "使用此 Audio Forge 节点",
+    "Selected Audio Node": "已选 Audio 节点",
+    "Not selected": "未选择",
+    "Model download targets: Image Forge → {image}; GGUF → Concept Forge {concept}. Third-party APIs do not require GGUF downloads.": "模型下载目标：Image Forge → {image}；GGUF → Concept Forge {concept}。第三方 API 无需下载 GGUF。",
+    "Remote Concept and Image Nodes are connected. Open Creation to generate.": "远端 Concept 与 Image 节点已接入，可前往创作页面生成。",
+    "Select a ready Concept machine or choose an OpenAI Compatible service in Creation.": "请选择已就绪的 Concept 机器，或在创作页面选择 OpenAI Compatible 服务。",
+    "Unable to verify": "无法验证",
+    "Service status could not be verified because the runtime request failed.": "运行状态请求失败，无法验证服务状态。",
+    "Runtime checks failed; service status is unverified.": "运行状态检查失败，服务状态无法验证。",
+    "{forge} · {status}": "{forge} · {status}",
+    "{count} × {model}": "{count} × {model}",
+    "GPU unknown": "GPU 未知",
+    "${price} / hour": "${price} / 小时",
+    "{size} GB VRAM / GPU": "每张 GPU 显存 {size} GB",
+    "Reliability: {percent}%": "可靠性：{percent}%",
+    "Offer ID: {id}": "报价 ID：{id}",
+    "Available disk: {size} GB": "可用磁盘：{size} GB",
+    "Upload / download: ${up} / ${down} per GB": "上传 / 下载：每 GB ${up} / ${down}",
+    "{count} cores": "{count} 核",
+    "Active filters: {filters}": "当前筛选：{filters}",
   };
 
   const storageKey = "everspark.language";
@@ -613,32 +641,48 @@
     language = String(navigator.language || "").toLowerCase().startsWith("zh") ? "zh-CN" : "en";
   }
   const bound = new Set();
+  // Bindings must not keep replaced cards alive. Clean removed subtrees after a
+  // DOM batch, retaining nodes moved elsewhere and nodes awaiting insertion.
+  if (typeof MutationObserver !== "undefined") {
+    new MutationObserver((records) => {
+      const removed = records.flatMap((record) => [...record.removedNodes]);
+      if (!removed.length) return;
+      for (const item of bound) {
+        const node = item.node.deref();
+        if (!node || (!node.isConnected && removed.some((root) => root === node || root.contains(node)))) {
+          bound.delete(item);
+        }
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
   const t = (key, args = {}) => {
     const template = language === "zh-CN" ? zh[key] || key : key;
     return template.replace(/\{([a-z_]+)\}/g, (match, name) =>
-      Object.hasOwn(args, name) ? String(args[name]?.i18nKey ? t(args[name].i18nKey) : args[name]) : match);
+      Object.hasOwn(args, name) ? String(args[name]?.i18nKey ? t(args[name].i18nKey, args[name]) : args[name]) : match);
   };
   function unbind(node) {
-    for (const item of bound) if (item.node === node) bound.delete(item);
+    for (const item of bound) if (!item.node.deref() || item.node.deref() === node) bound.delete(item);
   }
   function bind(node, key, args = {}, property = "textContent") {
     if (!node) return;
     for (const item of bound) {
-      if (item.node === node && item.property === property) bound.delete(item);
+      const target = item.node.deref();
+      if (!target || (target === node && item.property === property)) bound.delete(item);
     }
-    bound.add({ node, key, args, property });
+    bound.add({ node: new WeakRef(node), key, args, property });
     if (property === "textContent" && node.nodeType === Node.TEXT_NODE) node.textContent = t(key, args);
     else if (property in node) node[property] = t(key, args);
     else node.setAttribute(property, t(key, args));
   }
   function refresh() {
     for (const item of bound) {
-      if (!item.node.isConnected) { bound.delete(item); continue; }
+      const node = item.node.deref();
+      if (!node?.isConnected) { bound.delete(item); continue; }
       const value = t(item.key, item.args);
-      if (item.property === "staticText") item.node.textContent = item.prefix + value + item.suffix;
-      else if (item.property === "textContent" && item.node.nodeType === Node.TEXT_NODE) item.node.textContent = value;
-      else if (item.property in item.node) item.node[item.property] = value;
-      else item.node.setAttribute(item.property, value);
+      if (item.property === "staticText") node.textContent = item.prefix + value + item.suffix;
+      else if (item.property === "textContent" && node.nodeType === Node.TEXT_NODE) node.textContent = value;
+      else if (item.property in node) node[item.property] = value;
+      else node.setAttribute(item.property, value);
     }
     document.documentElement.lang = language;
     const selector = document.getElementById("languageSelect");
@@ -654,7 +698,7 @@
       if (key && Object.hasOwn(zh, key)) {
         const prefix = node.textContent.match(/^\s*/)[0];
         const suffix = node.textContent.match(/\s*$/)[0];
-        bound.add({ node, key, args: {}, property: "staticText", prefix, suffix });
+        bound.add({ node: new WeakRef(node), key, args: {}, property: "staticText", prefix, suffix });
       }
     }
     for (const element of document.querySelectorAll("[placeholder], [aria-label], [title], img[alt]")) {

@@ -14,8 +14,6 @@
     <script src="/static/app.js" defer></script>
   </head>
   <body>
-    <div class="ambient ambient-one"></div>
-    <div class="ambient ambient-two"></div>
 
     <div class="app-shell">
       <aside class="sidebar">
@@ -67,7 +65,7 @@
         <header class="topbar">
           <div>
             <p class="eyebrow" id="viewEyebrow">WORKSPACE / CREATION</p>
-            <h1 id="viewTitle">Turn an idea into an image.</h1>
+            <h1 id="viewTitle">Turn ideas into images, audio, or both.</h1>
           </div>
           <div class="top-actions">
             <label class="language-picker" for="languageSelect">
@@ -90,9 +88,6 @@
           <button id="dismissNotice" type="button" aria-label="Dismiss">×</button>
         </div>
 
-        <div class="legacy-page-navigation hidden" id="legacyPageNavigation">
-          <button class="ghost-button" id="returnToSectionButton" data-view-link="" type="button">Back to section</button>
-        </div>
 
         <section class="view active" id="forgeView" data-view-panel="forge" data-primary-view>
           <div class="forge-layout">
@@ -321,8 +316,8 @@
           <div class="section-toolbar">
             <div>
               <p class="section-kicker">AUDIO FORGE OUTPUT</p>
-              <h2>音频结果</h2>
-              <p class="section-copy">已生成的人声音频，可播放或下载 WAV。点击刷新图库可同时刷新音频。</p>
+              <h2>Audio results</h2>
+              <p class="section-copy">Generated voice audio. Play or download WAV files; refresh history to update audio too.</p>
             </div>
           </div>
           <div class="gallery-grid" id="audioHistoryGrid"></div>
@@ -362,12 +357,11 @@
           <button class="secondary-button" id="moreVastInstances" type="button" hidden>Load more</button>
         </div>
           <div class="compute-tab-panel" id="offersView" data-compute-panel="offers" role="tabpanel" aria-labelledby="computeOffersTab">
-          <div class="section-toolbar machine-heading"><h3>Search Vast offers</h3><button class="ghost-button" id="toggleVastOffers" type="button" aria-expanded="true">Collapse</button></div>
+          <div class="section-toolbar machine-heading"><h3>Search Vast offers</h3><button class="ghost-button" id="toggleVastOffers" type="button" aria-expanded="true" aria-controls="vastOffersPanel">Collapse</button></div>
           <div id="vastOffersPanel">
           <form class="storage-panel offer-search" id="vastOfferForm">
             <div>
               <p class="section-kicker">AVAILABLE PODS</p>
-              <h3>Search Vast offers</h3>
               <p class="section-copy">Verified, rentable NVIDIA on-demand offers. Prices change; searching does not rent a Pod.</p>
             </div>
             <div class="offer-filters">
@@ -636,7 +630,7 @@
             <div class="storage-heading">
               <div><p class="section-kicker">CLOUD STORAGE</p><h3>Cloud storage</h3>
                 <p class="section-copy" id="cloudConfigurationSummary">Import your rclone connections and choose model directories to enable cloud operations.</p></div>
-              <button class="secondary-button" id="configureCloudButton" type="button">Enable cloud storage</button>
+              <button class="secondary-button" id="configureCloudButton" type="button" aria-expanded="false" aria-controls="cloudConfigurationEditor">Enable cloud storage</button>
             </div>
             <div id="cloudConfigurationEditor" class="hidden">
               <form id="cloudImportForm" class="backup-actions">

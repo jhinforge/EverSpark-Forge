@@ -17,7 +17,7 @@ const context = {
   elements: {viewerImage: viewer, imageViewer: viewer},
   window: {location: {protocol: "http:", href: "http://127.0.0.1:8780/"},
            setTimeout() {return 1;}, clearTimeout() {}},
-  URL, encodeURIComponent, uiAttr() {}
+  URL, encodeURIComponent, uiAttr() {}, uiText(node,key,args={}) {node.textContent=key.replace(/\{(\w+)\}/g,(_,name)=>args[name]);}
 };
 vm.createContext(context);
 vm.runInContext(extract("function imageButton(", "function renderResults(")

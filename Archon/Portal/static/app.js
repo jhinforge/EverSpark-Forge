@@ -160,15 +160,7 @@ const viewCopy = {
   compute: ["WORKSPACE / COMPUTE", "Machines and service readiness."],
   resources: ["WORKSPACE / RESOURCES", "Model downloads and remote libraries."],
   settings: ["WORKSPACE / SETTINGS", "Model services and connection settings."],
-  forge: ["WORKSPACE / CREATION", "Turn an idea into an image."],
-  subjects: ["WORKSPACE / SUBJECTS", "Build identity that persists."],
-  history: ["WORKSPACE / GALLERY", "Review the latest outputs."],
-  storage: ["WORKSPACE / STORAGE", "Manage models and backups."],
-  "storage-configuration": ["WORKSPACE / STORAGE", "Cloud storage configuration"],
-  runtime: ["WORKSPACE / RUNTIME", "Know what is ready."],
-  models: ["WORKSPACE / MODEL SERVICES", "Connect language models."],
-  machines: ["WORKSPACE / MACHINES", "Manage your machines."],
-  "machine-configuration": ["WORKSPACE / MACHINES", "Vast / Tailscale configuration"],
+  forge: ["WORKSPACE / CREATION", "Turn ideas into images, audio, or both."],
 };
 
 async function api(path, options = {}) {
@@ -673,6 +665,7 @@ async function saveCloudConfiguration() {
     state.pathsLoaded = false;
     state.remoteStorage = null;
     $("#cloudConfigurationEditor").classList.add("hidden");
+    $("#configureCloudButton").setAttribute("aria-expanded", "false");
     uiText($("#cloudConfigurationMessage"), "Cloud configuration saved and active.");
     showNotice(t("Cloud configuration saved and active."), "success");
     await Promise.all([loadRemoteStorage(true), loadBackup(), loadRestorePoints()]);
@@ -1240,7 +1233,7 @@ async function testModelService() {
   try {
     const started = await modelServiceRequest("test", modelServicePayload());
     if (!started.job?.id) throw new Error(t("Model connection test did not start."));
-    showNotice(t("Testing model connection..."), "success");
+    showNotice(t("Testing model connection..."), "info");
     const deadline = Date.now() + 150000;
     let failures = 0;
     while (Date.now() < deadline) {
@@ -1265,12 +1258,6 @@ async function testModelService() {
   } catch (error) { showNotice(error.message); }
   finally { button.disabled = false; }
 }
-
-// Legacy pages remain intact and accessible while the new sections are built.
-const legacyViewSections = {
-  subjects: "assets", history: "assets", machines: "compute",
-  "machine-configuration": "compute", runtime: "compute", storage: "resources", "storage-configuration": "resources", models: "settings",
-};
 
 function setAssetTab(name) {
   if (!["characters", "images", "audio"].includes(name)) return;
@@ -1338,22 +1325,14 @@ function setView(name) {
     name = "settings";
   }
   if (!viewCopy[name]) return;
-  const section = legacyViewSections[name] || name;
-  $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === section));
+  $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
   $$("[data-view-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.viewPanel === name));
-  $("#legacyPageNavigation").classList.toggle("hidden", !legacyViewSections[name]);
-  $("#returnToSectionButton").dataset.viewLink = section;
   uiText($("#viewEyebrow"), viewCopy[name][0]);
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "assets") setAssetTab(state.assetTab);
   if (name === "compute") setComputeTab(state.computeTab);
   if (name === "settings") setSettingsTab(state.settingsTab);
-  if (name === "machine-configuration") { nodeConnection.refresh(); loadMachines(); }
-  if (name === "history") loadHistory();
-  if (name === "runtime") loadRuntime();
-  if (name === "machines") { nodeConnection.refresh(); loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
-  if (name === "models") loadModelConnections();
-  if (name === "storage" || name === "resources" || name === "storage-configuration") Promise.all([loadCloudConfiguration(), loadDirectDownload()]);
+  if (name === "resources") Promise.all([loadCloudConfiguration(), loadDirectDownload()]);
 }
 
 function machineMessage(message, style = "") {
@@ -1401,30 +1380,30 @@ function renderOffer(offer, diskGb) {
   const card = document.createElement("article");
   card.className = "machine-card";
   const title = document.createElement("h3");
-  title.textContent = `${offer.num_gpus || 0} × ${offer.gpu_name || "GPU unknown"}`;
+  uiText(title, "{count} × {model}", { count: offer.num_gpus || 0, model: offer.gpu_name || { i18nKey: "GPU unknown" } });
   const price = document.createElement("p");
   price.className = "machine-state";
-  price.textContent = Number.isFinite(Number(offer.dph_total)) && offer.dph_total != null
-    ? `$${Number(offer.dph_total).toFixed(3)} / hour` : t("Price unavailable");
+  uiText(price, Number.isFinite(Number(offer.dph_total)) && offer.dph_total != null
+    ? "${price} / hour" : "Price unavailable", { price: Number(offer.dph_total).toFixed(3) });
   const location = document.createElement("p");
-  location.textContent = offer.geolocation || t("Location unknown");
+  uiText(location, "{value}", { value: offer.geolocation || { i18nKey: "Location unknown" } });
   const memory = document.createElement("p");
-  memory.textContent = offer.gpu_ram != null && Number.isFinite(Number(offer.gpu_ram))
-    ? `${(Number(offer.gpu_ram) / 1000).toFixed(1)} GB VRAM / GPU` : t("VRAM unknown");
+  uiText(memory, offer.gpu_ram != null && Number.isFinite(Number(offer.gpu_ram))
+    ? "{size} GB VRAM / GPU" : "VRAM unknown", { size: (Number(offer.gpu_ram) / 1000).toFixed(1) });
   const reliability = document.createElement("p");
-  reliability.textContent = offer.reliability != null && Number.isFinite(Number(offer.reliability))
-    ? `${t("Reliability")}: ${(Number(offer.reliability) * 100).toFixed(1)}%` : t("Reliability unknown");
+  uiText(reliability, offer.reliability != null && Number.isFinite(Number(offer.reliability))
+    ? "Reliability: {percent}%" : "Reliability unknown", { percent: (Number(offer.reliability) * 100).toFixed(1) });
   const details = document.createElement("details");
   const summary = document.createElement("summary");
   uiText(summary, "Offer details");
   const id = document.createElement("p");
-  id.textContent = `${t("Offer ID")}: ${offer.id}`;
+  uiText(id, "Offer ID: {id}", { id: offer.id });
   const disk = document.createElement("p");
-  disk.textContent = `${t("Available disk")}: ${offer.disk_space ?? "?"} GB`;
+  uiText(disk, "Available disk: {size} GB", { size: offer.disk_space ?? "?" });
   const transfer = document.createElement("p");
   const up = offer.inet_up_cost == null ? "?" : Number(offer.inet_up_cost).toFixed(3);
   const down = offer.inet_down_cost == null ? "?" : Number(offer.inet_down_cost).toFixed(3);
-  transfer.textContent = `${t("Upload / download")}: $${up} / $${down} per GB`;
+  uiText(transfer, "Upload / download: ${up} / ${down} per GB", { up, down });
   details.append(summary, id, disk, transfer);
   const rent = document.createElement("button");
   rent.className = "secondary-button";
@@ -1474,7 +1453,7 @@ async function loadVastOffers(event) {
       offerMessage("No offers matched these filters.");
       const details = document.createElement("p");
       details.className = "machine-empty";
-      details.textContent = `${t("Active filters")}: ${activeOfferFilters(filters)}`;
+      uiText(details, "Active filters: {filters}", { get filters() { return activeOfferFilters(filters); } });
       elements.vastOfferList.appendChild(details);
     }
     const fetched = new Date(result.fetched_at * 1000).toLocaleTimeString();
@@ -1501,7 +1480,8 @@ async function runPodAction(instanceId, action, message = "") {
     if (data.job.status === "running") {
       state.podJobs[instanceId] = window.EverSparkDeploymentProgress.format(data.job);
       const progress = document.querySelector(`[data-pod-progress="${instanceId}"]`);
-      if (progress) progress.textContent = `${t("Task stage")}: ${state.podJobs[instanceId]}`;
+      if (progress) uiText(progress, "{label}: {value}", { label: { i18nKey: "Task stage" },
+        get value() { return window.EverSparkDeploymentProgress.format(data.job); } });
       continue;
     }
     delete state.podJobs[instanceId];
@@ -1514,7 +1494,7 @@ async function runPodAction(instanceId, action, message = "") {
     else showNotice(action === "deploy" || action === "verify" ? t("Concept Forge ready") : t("Source updated; deploy again"), "success");
     return;
   }
-  showNotice(t("Deployment in progress"));
+  showNotice(t("Deployment in progress"), "info");
 }
 
 async function deployImageForge(instanceId, action = "deploy-image") {
@@ -1530,7 +1510,8 @@ async function deployImageForge(instanceId, action = "deploy-image") {
     if (data.job.status === "running") {
       state.podJobs[instanceId] = window.EverSparkDeploymentProgress.format(data.job);
       const progress = document.querySelector(`[data-pod-progress="${instanceId}"]`);
-      if (progress) progress.textContent = `${t("Task stage")}: ${state.podJobs[instanceId]}`;
+      if (progress) uiText(progress, "{label}: {value}", { label: { i18nKey: "Task stage" },
+        get value() { return window.EverSparkDeploymentProgress.format(data.job); } });
       continue;
     }
     delete state.podJobs[instanceId];
@@ -1540,7 +1521,7 @@ async function deployImageForge(instanceId, action = "deploy-image") {
     data.job.status === "completed" ? "success" : undefined);
     return;
   }
-  showNotice(t("Deployment in progress"));
+  showNotice(t("Deployment in progress"), "info");
 }
 
 function renderMachine(machine) {
@@ -1566,15 +1547,17 @@ function renderMachine(machine) {
   uiText(detailsSummary, "Details");
   machineDetails.appendChild(detailsSummary);
   function deploymentFailure(deployment, role) {
-    const full = window.EverSparkDeploymentProgress.failure(deployment);
     const summary = document.createElement("p");
     summary.className = "machine-deployment-error";
-    const firstLine = full.split(/\r?\n/)[0];
-    summary.textContent = `${role}: ${firstLine.length > 240 ? firstLine.slice(0, 240) + "…" : firstLine}`;
+    uiText(summary, "{label}: {value}", { label: role, get value() {
+      const line = window.EverSparkDeploymentProgress.failure(deployment).split(/\r?\n/)[0];
+      return line.length > 240 ? line.slice(0, 240) + "…" : line;
+    } });
     forgeGroup.appendChild(summary);
     const detail = document.createElement("p");
     detail.className = "machine-deployment-error";
-    detail.textContent = `${role}: ${full}`;
+    uiText(detail, "{label}: {value}", { label: role,
+      get value() { return window.EverSparkDeploymentProgress.failure(deployment); } });
     machineDetails.appendChild(detail);
   }
 
@@ -1585,13 +1568,13 @@ function renderMachine(machine) {
   status.dataset.status = machine.actual_status || "unknown";
   status.textContent = `Vast #${machine.id} · ${machine.actual_status || "unknown"}`;
   const gpu = document.createElement("p");
-  gpu.textContent = `${machine.num_gpus || 0} × ${machine.gpu_name || "GPU unknown"}`;
+  uiText(gpu, "{count} × {model}", { count: machine.num_gpus || 0, model: machine.gpu_name || { i18nKey: "GPU unknown" } });
   const place = document.createElement("p");
-  place.textContent = machine.geolocation || "Location unknown";
+  uiText(place, "{value}", { value: machine.geolocation || { i18nKey: "Location unknown" } });
   overviewGroup.append(title, status, gpu, place);
   if (machine.dph_total != null && Number.isFinite(Number(machine.dph_total))) {
     const price = document.createElement("p");
-    price.textContent = `$${Number(machine.dph_total).toFixed(3)} / hour`;
+    uiText(price, "${price} / hour", { price: Number(machine.dph_total).toFixed(3) });
     overviewGroup.appendChild(price);
   }
   if (machine.ssh_host) {
@@ -1610,7 +1593,7 @@ function renderMachine(machine) {
     source_updated: "Source updated; deploy again",
     updating: "Source updating", update_failed: "Source update failed",
     update_unknown: "Source update outcome unknown; check Pod"};
-  forge.textContent = `Concept Forge · ${t(labels[machine.forge?.status] || "Not deployed")}`;
+  uiText(forge, "{forge} · {status}", { forge: "Concept Forge", status: { i18nKey: labels[machine.forge?.status] || "Not deployed" } });
   if (machine.forge?.revision) {
     const revision = document.createElement("p");
     revision.textContent = `Concept Forge · ${machine.forge.revision}`;
@@ -1630,7 +1613,7 @@ function renderMachine(machine) {
       deployment_failed: "Image Forge deployment failed", not_deployed: "Image Forge not deployed",
       verification_required: "Image Forge needs verification",
       deployment_unknown: "Image Forge deployment outcome unknown"};
-    imageForge.textContent = `Image Forge · ${t(imageLabels[machine.image_forge.status] || "Image Forge not deployed")}`;
+    uiText(imageForge, "{forge} · {status}", { forge: "Image Forge", status: { i18nKey: imageLabels[machine.image_forge.status] || "Image Forge not deployed" } });
     if (machine.image_forge.revision) {
       const revision = document.createElement("p");
       revision.textContent = `Image Forge · ${machine.image_forge.revision}`;
@@ -1654,7 +1637,7 @@ function renderMachine(machine) {
   const audioLabels = { not_deployed: "Not deployed", ready: "Ready", deploying: "Deployment in progress",
     deployment_failed: "Deployment failed", deployment_unknown: "Deployment outcome unknown; check Pod",
     verifying: "Verifying", verification_required: "Verification required", recovering: "Recovering previous task result" };
-  audioStatus.textContent = `Audio Forge · ${t(audioLabels[machine.audio_forge?.status] || machine.audio_forge?.status || "Not deployed")}`;
+  uiText(audioStatus, "{forge} · {status}", { forge: "Audio Forge", status: { i18nKey: audioLabels[machine.audio_forge?.status] || machine.audio_forge?.status || "Not deployed" } });
   forgeGroup.appendChild(audioStatus);
   if (machine.audio_forge?.detail) deploymentFailure(machine.audio_forge, "Audio Forge");
   resourcesGroup.appendChild(window.EverSparkNodeCard.render(machine.node, { t, bind: uiText, details: machineDetails,
@@ -1663,7 +1646,7 @@ function renderMachine(machine) {
       try {
         await api("/api/nodes/bandwidth", {method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({node_id: machine.node.node_id})});
-        showNotice(t("Download speed test started."));
+        showNotice(t("Download speed test started."), "info");
         await loadMachines();
       } catch (error) { showNotice(error.message); }
       finally { button.disabled = false; }
@@ -1684,7 +1667,8 @@ function renderMachine(machine) {
   if (deploymentText) {
     const progress = document.createElement("p");
     progress.dataset.podProgress = String(machine.id);
-    progress.textContent = `${t("Task stage")}: ${deploymentText}`;
+    uiText(progress, "{label}: {value}", { label: { i18nKey: "Task stage" },
+      get value() { return activeDeployment ? window.EverSparkDeploymentProgress.format(activeDeployment) : t(deploymentText); } });
     forgeGroup.appendChild(progress);
   }
   if (machine.actual_status === "running" &&
@@ -1743,12 +1727,12 @@ function renderMachine(machine) {
   if (machine.node?.status === "online" && machine.actual_status === "running") {
     const actions = document.createElement("div");
     actions.className = "machine-actions";
-    for (const [action, label] of [["deploy-audio", "部署 Audio Forge"], ["verify-audio", "验证 Audio Forge"]]) {
+    for (const [action, label] of [["deploy-audio", "Deploy Audio Forge"], ["verify-audio", "Verify Audio Forge"]]) {
       if (action !== "deploy-audio") continue;
       const button = document.createElement("button");
       button.type = "button";
       button.className = "ghost-button";
-      button.textContent = label;
+      uiText(button, label);
       button.disabled = Boolean(machine.audio_forge?.job);
       button.addEventListener("click", async () => {
         button.disabled = true;
@@ -1757,12 +1741,12 @@ function renderMachine(machine) {
             headers: {"Content-Type": "application/json"}, body: JSON.stringify({instance_id: machine.id})});
           let job = data.job;
           while (job.status === "running") {
-            showNotice(window.EverSparkDeploymentProgress.format(job));
+            showNotice(window.EverSparkDeploymentProgress.format(job), "info");
             await new Promise((resolve) => setTimeout(resolve, 1800));
             job = (await api(`/api/machines/vast/audio-deployment-job?id=${encodeURIComponent(job.id)}`)).job;
           }
           if (job.status !== "completed") throw new Error(window.EverSparkDeploymentProgress.failure(job));
-          showNotice("Audio Forge 就绪", "success");
+          showNotice(t("Audio Forge ready"), "success");
           await loadMachines();
         } catch (error) { showNotice(error.message); }
         finally { button.disabled = false; }
@@ -1858,7 +1842,7 @@ function renderMachinesPage(data, cursor = "", silent = false) {
     const liveIds = new Set((data.instances || []).map((machine) => machine.id));
     for (const id of state.destroyedPods) if (!liveIds.has(id)) state.destroyedPods.delete(id);
   }
-  const signature = JSON.stringify([instances, data.next_token]);
+  const signature = JSON.stringify([instances, data.next_token, i18n.language]);
   if (!cursor && silent && state.lastMachineSignature === signature) return;
   if (!cursor) elements.vastInstanceList.replaceChildren();
   for (const machine of instances) renderMachine(machine);
@@ -2061,9 +2045,13 @@ function renderSubjectGrid() {
     uiText(inspect, "View four JSON documents →");
     const groups = document.createElement("div");
     groups.className = "subject-documents hidden";
+    groups.id = `subject-documents-${crypto.randomUUID()}`;
+    inspect.setAttribute("aria-controls", groups.id);
+    inspect.setAttribute("aria-expanded", "false");
     inspect.addEventListener("click", async () => {
       if (!groups.classList.contains("hidden")) {
         groups.classList.add("hidden");
+        inspect.setAttribute("aria-expanded", "false");
         uiText(inspect, "View four JSON documents →");
         return;
       }
@@ -2073,6 +2061,7 @@ function renderSubjectGrid() {
         const { bundle } = await api(`/api/subjects/bundle?${query}`);
         renderSubjectDocuments(groups, bundle);
         groups.classList.remove("hidden");
+        inspect.setAttribute("aria-expanded", "true");
         uiText(inspect, "Hide documents ↑");
       } catch (error) {
         showNotice(error.message);
@@ -2490,8 +2479,8 @@ async function waitForGeneration(jobId) {
     }
     if (data.job.status === "failed") throw new Error(data.job.error || t("Generation failed"));
     const active = data.job.tasks?.find((task) => ["preparing", "running"].includes(task.status));
-    if (active) setGenerationState(active.status === "preparing" ? "Concept Forge 正在生成任务输入"
-      : `${active.forge === "audio" ? "Audio" : "Image"} Forge 正在生成`, "running");
+    if (active) setGenerationState(active.status === "preparing" ? "Concept Forge is preparing task input"
+      : "{forge} Forge is generating", "running", { forge: active.forge === "audio" ? "Audio" : "Image" });
   }
 }
 
@@ -2616,11 +2605,11 @@ function audioCard(resource) {
   const download = document.createElement("a");
   download.href = fallback;
   download.download = resource.filename;
-  download.textContent = "下载 WAV";
+  uiText(download, "Download WAV");
   card.append(text, audio, download);
   if (resource.voice_description) {
     const voice = document.createElement("p");
-    voice.textContent = `声音要求：${resource.voice_description}`;
+    uiText(voice, "Voice requirements: {description}", { description: resource.voice_description });
     card.appendChild(voice);
   }
   return card;
@@ -2631,18 +2620,18 @@ async function loadAudioHistory() {
   grid.replaceChildren();
   const message = document.createElement("div");
   message.className = "empty-collection";
-  message.textContent = "正在读取音频结果…";
+  uiText(message, "Loading audio results…");
   grid.appendChild(message);
   try {
     const data = await api("/api/audio/history?limit=36");
     grid.replaceChildren();
     if (!data.audio?.length) {
-      message.textContent = "暂无音频结果；请先选择 Audio Forge 节点并生成音频。";
+      uiText(message, "No audio results yet. Select an Audio Forge node and generate audio first.");
       grid.appendChild(message);
     }
     for (const resource of data.audio || []) grid.appendChild(audioCard(resource));
   } catch (error) {
-    message.textContent = error.message;
+    uiText(message, error.message);
     grid.replaceChildren(message);
   }
 }
@@ -2745,14 +2734,15 @@ function runtimeCard(title, online, copy, args = {}) {
   const name = document.createElement("h3");
   uiText(name, title);
   const dot = document.createElement("span");
-  dot.className = `runtime-status status-indicator ${online ? "online" : "offline"}`;
-  dot.dataset.status = online ? "online" : "offline";
+  const serviceStatus = online === null ? "unknown" : online ? "online" : "offline";
+  dot.className = `runtime-status status-indicator ${serviceStatus}`;
+  dot.dataset.status = serviceStatus;
   const detail = document.createElement("p");
   uiText(detail, copy, args);
   const status = document.createElement("span");
   status.className = "status-badge";
-  status.dataset.status = online ? "online" : "offline";
-  uiText(status, online ? "Online" : "Offline");
+  status.dataset.status = serviceStatus;
+  uiText(status, online === null ? "Unable to verify" : online ? "Online" : "Offline");
   head.append(name, dot, status);
   card.append(head, detail);
   return card;
@@ -2781,9 +2771,12 @@ async function loadRuntime() {
     uiText(elements.healthDetail, ready ? "Forge services available for creation."
       : archonBackend ? "Open Compute for service readiness" : "Archon control backend is unavailable.");
   } catch (error) {
+    const copy = "Service status could not be verified because the runtime request failed.";
+    document.querySelector("#runtimeBackend").replaceChildren(runtimeCard("Archon Backend", null, copy));
+    elements.runtimeGrid.replaceChildren(...["Concept Forge", "Image Forge", "Audio Forge"].map((title) => runtimeCard(title, null, copy)));
     elements.healthDot.className = "pulse-dot partial";
     uiText(elements.healthTitle, "Status unavailable");
-    uiText(elements.healthDetail, "WebUI could not complete checks");
+    uiText(elements.healthDetail, "Runtime checks failed; service status is unverified.");
     if (computePanelVisible("runtime")) showNotice(error.message);
   }
 }
@@ -2913,7 +2906,8 @@ function bindEvents() {
   elements.restoreDataButton.addEventListener("click", restoreDataArchive);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);
   $("#configureCloudButton").addEventListener("click", () => {
-    $("#cloudConfigurationEditor").classList.toggle("hidden");
+    const collapsed = $("#cloudConfigurationEditor").classList.toggle("hidden");
+    $("#configureCloudButton").setAttribute("aria-expanded", String(!collapsed));
   });
   $("#cloudImportForm").addEventListener("submit", importCloudConnections);
   $("#browseCloudRoot").addEventListener("click", () => { void browseCloudDirectory($("#cloudRemoteSelect").value + ":"); });

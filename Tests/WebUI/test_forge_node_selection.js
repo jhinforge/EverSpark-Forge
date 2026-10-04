@@ -39,7 +39,7 @@ test('persisted selections mark current Nodes and show generation readiness', as
   assert.equal(panel.children[0].textContent, 'Selected Concept Node');
   assert.equal(panel.children[1].textContent, 'Selected Image Node');
   assert.ok(panel.children.every(button => button.disabled));
-  assert.match(ui.summary.textContent, /Open Create/);
+  assert.match(ui.summary.textContent, /Open Creation/);
 });
 test('failed binding remains retryable and shows its error beside the connection area', async () => {
   let attempts = 0, changed = 0;

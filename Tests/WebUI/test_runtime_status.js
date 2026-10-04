@@ -9,7 +9,7 @@ function setup(services, logging = {ready: false}) {
   const context = {elements, document: {querySelector: () => backend},
     api: async () => ({services, logging, ready: true}), runtimeCard: (title, online, copy) => ({title, online, copy}),
     uiText(node, text) {node.textContent = text;}, computePanelVisible: () => true,
-    showNotice(error) {throw new Error(error);}};
+    showNotice(error) {context.notice=error;}};
   vm.createContext(context);
   vm.runInContext(source.slice(source.indexOf('async function loadRuntime()'), source.indexOf('function bindEvents()')), context);
   return {context, backend, elements};
@@ -35,4 +35,37 @@ test('audio creation is available without Image; offline Archon still prevents g
     await context.loadRuntime();
     assert.equal(elements.healthTitle.textContent, online ? 'System ready' : 'Status unavailable');
   }
+});
+
+
+test('a failed runtime request replaces every stale Online card with unverified and can recover', async () => {
+  const {context,backend,elements}=setup(Object.fromEntries(['archon_backend','concept_forge','image_forge','audio_forge'].map(key=>[key,{online:true}])));
+  const healthy=context.api;
+  await context.loadRuntime();
+  context.api=async()=>{throw new Error('network timeout');};
+  await context.loadRuntime();
+  for(const card of [...backend.cards,...elements.runtimeGrid.cards]) {
+    assert.equal(card.online,null);
+    assert.match(card.copy,/could not be verified/);
+  }
+  assert.equal(elements.healthTitle.textContent,'Status unavailable');
+  assert.match(elements.healthDetail.textContent,/unverified/);
+  assert.equal(elements.healthDot.className,'pulse-dot partial');
+  context.api=healthy;
+  await context.loadRuntime();
+  assert.ok([...backend.cards,...elements.runtimeGrid.cards].every(card=>card.online));
+  assert.equal(elements.healthTitle.textContent,'System ready');
+});
+
+test('unknown runtime state is distinct from Offline in the actual card DOM', () => {
+  const node=()=>({children:[],dataset:{},append(...nodes){this.children.push(...nodes);}});
+  const context={document:{createElement:node},uiText(node,text){node.textContent=text;}};
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf('function runtimeCard('),source.indexOf('async function loadRuntime()')),context);
+  const card=context.runtimeCard('Archon Backend',null,'Request failed');
+  const [title,dot,badge]=card.children[0].children;
+  assert.equal(badge.textContent,'Unable to verify');
+  assert.equal(dot.dataset.status,'unknown');
+  assert.equal(badge.dataset.status,'unknown');
+  assert.ok(!dot.className.includes('online') && !dot.className.includes('offline'));
 });

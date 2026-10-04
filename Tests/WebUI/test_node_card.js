@@ -10,7 +10,8 @@ class Element {
 }
 const context = { window: {}, document: { createElement: (tag) => new Element(tag) } };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../Archon/Portal/static/node-card.js'), 'utf8'), context);
-const options = { t: (key) => key, bind: (node, key, args={}) => { node.textContent = key.replace(/\{(\w+)\}/g, (_, name) => args[name]?.i18nKey || args[name]); } };
+const translate = (key,args={}) => key.replace(/\{(\w+)\}/g, (_, name) => args[name]?.i18nKey ? translate(args[name].i18nKey,args[name]) : args[name]);
+const options = { t: (key) => key, bind: (node, key, args={}) => { node.textContent = translate(key,args); } };
 function texts(node) { return [node.textContent, ...node.children.flatMap(texts)].join('\n'); }
 test('always shows unconfigured status instead of hiding Node connectivity', () => {
   const panel = context.window.EverSparkNodeCard.render(undefined, options);

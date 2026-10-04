@@ -9,7 +9,7 @@ function element(tag) {
 }
 const stage = element('stage'), audioHistory = element('history'), gallery = element('gallery');
 const completedImage = {forge: 'image', status: 'completed', result: {outputs: [{images: [{filename: 'ready.png'}]}]}};
-const context = {window: {location: {protocol: 'http:'}}, document: {createElement: element}, elements: {resultStage: stage, galleryGrid: gallery}, uiText: (el, value) => {el.textContent = value;},
+const context = {window: {location: {protocol: 'http:'}}, document: {createElement: element}, elements: {resultStage: stage, galleryGrid: gallery}, uiText: (el, value, args={}) => {el.textContent = value.replace(/\{(\w+)\}/g, (_, key) => args[key]);},
   URLSearchParams, encodeURIComponent, t: x => x, setGenerationState() {},
   transientApiError: () => false, setTimeout: fn => fn(),
   imageButton: image => ({tag: 'image', ...image}), $: () => audioHistory};
@@ -26,7 +26,7 @@ vm.runInContext(extract('async function waitForGeneration(', 'async function gen
   assert.equal(card.children[0].textContent, '<hello>');
   assert.equal(card.children[1].controls, true);
   assert.equal(card.children[2].download, 'speech.wav');
-  assert.equal(card.children[3].textContent, '声音要求：young female voice');
+  assert.equal(card.children[3].textContent, 'Voice requirements: young female voice');
   context.api = async path => {
     assert.equal(path, '/api/audio/history?limit=36');
     return {audio: [{filename: 'past.wav'}]};

@@ -31,7 +31,12 @@
     if (node.hostname) field("Hostname", node.hostname);
     if (node.system) field("System", [node.system.os, node.system.architecture].filter(Boolean).join(" / "));
     if (node.runtime_id) field("Runtime ID", node.runtime_id);
-    if (node.last_seen) field("Last heartbeat", new Date(node.last_seen).toLocaleString());
+    if (node.last_seen) {
+      const date = document.createElement("p");
+      bind(date, "{label}: {value}", { label: { i18nKey: "Last heartbeat" },
+        get value() { return new Date(node.last_seen).toLocaleString(window.EverSparkI18n?.language); } });
+      details.appendChild(date);
+    }
     const messages = { unconfigured: "No Agent registration is associated with this machine. SSH deployment does not verify Node registration.",
       joining: "Waiting for Pod startup and agent registration", unhealthy: "Agent reported an unhealthy Node.",
       removed: "This Node identity has been revoked." };
@@ -56,11 +61,16 @@
       }
       if (speed.region) {
         const regions = {AS: "Asia", EU: "Europe", NA: "North America", SA: "South America", AF: "Africa", OC: "Oceania"};
-        field("Node test region", t(regions[speed.region] || "Unknown"));
+        field("Node test region", { i18nKey: regions[speed.region] || "Unknown" });
       }
       if (speed.country) field("Node egress country", speed.country);
       if (speed.error) { const detail = document.createElement("p"); bind(detail, speed.error); details.appendChild(detail); }
-      if (speed.finished_at) field("Test time", new Date(speed.finished_at).toLocaleString());
+      if (speed.finished_at) {
+        const date = document.createElement("p");
+        bind(date, "{label}: {value}", { label: { i18nKey: "Test time" },
+          get value() { return new Date(speed.finished_at).toLocaleString(window.EverSparkI18n?.language); } });
+        details.appendChild(date);
+      }
     }
     if (node.status === "online" && speedtest) {
       const button = document.createElement("button");
@@ -80,12 +90,12 @@
       const available = node.status === "online" ? node.resources.allocatable : null;
       function resource(label, total, free) {
         const row = document.createElement("tr");
-        for (const value of [label, total, free]) { const cell = document.createElement("td"); cell.textContent = value; row.appendChild(cell); }
+        for (const value of [label, total, free]) { const cell = document.createElement("td"); bind(cell, "{value}", { value }); row.appendChild(cell); }
         body.appendChild(row);
       }
-      resource("CPU", `${capacity.cpu} ${t("cores")}`, available ? `${available.cpu} ${t("cores")}` : "—");
-      resource(t("Memory"), bytes(capacity.memory), bytes(available?.memory));
-      resource(t("Disk"), bytes(capacity.disk), bytes(available?.disk));
+      resource("CPU", { i18nKey: "{count} cores", count: capacity.cpu }, available ? { i18nKey: "{count} cores", count: available.cpu } : "—");
+      resource({ i18nKey: "Memory" }, bytes(capacity.memory), bytes(available?.memory));
+      resource({ i18nKey: "Disk" }, bytes(capacity.disk), bytes(available?.disk));
       for (const [id, gpu] of Object.entries(capacity.gpu || {})) {
         const device = (node.hardware?.gpu || []).find((item) => item.id === id);
         resource(device?.name || id, bytes(gpu.vram), bytes(available?.gpu?.[id]?.vram));

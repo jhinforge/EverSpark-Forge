@@ -24,13 +24,16 @@ function setup(savedLanguage = null, browserLanguage = "zh-CN") {
       nextNode() { if (this.currentNode) return false; this.currentNode = staticText; return true; },
     }),
   };
+  let observerCallback;
   const context = {
+    MutationObserver: class { constructor(callback) {observerCallback=callback;} observe() {} },
     window: {}, document, NodeFilter: { SHOW_TEXT: 4 }, Node: { TEXT_NODE: 3 },
     localStorage: { getItem: (key) => settings.get(key), setItem: (key, value) => settings.set(key, value) },
     navigator: { language: browserLanguage },
   };
   vm.runInNewContext(source, context);
-  return { i18n: context.window.EverSparkI18n, document, staticText, dynamic, input, selector, settings };
+  return { i18n: context.window.EverSparkI18n, document, staticText, dynamic, input, selector, settings,
+    removed: (...nodes) => observerCallback(nodes.map(node=>({removedNodes:[node]}))) };
 }
 
 test("switches visible copy and restores English without changing names or field values", () => {
@@ -57,4 +60,31 @@ test("honors saved preference ahead of browser language", () => {
   assert.equal(i18n.language, "en");
   i18n.setLanguage("zh-CN");
   assert.equal(i18n.t("Storage"), "存储");
+});
+
+
+test("removed subtrees release bindings without a language refresh; moved and pending nodes survive", () => {
+  const {i18n, dynamic, removed} = setup("en");
+  i18n.bind(dynamic, "Offline");
+  const moved = {textContent:"",isConnected:true};
+  const pending = {textContent:"",isConnected:false};
+  i18n.bind(moved, "Online");
+  i18n.bind(pending, "Ready");
+  dynamic.isConnected=false;
+  removed({contains: node=>node===dynamic || node===moved});
+  // Reconnecting proves that the old binding was actually removed, rather than
+  // merely skipped by refresh while the node was disconnected.
+  dynamic.isConnected=true;pending.isConnected=true;
+  i18n.setLanguage("zh-CN");
+  assert.equal(dynamic.textContent,"Offline");
+  assert.equal(moved.textContent,"在线");
+  assert.equal(pending.textContent,"就绪");
+});
+
+test("translation keys are unique and Offline has one consistent meaning", () => {
+  const keys=[...source.matchAll(/^\s*("(?:[^"\\]|\\.)*")\s*:/gm)].map(match=>JSON.parse(match[1]));
+  assert.equal(new Set(keys).size,keys.length);
+  const {i18n}=setup();
+  assert.equal(i18n.t("Offline"),"离线");
+  assert.equal(i18n.t("{value}",{value:{i18nKey:"{count} cores",count:8}}),"8 核");
 });

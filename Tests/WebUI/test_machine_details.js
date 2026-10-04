@@ -4,11 +4,12 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 class Element {
-  constructor(tag) { this.tag=tag; this.children=[]; this.dataset={}; this.textContent=''; this.open=false; this.listeners={}; }
+  constructor(tag) { this.tag=tag; this.children=[]; this.dataset={}; this.textContent=''; this.open=false; this.listeners={}; this.isConnected=true; }
   appendChild(child) { this.children.push(child); child.parent=this; return child; }
   append(...children) { children.forEach(child=>this.appendChild(child)); }
   addEventListener(name, fn) { this.listeners[name]=fn; }
   remove() { this.parent.children=this.parent.children.filter(child=>child!==this); }
+  replaceChildren(...children) {this.children=[];this.append(...children);}
   get childElementCount() { return this.children.length; }
 }
 function all(node) { return [node,...node.children.flatMap(all)]; }
@@ -16,9 +17,9 @@ function text(node, includeDetails=true) {
   if (!includeDetails && node.tag==='details') return '';
   return [node.textContent,...node.children.map(child=>text(child,includeDetails))].join('\n');
 }
-function setup(machine) {
+function setup(machine, language = null) {
   const list=new Element('div'), calls=[];
-  const t=(key,args={})=>key.replace(/\{(\w+)\}/g,(_,name)=>args[name]?.i18nKey || args[name]);
+  const t=(key,args={})=>key.replace(/\{(\w+)\}/g,(_,name)=>args[name]?.i18nKey ? t(args[name].i18nKey,args[name]) : args[name]);
   const context={document:{createElement:tag=>new Element(tag)},window:{confirm:()=>true},t,
     uiText(node,key,args){node.textContent=t(key,args);},state:{podJobs:{},destroyedPods:new Set()},
     elements:{vastInstanceList:list},showNotice(){},machineMessage(){},
@@ -27,12 +28,21 @@ function setup(machine) {
     runPodAction:async(...args)=>{calls.push(['concept',...args]);},
     deployImageForge:async(...args)=>{calls.push(['image',...args]);},
     forgeNodes:{render(){const selection=new Element('div');selection.textContent='Forge bindings';return selection;}}};
+  if(language) {
+    context.document.documentElement={};context.document.getElementById=()=>null;
+    context.localStorage={getItem:()=>language,setItem(){}};context.navigator={language};context.Node={TEXT_NODE:3};
+  }
   vm.createContext(context);
+  if(language) {
+    vm.runInContext(fs.readFileSync('Archon/Portal/static/i18n.js','utf8'),context);
+    context.i18n=context.window.EverSparkI18n;context.t=(key,args)=>context.i18n.t(key,args);
+    context.uiText=(node,key,args)=>context.i18n.bind(node,key,args);
+  }
   for(const file of ['node-card.js','deployment-progress.js']) vm.runInContext(fs.readFileSync(`Archon/Portal/static/${file}`,'utf8'),context);
   const app=fs.readFileSync('Archon/Portal/static/app.js','utf8');
   vm.runInContext(app.slice(app.indexOf('function renderMachine(machine)'),app.indexOf('const nodeConnection =')),context);
   context.renderMachine(machine);
-  return {card:list.children[0],calls};
+  return {card:list.children[0],calls,context,list};
 }
 const fixture={id:42,label:'My Pod',actual_status:'running',gpu_name:'RTX 3090',num_gpus:1,geolocation:'JP',dph_total:0.25,
   ssh_host:'ssh.example',ssh_port:1234,forge:{status:'ready',revision:'concept-revision'},image_forge:{status:'ready',revision:'image-revision'},
@@ -56,16 +66,16 @@ test('only deployment, retest and destruction buttons are exposed; debug entries
   for(const status of ['online','joining','offline','unhealthy']) {
     const {card}=setup({...fixture,node:{...fixture.node,status}});
     const buttons=all(card).filter(node=>node.tag==='button').map(node=>node.textContent);
-    for(const label of ['Verify Concept Forge','Verify Image Forge','验证 Audio Forge','Update source','Test discussion','View startup diagnostics']) assert.ok(!buttons.includes(label),label);
+    for(const label of ['Verify Concept Forge','Verify Image Forge','Verify Audio Forge','Update source','Test discussion','View startup diagnostics']) assert.ok(!buttons.includes(label),label);
     assert.ok(buttons.includes('Destroy Pod'));
-    if(status==='online') for(const label of ['Deploy Concept Forge','Deploy Image Forge','部署 Audio Forge','Retest download speed']) assert.ok(buttons.includes(label),label);
+    if(status==='online') for(const label of ['Deploy Concept Forge','Deploy Image Forge','Deploy Audio Forge','Retest download speed']) assert.ok(buttons.includes(label),label);
   }
 });
 test('formal action listeners still dispatch original deploy, retest and destroy requests',async()=>{
   const {card,calls}=setup(fixture);
   const click=label=>all(card).find(node=>node.tag==='button' && node.textContent===label).listeners.click();
   click('Deploy Concept Forge');click('Deploy Image Forge');
-  await click('部署 Audio Forge');await click('Retest download speed');await click('Destroy Pod');
+  await click('Deploy Audio Forge');await click('Retest download speed');await click('Destroy Pod');
   assert.ok(calls.some(call=>call[0]==='concept' && call[1]===42 && call[2]==='deploy'));
   assert.ok(calls.some(call=>call[0]==='image' && call[1]===42));
   assert.ok(calls.some(call=>call[0]==='/api/machines/vast/deploy-audio' && call[1].instance_id===42));
@@ -87,7 +97,7 @@ test('active deployment keeps progress visible and disables duplicate deployment
   assert.ok(text(card,false).includes('Installing runtime and dependencies'));
   const progress=all(card).find(node=>node.dataset.podProgress==='42');
   assert.ok(progress);
-  for(const label of ['Deploy Concept Forge','Deploy Image Forge','部署 Audio Forge']) {
+  for(const label of ['Deploy Concept Forge','Deploy Image Forge','Deploy Audio Forge']) {
     const button=all(card).find(node=>node.tag==='button' && node.textContent===label);
     assert.equal(button.disabled,true,label);
   }
@@ -99,7 +109,7 @@ test('four machine groups contain the corresponding information and keep Details
   const [overview,resources,forge,operations]=groups;
   for(const value of ['My Pod','Vast #42','running','RTX 3090','JP','$0.250']) assert.ok(text(overview).includes(value),value);
   for(const value of ['Node Agent: Online','CPU','Memory','Disk','24.0 GiB','qualified','Retest download speed']) assert.ok(text(resources).includes(value),value);
-  for(const value of ['Concept Forge','Image Forge','Audio Forge','Forge bindings','concept-error','Installing runtime and dependencies','Deploy Concept Forge','Deploy Image Forge','部署 Audio Forge']) assert.ok(text(forge).includes(value),value);
+  for(const value of ['Concept Forge','Image Forge','Audio Forge','Forge bindings','concept-error','Installing runtime and dependencies','Deploy Concept Forge','Deploy Image Forge','Deploy Audio Forge']) assert.ok(text(forge).includes(value),value);
   assert.deepEqual(all(operations).filter(node=>node.tag==='button').map(node=>node.textContent),['Destroy Pod']);
   assert.ok(!text(overview).includes('Deploy Concept Forge'));
   assert.ok(!text(resources).includes('Forge bindings'));
@@ -117,4 +127,44 @@ test('danger styling and status badges retain the underlying machine and Forge s
   const badges=nodes.filter(node=>node.className?.split(' ').includes('status-badge'));
   assert.deepEqual(badges.map(node=>node.dataset.status).sort(),['running','online','deployment_failed','deploying','not_deployed'].sort());
   assert.equal(nodes.find(node=>node.tag==='details').open,false);
+});
+
+
+test('language changes update existing machine, node and offer copy without replacing busy actions',()=>{
+  const job={status:'running',stage:'installing_runtime'};
+  const {card,context}=setup({...fixture,audio_forge:{status:'deploying',job}},'en');
+  const button=all(card).find(node=>node.tag==='button' && node.textContent==='Deploy Audio Forge');
+  assert.equal(button.disabled,true);
+  const app=fs.readFileSync('Archon/Portal/static/app.js','utf8');
+  context.elements.vastOfferList=new Element('div');
+  vm.runInContext(app.slice(app.indexOf('function renderOffer('),app.indexOf('async function loadVastOffers(')),context);
+  context.renderOffer({id:9,num_gpus:1,gpu_name:'RTX 3090',geolocation:'JP',dph_total:0.5,gpu_ram:24000,reliability:0.99,disk_space:100,cuda_max_good:12.8},50);
+  const offer=context.elements.vastOfferList.children[0];
+  const rent=all(offer).find(node=>node.tag==='button');rent.disabled=true;
+  context.i18n.setLanguage('zh-CN');
+  for(const value of ['部署 Audio Forge','内存','磁盘','8 核','亚洲','安装运行时与依赖']) assert.ok(text(card).includes(value),value);
+  assert.ok(text(offer).includes('可靠性：99.0%'));
+  assert.ok(text(offer).includes('可用磁盘：100 GB'));
+  assert.equal(button.disabled,true);assert.equal(rent.disabled,true);
+  assert.ok(text(card).includes('My Pod'));assert.ok(text(card).includes('internal-node'));
+  context.i18n.setLanguage('en');
+  assert.ok(text(card).includes('8 cores'));assert.ok(text(card).includes('Asia'));
+  assert.ok(text(offer).includes('Reliability: 99.0%'));
+  assert.equal(button.textContent,'Deploy Audio Forge');assert.equal(button.disabled,true);
+});
+
+test('silent machine rendering does not reuse a signature from another language',()=>{
+  const {context,list}=setup(fixture,'en');
+  context.elements.moreVastInstances={};
+  const app=fs.readFileSync('Archon/Portal/static/app.js','utf8');
+  vm.runInContext(app.slice(app.indexOf('function renderMachinesPage('),app.indexOf('async function saveVastKey(')),context);
+  const data={instances:[fixture],next_token:null};
+  context.renderMachinesPage(data);
+  const original=list.children[0];
+  context.renderMachinesPage(data,'',true);
+  assert.equal(list.children[0],original);
+  context.i18n.setLanguage('zh-CN');
+  context.renderMachinesPage(data,'',true);
+  assert.notEqual(list.children[0],original);
+  assert.ok(text(list.children[0]).includes('部署 Audio Forge'));
 });
