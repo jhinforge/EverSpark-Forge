@@ -4,9 +4,9 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 class Element {
-  constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.textContent = ''; }
+  constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.textContent = ''; this.listeners = {}; }
   appendChild(child) { this.children.push(child); }
-  addEventListener() {}
+  addEventListener(name, listener) { this.listeners[name] = listener; }
 }
 const context = { window: {}, document: { createElement: (tag) => new Element(tag) } };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../Archon/Portal/static/node-card.js'), 'utf8'), context);
@@ -112,5 +112,36 @@ test('new network test states do not promise a 30-second download or label failu
   assert.match(texts(running), /download and upload/);
   assert.doesNotMatch(texts(running), /30-second/);
   const terms=context.window.EverSparkNodeCard.render({status:'online',bandwidth:{status:'failed',method:'ookla_cli',error_code:'terms_required'}}, options);
-  assert.match(texts(terms), /Confirm Ookla CLI terms/);
+  assert.match(texts(terms), /confirm Ookla CLI terms/);
+});
+
+test('WebUI confirmation is explicit, per Pod, survives polling and blocks duplicate requests', async () => {
+  const nodes = node => [node, ...node.children.flatMap(nodes)];
+  const raw = {status:'online',node_id:'consent-pod-a',bandwidth:{status:'failed',method:'ookla_cli',error_code:'terms_required'}};
+  const calls=[]; let complete;
+  const speedtest=(button, settings)=>{calls.push(settings);return new Promise(resolve=>{complete=resolve;});};
+  const render=raw=>context.window.EverSparkNodeCard.render(raw,{...options,speedtest});
+  const panel=render(raw);
+  const checkbox=nodes(panel).find(node=>node.tag==='input');
+  const button=nodes(panel).find(node=>node.tag==='button');
+  assert.equal(checkbox.checked,false);assert.equal(button.disabled,true);
+  assert.equal(nodes(panel).filter(node=>node.tag==='a').length,3);
+  for(const link of nodes(panel).filter(node=>node.tag==='a')) {
+    assert.match(link.href,/^https:\/\/www\.speedtest\.net\/about\/(eula|terms|privacy)$/);
+    assert.equal(link.rel,'noopener noreferrer');
+  }
+  await button.listeners.click();assert.equal(calls.length,0);
+  checkbox.checked=true;checkbox.listeners.change();assert.equal(button.disabled,false);
+  const refreshed=render(raw);
+  const refreshedCheckbox=nodes(refreshed).find(node=>node.tag==='input');
+  const refreshedButton=nodes(refreshed).find(node=>node.tag==='button');
+  assert.equal(refreshedCheckbox.checked,true);
+  assert.equal(nodes(render({...raw,node_id:'consent-pod-b'})).find(node=>node.tag==='input').checked,false);
+  const pending=refreshedButton.listeners.click();
+  await button.listeners.click();assert.equal(calls.length,1);assert.equal(calls[0].acceptTerms,true);
+  assert.equal(nodes(render(raw)).find(node=>node.tag==='button').disabled,true);
+  complete();await pending;
+  const running=render({...raw,bandwidth:{status:'running',method:'ookla_cli'}});
+  assert.equal(nodes(running).filter(node=>node.tag==='input').length,0);
+  assert.equal(nodes(running).find(node=>node.tag==='button').disabled,true);
 });

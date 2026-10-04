@@ -208,3 +208,13 @@ test('each machine preserves its own Details state through polling, manual redra
   context.renderMachinesPage(data);
   assert.deepEqual(details().map(node=>node.open),[false,true]);
 });
+
+test('explicit checked consent sends acceptance for this machine through the existing API',async()=>{
+  const {card,calls}=setup({...fixture,node:{...fixture.node,bandwidth:{status:'failed',error_code:'terms_required'}}});
+  const checkbox=all(card).find(node=>node.tag==='input' && node.type==='checkbox');
+  const button=all(card).find(node=>node.tag==='button' && node.textContent==='Confirm and start network test');
+  assert.equal(checkbox.checked,false);assert.equal(button.disabled,true);
+  await button.listeners.click();assert.equal(calls.length,0);
+  checkbox.checked=true;checkbox.listeners.change();await button.listeners.click();
+  assert.ok(calls.some(call=>call[0]==='/api/nodes/bandwidth' && call[1].node_id==='internal-node' && call[1].accept_terms===true));
+});

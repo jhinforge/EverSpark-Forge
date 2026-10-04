@@ -9,10 +9,10 @@ from . import progress
 
 
 def execute(action: str, message: str, forge: str = "concept") -> dict:
-    if forge == "node" and action == "bandwidth" and message == "":
+    if forge == "node" and action == "bandwidth" and message in {"", "accept_ookla_terms"}:
         from ..bandwidth import start
         from ..settings import DATA_DIR
-        return {"status": "completed", "output": json.dumps(start(DATA_DIR, force=True)), "exit_code": 0}
+        return {"status": "completed", "output": json.dumps(start(DATA_DIR, force=True, accept_terms=message == "accept_ookla_terms")), "exit_code": 0}
     if forge not in {"concept", "image", "audio"}:
         return {"status": "failed", "output": "Unknown Forge identity", "exit_code": 2}
     if action == "recover":

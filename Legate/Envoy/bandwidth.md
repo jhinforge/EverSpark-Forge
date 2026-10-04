@@ -11,14 +11,21 @@ does not redistribute the binary. Python `speedtest-cli` is not used.
 
 The official tool has its own license and privacy terms, independently of
 EverSpark's license. Review them at the prompts or the links in the official
-package (`speedtest.md`). EverSpark does not pass `--accept-license` or
-`--accept-gdpr` on behalf of users.
+package (`speedtest.md`). EverSpark does not pass acceptance flags without a recorded user confirmation.
 
-If the tool requires confirmation, the UI displays a terms-required message
-and Details includes the command to run over SSH. Run that executable
-interactively as the same user as the Node Agent, review the prompts, and
-confirm only if you agree. Then retry in WebUI. Existing confirmations from
-manual CLI tests are reused by the official tool.
+If the tool requires confirmation, the machine's network area displays links to
+Ookla's license, terms of use and privacy policy. The checkbox starts unchecked.
+After reviewing the terms, users can check the agreement and click **Confirm
+and start network test**. No SSH session is needed.
+
+The existing `/api/nodes/bandwidth` route accepts an optional boolean
+`accept_terms`. Only explicit `true` routes the allowlisted
+`accept_ookla_terms` task message to the selected Node. The Node saves a
+versioned, per-Pod confirmation in `ookla-consent.json` and runs the official
+CLI with `--accept-license --accept-gdpr`. Automatic tests and retests reuse
+that confirmation; changing CLI version requires a new confirmation. Ordinary
+requests without this field do not create confirmation records. Existing
+confirmations from manual CLI tests remain usable by the official tool.
 
 ## Execution and interpretation
 

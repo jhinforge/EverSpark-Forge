@@ -38,13 +38,14 @@ def task(manager, body):
 
 
 def bandwidth(manager, body):
-    if set(body) != {"node_id"}:
+    if not {"node_id"} <= set(body) or set(body) - {"node_id", "accept_terms"} or ("accept_terms" in body and not isinstance(body["accept_terms"], bool)):
         raise NodeError("Invalid bandwidth request", 400)
     node_id = validate_id(body["node_id"])
     if manager.status(node_id).get("status") != "online":
         raise NodeError("Node must be online for download testing", 409)
     import json
-    value = json.loads(manager.execute(node_id, "bandwidth", forge="node", timeout=10))
+    message = "accept_ookla_terms" if body.get("accept_terms") is True else ""
+    value = json.loads(manager.execute(node_id, "bandwidth", message, forge="node", timeout=10))
     if not value:
         raise NodeError("Download testing is disabled or unsupported on this Node", 409)
     return {"bandwidth": value}

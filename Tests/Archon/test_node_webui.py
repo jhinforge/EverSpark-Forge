@@ -56,6 +56,27 @@ class NodeWebUITests(unittest.TestCase):
         with urlopen(request) as response:
             return json.load(response)
 
+    def test_bandwidth_consent_crosses_portal_and_gate_only_as_boolean(self):
+        node_id = "a"*32
+        def request(body):
+            with urlopen(Request(self.url+"/api/nodes/bandwidth",
+                                data=json.dumps(body).encode(),
+                                headers={"Content-Type": "application/json"})) as response:
+                return json.load(response)
+        with patch.object(self.nodes, "status", return_value={"status": "online"}), patch.object(self.nodes, "execute", return_value='{"status":"pending"}') as execute:
+            for consent in (None, False, True):
+                body = {"node_id": node_id}
+                if consent is not None:
+                    body["accept_terms"] = consent
+                self.assertEqual(request(body)["bandwidth"]["status"], "pending")
+                execute.assert_called_with(node_id, "bandwidth", "accept_ookla_terms" if consent is True else "", forge="node", timeout=10)
+            execute.reset_mock()
+            for invalid in ("true", 1, None, {}):
+                with self.assertRaises(HTTPError) as rejected:
+                    request({"node_id": node_id, "accept_terms": invalid})
+                self.assertEqual(rejected.exception.code, 400)
+            execute.assert_not_called()
+
     def test_webui_blocks_rental_before_agent_bootstrap_is_configured(self):
         self.assertFalse(self.call("node-connection")["ready"])
         with self.assertRaises(HTTPError) as blocked:

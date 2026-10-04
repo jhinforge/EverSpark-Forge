@@ -58,7 +58,15 @@ def snapshot(directory):
     return {key: item for key, item in value.items() if key not in {"pid", "created", "run_id"}}
 
 
-def start(directory, force=False):
+def terms_accepted(directory):
+    try:
+        record = json.loads((Path(directory) / "ookla-consent.json").read_text())
+        return isinstance(record, dict) and record.get("version") == VERSION and record.get("accepted") is True
+    except (OSError, ValueError):
+        return False
+
+
+def start(directory, force=False, accept_terms=False):
     # Automatic tests are for Linux worker Nodes; Windows remains the controller.
     if sys.platform != "linux" or os.environ.get("EVERSPARK_NODE_BANDWIDTH") == "0":
         return {}
@@ -71,6 +79,8 @@ def start(directory, force=False):
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 return snapshot(directory)
+            if accept_terms is True:
+                save(directory / "ookla-consent.json", {"version": VERSION, "accepted": True, "accepted_at": now()})
             value = _read(directory)
             if value and (_alive(value) or (not force and value.get("policy") == POLICY)):
                 return snapshot(directory)
@@ -190,18 +200,21 @@ def parse_result(payload):
     return result
 
 
-def measure(binary):
+def measure(binary, accept_terms=False):
     """Let Ookla choose the server and test durations; retry once on execution failure."""
     for attempt in range(2):
         try:
-            process = subprocess.run([str(binary), "--format=json", "--progress=no"],
+            args = [str(binary), "--format=json", "--progress=no"]
+            if accept_terms is True:
+                args.extend(["--accept-license", "--accept-gdpr"])
+            process = subprocess.run(args,
                                      stdin=subprocess.DEVNULL, capture_output=True, text=True,
                                      timeout=TEST_TIMEOUT)
-            # No --accept-license/--accept-gdpr: respect confirmation recorded by the user.
+            # Acceptance flags are allowed only after explicit per-Pod confirmation.
             if process.returncode != 0 or not process.stdout.lstrip().startswith("{"):
                 message = (process.stderr + " " + process.stdout).lower()
                 if any(word in message for word in ["license", "gdpr", "eula", "privacy", "terms"]):
-                    raise TermsRequired(f"Confirm Ookla CLI terms over SSH by running {binary}, then retry")
+                    raise TermsRequired("Confirm Ookla CLI terms in WebUI before testing")
                 try:
                     error = json.loads(process.stdout).get("message", "")
                 except (ValueError, AttributeError):
@@ -232,7 +245,7 @@ def run(directory, run_id):
             value.update(status="running", policy=POLICY, method="ookla_cli")
             save(directory / "bandwidth.json", value)
             print(f"[bandwidth] started run_id={run_id} source=Ookla timeout={TEST_TIMEOUT}s attempts=2", flush=True)
-            measured = measure(cli(directory))
+            measured = measure(cli(directory), accept_terms=terms_accepted(directory))
             print(f"[bandwidth] completed speed={measured['download_mb_s']:.2f} MB/s bytes={measured['bytes_received']} elapsed={measured['elapsed_seconds']:.2f}s server={measured['server_name']}", flush=True)
         except Exception as exc:
             # Preserve the actual failure instead of silently replacing it with a

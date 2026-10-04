@@ -1,5 +1,7 @@
 /* Node inventory presentation; no provider provisioning logic. */
 (() => {
+  const consentChecks = new Set();
+  const consentRequests = new Set();
   function bytes(value) {
     if (value == null || !Number.isFinite(Number(value)) || Number(value) < 0) return "—";
     return `${(Number(value) / 1024 ** 3).toFixed(1)} GiB`;
@@ -45,6 +47,7 @@
     if (node.stage && stages[node.stage]) { const note = document.createElement("p"); bind(note, stages[node.stage]); details.appendChild(note); }
     if (node.stage && !stages[node.stage]) field("Node stage", node.stage);
     const speed = node.bandwidth;
+    if (speed?.error_code !== "terms_required") consentChecks.delete(node.node_id);
     if (speed) {
       const note = document.createElement("p");
       if (speed.status === "completed" && Number.isFinite(speed.download_mb_s)) {
@@ -93,7 +96,7 @@
         }
         if (speed.server_colo) field("Cloudflare edge", speed.server_colo);
       } else {
-        bind(note, speed.error_code === "terms_required" ? "Confirm Ookla CLI terms on the Pod before testing."
+        bind(note, speed.error_code === "terms_required" ? "Review and confirm Ookla CLI terms below to start testing."
           : speed.status === "failed" ? "Unable to measure network speed this time; this does not mean the machine is slow."
           : speed.method === "ookla_cli" ? "Testing network speed… (download and upload; one retry at most)"
           : "Testing download speed… (30-second download)");
@@ -113,11 +116,57 @@
       }
     }
     if (node.status === "online" && speedtest) {
-      const button = document.createElement("button");
-      button.type = "button"; button.className = "ghost-button";
-      button.disabled = ["pending", "running"].includes(speed?.status);
-      bind(button, "Retest download speed");
-      button.addEventListener("click", () => speedtest(button)); panel.appendChild(button);
+      if (speed?.error_code === "terms_required") {
+        const consent = document.createElement("div");
+        consent.className = "node-speedtest-consent";
+        const explanation = document.createElement("p");
+        bind(explanation, "First use on this Pod requires confirmation of Ookla's license, terms of use and privacy policy. The test transfers download and upload traffic.");
+        consent.appendChild(explanation);
+        const links = document.createElement("div");
+        links.className = "card-actions";
+        for (const [key, path] of [["Ookla CLI license", "eula"], ["Ookla terms of use", "terms"], ["Ookla privacy policy", "privacy"]]) {
+          const link = document.createElement("a");
+          link.href = `https://www.speedtest.net/about/${path}`;
+          link.target = "_blank"; link.rel = "noopener noreferrer";
+          bind(link, key); links.appendChild(link);
+        }
+        consent.appendChild(links);
+        const label = document.createElement("label");
+        label.className = "node-speedtest-agreement";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = consentChecks.has(node.node_id);
+        checkbox.disabled = consentRequests.has(node.node_id);
+        const copy = document.createElement("span");
+        bind(copy, "I agree to the Ookla CLI license, terms of use and privacy policy for this Pod.");
+        label.appendChild(checkbox); label.appendChild(copy); consent.appendChild(label);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.disabled = !checkbox.checked || consentRequests.has(node.node_id);
+        bind(button, "Confirm and start network test");
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) consentChecks.add(node.node_id);
+          else consentChecks.delete(node.node_id);
+          button.disabled = !checkbox.checked || consentRequests.has(node.node_id);
+        });
+        button.addEventListener("click", async () => {
+          if (!checkbox.checked || consentRequests.has(node.node_id)) return;
+          consentRequests.add(node.node_id);
+          checkbox.disabled = true; button.disabled = true;
+          try { await speedtest(button, { acceptTerms: true }); }
+          finally {
+            consentRequests.delete(node.node_id);
+            checkbox.disabled = false; button.disabled = !checkbox.checked;
+          }
+        });
+        consent.appendChild(button); panel.appendChild(consent);
+      } else {
+        const button = document.createElement("button");
+        button.type = "button"; button.className = "ghost-button";
+        button.disabled = ["pending", "running"].includes(speed?.status);
+        bind(button, "Retest download speed");
+        button.addEventListener("click", () => speedtest(button)); panel.appendChild(button);
+      }
     }
     if (node.resources?.capacity) {
       const table = document.createElement("table");

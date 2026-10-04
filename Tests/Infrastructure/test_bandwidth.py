@@ -23,6 +23,16 @@ class DownloadTestTests(unittest.TestCase):
                 'interface':{'externalIp':'private-public-ip','macAddr':'private-mac'},'isp':'private-isp',
                 'result':{'url':'private-result-url'}}
 
+    def test_agent_consent_task_is_allowlisted(self):
+        from Legate.Envoy.executor.tasks import execute
+        with patch.object(module, "start", return_value={"status": "pending"}) as start:
+            for message in ("", "accept_ookla_terms"):
+                self.assertEqual(execute("bandwidth", message, forge="node")["status"], "completed")
+                self.assertEqual(start.call_args.kwargs, {"force": True, "accept_terms": message == "accept_ookla_terms"})
+            start.reset_mock()
+            self.assertEqual(execute("bandwidth", "accept_everything", forge="node")["status"], "failed")
+            start.assert_not_called()
+
     def test_result_units_server_location_and_privacy(self):
         result = module.parse_result(self.payload())
         self.assertEqual(result['download_mb_s'], 97.372229)
@@ -60,6 +70,25 @@ class DownloadTestTests(unittest.TestCase):
         self.assertEqual(execute.call_args.args[0],['/fixture/speedtest','--format=json','--progress=no'])
         self.assertEqual(execute.call_args.kwargs['timeout'],90)
         self.assertEqual(execute.call_args.kwargs['stdin'],module.subprocess.DEVNULL)
+        with patch.object(module.subprocess,'run',return_value=Mock(returncode=0,stdout=json.dumps(self.payload()))) as execute:
+            module.measure(Path('/fixture/speedtest'),accept_terms=True)
+        self.assertEqual(execute.call_args.args[0][-2:],['--accept-license','--accept-gdpr'])
+
+    def test_consent_is_explicit_per_pod_versioned_and_reused(self):
+        with patch.dict(os.environ, {'EVERSPARK_NODE_BANDWIDTH':'1'}),patch.object(module.subprocess,'Popen',return_value=Mock(pid=os.getpid())):
+            module.start(self.directory,force=True)
+            self.assertFalse(module.terms_accepted(self.directory))
+            module.save(self.directory/'bandwidth.json',{'status':'failed','error_code':'terms_required'})
+            module.start(self.directory,force=True,accept_terms=True)
+        self.assertTrue(module.terms_accepted(self.directory))
+        other=self.directory/'another-pod';other.mkdir()
+        self.assertFalse(module.terms_accepted(other))
+        module.save(self.directory/'bandwidth.json',{'status':'pending','run_id':'fixture'})
+        with patch.object(module,'cli',return_value='fixture'),patch.object(module,'measure',return_value=module.parse_result(self.payload())) as measure,patch.object(module.time,'sleep'):
+            module.run(self.directory,'fixture')
+        self.assertTrue(measure.call_args.kwargs['accept_terms'])
+        with patch.object(module,'VERSION','future'):
+            self.assertFalse(module.terms_accepted(self.directory))
 
     def test_failure_retries_once_but_terms_do_not_retry(self):
         success=Mock(returncode=0,stdout=json.dumps(self.payload()),stderr='')
@@ -88,18 +117,21 @@ class DownloadTestTests(unittest.TestCase):
             self.assertEqual(module.measure(binary)['server_id'],5249)
         self.assertEqual(list(self.directory.iterdir()),[binary])
 
-    def test_actual_background_worker_and_manual_retest_replace_state(self):
+    def test_actual_background_worker_consent_and_manual_retest_replace_state(self):
         import sys
         architecture={'x86_64':'x86_64','aarch64':'aarch64'}.get(module.platform.machine().lower())
         if architecture is None or sys.platform != 'linux': self.skipTest('Linux worker architecture required')
         binary=self.directory/f'ookla-speedtest-{module.VERSION}-{architecture}'/'speedtest'
         binary.parent.mkdir()
-        binary.write_text('#!'+sys.executable+'\nimport sys\nprint("Speedtest by Ookla 1.2.0" if "--version" in sys.argv else '+repr(json.dumps(self.payload()))+')\n')
+        binary.write_text('#!'+sys.executable+'\nimport sys\n'
+            'if "--version" in sys.argv: print("Speedtest by Ookla 1.2.0")\n'
+            'elif "--accept-license" not in sys.argv or "--accept-gdpr" not in sys.argv: print("You must accept the license"); sys.exit(1)\n'
+            'else: print('+repr(json.dumps(self.payload()))+')\n')
         binary.chmod(0o700)
         previous=None
         with patch.dict(os.environ, {'EVERSPARK_NODE_BANDWIDTH':'1'}):
-            for _ in range(2):
-                pending=module.start(self.directory,force=True)
+            for attempt in range(3):
+                pending=module.start(self.directory,force=True,accept_terms=attempt == 1)
                 self.assertEqual(pending['status'],'pending')
                 value=module._read(self.directory)
                 self.assertNotEqual(value['run_id'],previous)
@@ -108,6 +140,11 @@ class DownloadTestTests(unittest.TestCase):
                 while module._read(self.directory).get('status') in {'pending','running'} and module.time.monotonic()<deadline:
                     module.time.sleep(.05)
                 completed=module.snapshot(self.directory)
+                if attempt == 0:
+                    self.assertEqual(completed['status'],'failed',completed)
+                    self.assertEqual(completed['error_code'],'terms_required')
+                    self.assertFalse(module.terms_accepted(self.directory))
+                    continue
                 self.assertEqual(completed['status'],'completed',completed)
                 self.assertAlmostEqual(completed['download_mb_s'],97.372229)
                 self.assertTrue(validate(completed)['qualified'])

@@ -423,6 +423,8 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 }
 .select-wrap select { min-height: var(--ui-control-height); border-color: var(--line-strong); border-radius: var(--ui-control-radius); font-size: var(--font-size-base); }
 input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--ember); }
+.node-speedtest-consent { display: grid; gap: var(--spacing-md); }
+.node-speedtest-agreement { display: flex; align-items: flex-start; gap: var(--spacing-sm); }
 input[type="file"] { max-width: 100%; min-height: var(--ui-control-height); padding: var(--spacing-xs) var(--spacing-md); border: 1px solid var(--line-strong); border-radius: var(--ui-control-radius); color: var(--muted); }
 input[type="file"]::file-selector-button { margin-right: var(--spacing-md); padding: var(--spacing-xs) var(--spacing-md); border: 1px solid var(--line-strong); border-radius: 7px; color: var(--text); background: var(--panel-soft); cursor: pointer; }
 .ui-actions, .toolbar-actions, .machine-actions, .model-service-card-actions, .model-service-actions, .download-job-actions, .subject-card-actions, .backup-actions {

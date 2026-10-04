@@ -1650,11 +1650,11 @@ function renderMachine(machine) {
   forgeGroup.appendChild(audioStatus);
   if (machine.audio_forge?.detail) deploymentFailure(machine.audio_forge, "Audio Forge");
   resourcesGroup.appendChild(window.EverSparkNodeCard.render(machine.node, { t, bind: uiText, details: machineDetails,
-    speedtest: async (button) => {
+    speedtest: async (button, { acceptTerms = false } = {}) => {
       button.disabled = true;
       try {
         await api("/api/nodes/bandwidth", {method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({node_id: machine.node.node_id})});
+          body: JSON.stringify({node_id: machine.node.node_id, ...(acceptTerms ? {accept_terms: true} : {})})});
         showNotice(t("Network speed test requested."), "info");
         await loadMachines();
       } catch (error) { showNotice(error.message); }
