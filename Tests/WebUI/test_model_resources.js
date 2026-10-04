@@ -11,7 +11,7 @@ function setup() {
     llmSelect: select('custom-model'), addLoraButton: {disabled: false}};
   const context = {elements, encodeURIComponent, Set, t: x => x, showNotice(message) {throw new Error(message);},
     state: {imagePlugins: [{id: 'comfyui', online: true}], selectedLoras: [{name: 'old-lora.safetensors'}, {name: 'keep.safetensors'}]},
-    renderSelectedLoras() {}, updateLoraAvailability() {},
+    renderSelectedLoras() {}, updateLoraAvailability() {}, updateCreationSettingsSummary() {},
     fillSelect(el, items, key, label, preferred) {
       const values = items.map(key);
       el.value = values.includes(preferred) ? preferred : values[0] || '';

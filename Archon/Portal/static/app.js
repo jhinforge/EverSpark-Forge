@@ -271,6 +271,7 @@ function selectedWorkflow() {
 
 function updateLoraAvailability() {
   const enabled = Boolean(selectedWorkflow()?.supports?.lora_injection && state.resources.loras.length);
+  updateCreationSettingsSummary();
   elements.loraSelect.disabled = !enabled;
   elements.addLoraButton.disabled = !enabled;
   if (!enabled && state.selectedLoras.length) {
@@ -280,6 +281,7 @@ function updateLoraAvailability() {
 }
 
 function renderSelectedLoras() {
+  updateCreationSettingsSummary();
   elements.selectedLoras.replaceChildren();
   if (state.selectedLoras.length) {
     const header = document.createElement("div");
@@ -359,8 +361,25 @@ function generationSelection() {
   return selection;
 }
 
+function updateCreationSettingsSummary() {
+  const summary = document.querySelector("#creationSettingsSummary");
+  if (!summary) return;
+  const label = (select) => select.selectedOptions?.[0]?.textContent || select.value || "—";
+  const conceptOnly = state.mode === "discuss" || document.querySelector("#creationMode").value === "audio";
+  uiText(summary, conceptOnly
+    ? "Provider: {provider} · LLM: {llm}"
+    : "Workflow: {workflow} · Checkpoint: {checkpoint} · Provider: {provider} · LoRA: {count}", {
+      workflow: label(elements.workflowSelect), checkpoint: label(elements.checkpointSelect),
+      provider: label(elements.conceptProviderSelect), llm: label(elements.llmSelect),
+      count: state.selectedLoras.length,
+    });
+}
+
 function updateCreationMode() {
   const mode = document.querySelector("#creationMode").value;
+  document.querySelectorAll('input[name="creationTask"]').forEach((input) => {
+    input.checked = input.value === mode;
+  });
   document.querySelectorAll("[data-image-control]").forEach((node) => {
     node.hidden = mode === "audio";
     node.classList.toggle("hidden", mode === "audio");
@@ -370,6 +389,7 @@ function updateCreationMode() {
     : mode === "image_audio"
       ? "Describe the image and speech. Concept Forge prepares both tasks."
       : "Describe the image. Concept Forge prepares the image request.");
+  updateCreationSettingsSummary();
 }
 
 function renderImagePlugin() {
@@ -439,6 +459,7 @@ function updateConceptModels() {
   const current = elements.llmSelect.value;
   fillSelect(elements.llmSelect, models, (item) => item, (item) => item, models.includes(current) ? current : preferred);
   elements.llmSelect.disabled = !models.length;
+  updateCreationSettingsSummary();
 }
 
 async function loadResources() {
@@ -2226,6 +2247,14 @@ async function loadConversation() {
 function setMode(mode) {
   state.mode = mode;
   const discussing = mode === "discuss";
+  document.querySelector("#forgeView .canvas-panel").dataset.workMode = mode;
+  document.querySelector("#creationTaskTypes").hidden = discussing;
+  elements.conversationFeed.hidden = !discussing;
+  elements.discussModeButton.setAttribute("aria-pressed", String(discussing));
+  elements.generateModeButton.setAttribute("aria-pressed", String(!discussing));
+  uiText(document.querySelector("#creationWorkspaceTitle"), discussing ? "Discuss" : "Generate");
+  uiText(document.querySelector("#creationPromptLabel"), discussing ? "Conversation" : "Creation request");
+  updateCreationSettingsSummary();
   elements.discussModeButton.classList.toggle("active", discussing);
   elements.generateModeButton.classList.toggle("active", !discussing);
   uiText(elements.generateButton.firstElementChild, discussing ? "Discuss" : "Generate");
@@ -2813,6 +2842,17 @@ function bindEvents() {
   $("#newConversationButton").addEventListener("click", newConversation);
   elements.discussModeButton.addEventListener("click", () => setMode("discuss"));
   document.querySelector("#creationMode").addEventListener("change", updateCreationMode);
+  document.querySelectorAll('input[name="creationTask"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      const select = document.querySelector("#creationMode");
+      select.value = input.value;
+      select.dispatchEvent(new Event("change"));
+    });
+  });
+  [elements.checkpointSelect, elements.vaeSelect, elements.llmSelect].forEach((select) => {
+    select.addEventListener("change", updateCreationSettingsSummary);
+  });
   updateCreationMode();
   elements.generateModeButton.addEventListener("click", () => setMode("generate"));
   elements.workflowSelect.addEventListener("change", updateLoraAvailability);

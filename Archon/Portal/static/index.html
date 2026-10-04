@@ -134,93 +134,104 @@
               <p class="field-help">Identity is extracted automatically. Scene, pose and camera remain request-level details.</p>
             </section>
 
-            <section class="panel canvas-panel">
+            <section class="panel canvas-panel" data-work-mode="discuss">
               <div class="canvas-toolbar">
                 <div>
                   <p class="section-kicker">EVERSPARK FORGE</p>
-                  <h2>Generation canvas</h2>
+                  <h2 id="creationWorkspaceTitle">Discuss</h2>
                 </div>
                 <span class="state-chip" id="generationState" data-state="idle">
                   <span></span> Ready
                 </span>
               </div>
 
-              <div class="generation-controls" aria-label="Generation resources">
-                <div class="resource-field engine-field" data-image-control>
-                  <label for="imageEngineSelect">Drawing tool</label>
-                  <span class="select-wrap"><select id="imageEngineSelect"></select></span>
-                  <div class="engine-actions">
-                    <span id="imageEngineStatus"></span>
-                    <button class="secondary-button" id="imageEngineAction" type="button" hidden></button>
-                    <button class="secondary-button" id="imageEngineDefault" type="button" hidden>Set as default</button>
-                  </div>
-                </div>
-                <label class="resource-field" data-image-control>
-                  <span>Workflow</span>
-                  <span class="select-wrap"><select id="workflowSelect"></select></span>
-                </label>
-                <label class="resource-field" data-image-control>
-                  <span>Checkpoint</span>
-                  <span class="select-wrap"><select id="checkpointSelect"></select></span>
-                </label>
-                <label class="resource-field" data-image-control>
-                  <span>VAE</span>
-                  <span class="select-wrap"><select id="vaeSelect"></select></span>
-                </label>
-                <label class="resource-field">
-                  <span>Model service</span>
-                  <span class="select-wrap"><select id="conceptProviderSelect"></select></span>
-                </label>
-                <label class="resource-field">
-                  <span>Concept LLM</span>
-                  <span class="select-wrap"><select id="llmSelect"></select></span>
-                </label>
-                <div class="resource-field lora-field" data-image-control>
-                  <span>LoRA</span>
-                  <div class="lora-picker">
-                    <span class="select-wrap"><select id="loraSelect"></select></span>
-                    <button class="secondary-button" id="addLoraButton" type="button">Add</button>
-                  </div>
-                </div>
-                <div class="selected-loras" id="selectedLoras" data-image-control></div>
+              <div class="creation-work-modes" role="group" aria-label="Creation workspace mode">
+                <button class="secondary-button active" id="discussModeButton" type="button" aria-pressed="true" aria-controls="creationWorkspace">Discuss</button>
+                <button class="secondary-button" id="generateModeButton" type="button" aria-pressed="false" aria-controls="creationWorkspace">Generate</button>
               </div>
-
-              <div class="result-stage" id="resultStage">
-                <div class="stage-empty">
-                  <div class="spark-glyph" aria-hidden="true">✦</div>
-                  <h3>Your next frame starts here</h3>
-                  <p>Discuss the character or switch to Generate when the current concept is ready.</p>
-                </div>
-              </div>
-
-              <div class="composer">
-                <div class="composer-header">
-                  <label for="scenePrompt">Conversation</label>
-                  <div class="mode-switch" role="group" aria-label="Conversation mode">
-                    <button class="mode-button active" id="discussModeButton" type="button">Discuss</button>
-                    <button class="mode-button" id="generateModeButton" type="button">Generate</button>
+              <div id="creationWorkspace">
+                <fieldset class="creation-task-types" id="creationTaskTypes" hidden>
+                  <legend>What would you like to create?</legend>
+                  <div class="creation-task-options">
+                    <label class="creation-task-option"><input type="radio" name="creationTask" value="image" checked><span>Image</span></label>
+                    <label class="creation-task-option"><input type="radio" name="creationTask" value="audio"><span>Audio</span></label>
+                    <label class="creation-task-option"><input type="radio" name="creationTask" value="image_audio"><span>Image + Audio</span></label>
                   </div>
-                  <span>Ctrl + Enter</span>
-                </div>
-                <div class="conversation-feed" id="conversationFeed"></div>
-                <textarea id="scenePrompt" rows="4" placeholder="Let's design a character with long black hair and amber eyes..."></textarea>
-                <label for="creationMode">Generation mode</label>
-                <select id="creationMode">
-                  <option value="image">Image generation</option>
-                  <option value="audio">Audio generation</option>
-                  <option value="image_audio">Image + audio generation</option>
-                </select>
-                <p id="creationModeHint">Describe what to create. Concept Forge prepares the request.</p>
-                <div class="composer-footer">
-                  <div class="subject-context" id="composerSubjectContext">
-                    <span class="mini-avatar">—</span>
-                    <span>No persistent subject</span>
+                  <select id="creationMode" hidden aria-label="Generation mode">
+                    <option value="image">Image generation</option>
+                    <option value="audio">Audio generation</option>
+                    <option value="image_audio">Image + audio generation</option>
+                  </select>
+                  <p class="field-help" id="creationModeHint">Describe the image. Concept Forge prepares the image request.</p>
+                </fieldset>
+                <div class="composer">
+                  <div class="composer-header">
+                    <label id="creationPromptLabel" for="scenePrompt">Conversation</label>
+                    <span>Ctrl + Enter</span>
                   </div>
-                  <button class="forge-button" id="generateButton" type="button">
-                    <span>Discuss</span>
-                    <span class="button-arrow">→</span>
-                  </button>
+                  <div class="conversation-feed" id="conversationFeed"></div>
+                  <textarea id="scenePrompt" rows="4" placeholder="Let's design a character with long black hair and amber eyes..."></textarea>
+                  <div class="composer-footer">
+                    <div class="subject-context" id="composerSubjectContext">
+                      <span class="mini-avatar">—</span>
+                      <span>No persistent subject</span>
+                    </div>
+                    <button class="forge-button" id="generateButton" type="button">
+                      <span>Discuss</span>
+                      <span class="button-arrow">→</span>
+                    </button>
+                  </div>
                 </div>
+                <div class="result-stage" id="resultStage">
+                  <div class="stage-empty">
+                    <div class="spark-glyph" aria-hidden="true">✦</div>
+                    <h3>Your next frame starts here</h3>
+                    <p>Discuss the character or switch to Generate when the current concept is ready.</p>
+                  </div>
+                </div>
+
+                <details class="creation-settings ui-details" id="creationSettings">
+                  <summary><span>Creation settings</span><span class="creation-settings-summary" id="creationSettingsSummary"></span></summary>
+                <div class="generation-controls" aria-label="Generation resources">
+                  <div class="resource-field engine-field" data-image-control>
+                    <label for="imageEngineSelect">Drawing tool</label>
+                    <span class="select-wrap"><select id="imageEngineSelect"></select></span>
+                    <div class="engine-actions">
+                      <span id="imageEngineStatus"></span>
+                      <button class="secondary-button" id="imageEngineAction" type="button" hidden></button>
+                      <button class="secondary-button" id="imageEngineDefault" type="button" hidden>Set as default</button>
+                    </div>
+                  </div>
+                  <label class="resource-field" data-image-control>
+                    <span>Workflow</span>
+                    <span class="select-wrap"><select id="workflowSelect"></select></span>
+                  </label>
+                  <label class="resource-field" data-image-control>
+                    <span>Checkpoint</span>
+                    <span class="select-wrap"><select id="checkpointSelect"></select></span>
+                  </label>
+                  <label class="resource-field" data-image-control>
+                    <span>VAE</span>
+                    <span class="select-wrap"><select id="vaeSelect"></select></span>
+                  </label>
+                  <label class="resource-field">
+                    <span>Model service</span>
+                    <span class="select-wrap"><select id="conceptProviderSelect"></select></span>
+                  </label>
+                  <label class="resource-field">
+                    <span>Concept LLM</span>
+                    <span class="select-wrap"><select id="llmSelect"></select></span>
+                  </label>
+                  <div class="resource-field lora-field" data-image-control>
+                    <span>LoRA</span>
+                    <div class="lora-picker">
+                      <span class="select-wrap"><select id="loraSelect"></select></span>
+                      <button class="secondary-button" id="addLoraButton" type="button">Add</button>
+                    </div>
+                  </div>
+                  <div class="selected-loras" id="selectedLoras" data-image-control></div>
+                </div>
+                </details>
               </div>
             </section>
           </div>

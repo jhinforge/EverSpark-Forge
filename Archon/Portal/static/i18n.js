@@ -1,6 +1,14 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Creation workspace mode": "创作工作模式",
+    "What would you like to create?": "生成什么？",
+    "Image": "图像",
+    "Image + Audio": "图像 + 音频",
+    "Creation request": "创作请求",
+    "Creation settings": "创作设置",
+    "Provider: {provider} · LLM: {llm}": "服务：{provider} · LLM：{llm}",
+    "Workflow: {workflow} · Checkpoint: {checkpoint} · Provider: {provider} · LoRA: {count}": "工作流：{workflow} · Checkpoint：{checkpoint} · 服务：{provider} · LoRA：{count}",
     "Machine overview": "机器概览",
     "Resources and network": "资源与网络",
     "Machine actions": "机器操作",
