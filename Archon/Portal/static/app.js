@@ -2749,7 +2749,11 @@ function runtimeCard(title, online, copy, args = {}) {
   dot.dataset.status = online ? "online" : "offline";
   const detail = document.createElement("p");
   uiText(detail, copy, args);
-  head.append(name, dot);
+  const status = document.createElement("span");
+  status.className = "status-badge";
+  status.dataset.status = online ? "online" : "offline";
+  uiText(status, online ? "Online" : "Offline");
+  head.append(name, dot, status);
   card.append(head, detail);
   return card;
 }
@@ -2757,22 +2761,25 @@ function runtimeCard(title, online, copy, args = {}) {
 async function loadRuntime() {
   try {
     const data = await api("/api/runtime/status");
-    const orchestrator = Boolean(data.services?.orchestrator?.online);
-    const archonBackend = Boolean(data.services?.archon_backend?.online);
-    const imageForge = Boolean(data.services?.image_forge?.online);
-    const logging = Boolean(data.logging?.ready);
-    const controlOnly = data.mode === "archon-only";
-    elements.runtimeGrid.replaceChildren(
-      controlOnly
-        ? runtimeCard("Archon Backend", archonBackend, archonBackend ? "Archon control backend is online." : "Archon control backend is unavailable.")
-        : runtimeCard("Orchestrator", orchestrator, orchestrator ? "Inter-Forge task orchestration is online." : "Start with ./everspark orchestrator start"),
-      runtimeCard("Image Forge", imageForge, controlOnly ? "No Legate is connected; Forge execution is unavailable." : imageForge ? "The configured image adapter is responding." : "Start or configure the image execution adapter."),
-      runtimeCard("Runtime logs", logging, logging ? "{present}/{configured} managed logs are present." : "The runtime log manifest is unavailable.",
-        { present: data.logging?.present, configured: data.logging?.configured }),
-    );
-    elements.healthDot.className = `pulse-dot ${data.ready ? "online" : "partial"}`;
-    uiText(elements.healthTitle, controlOnly && data.ready ? "Archon ready" : data.ready ? "System ready" : "Setup required");
-    uiText(elements.healthDetail, controlOnly && data.ready ? "Control only · no Legate connected" : data.ready ? (data.remote ? "Remote Forge services responding" : "All local services responding") : "Open Compute for service readiness");
+    const archonBackend = data.services?.archon_backend?.online === true;
+    document.querySelector("#runtimeBackend").replaceChildren(runtimeCard(
+      "Archon Backend", archonBackend,
+      archonBackend ? "Archon control backend is online." : "Archon control backend is unavailable."));
+    elements.runtimeGrid.replaceChildren(...[
+      ["Concept Forge", "concept_forge"], ["Image Forge", "image_forge"], ["Audio Forge", "audio_forge"],
+    ].map(([title, key]) => {
+      const service = data.services?.[key];
+      const online = service?.online === true;
+      return runtimeCard(title, online, online ? "Service health check passed."
+        : service?.status === "unavailable" || !service ? "Service health cannot be verified." : "Service is unavailable.");
+    }));
+    const concept = data.services?.concept_forge?.online === true;
+    const worker = data.services?.image_forge?.online === true || data.services?.audio_forge?.online === true;
+    const ready = archonBackend && concept && worker;
+    elements.healthDot.className = `pulse-dot ${ready ? "online" : "partial"}`;
+    uiText(elements.healthTitle, ready ? "System ready" : archonBackend ? "Archon ready" : "Status unavailable");
+    uiText(elements.healthDetail, ready ? "Forge services available for creation."
+      : archonBackend ? "Open Compute for service readiness" : "Archon control backend is unavailable.");
   } catch (error) {
     elements.healthDot.className = "pulse-dot partial";
     uiText(elements.healthTitle, "Status unavailable");

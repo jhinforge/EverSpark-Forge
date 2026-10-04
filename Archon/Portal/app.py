@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 import json
 import mimetypes
@@ -471,28 +472,52 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._json(200, {"ok": True, "services": self._collect_service_health()})
 
     def _collect_service_health(self) -> dict[str, dict[str, Any]]:
-        if self._control_mode():
-            checks = {"archon_backend": f"{self.server.settings.control_url}/health"}
-        else:
-            checks = {
-                "orchestrator": f"{self.orchestrator_url}/health",
-                "image_forge": f"{self.orchestrator_url}/image/health",
-            }
-        services: dict[str, dict[str, Any]] = {}
-        for name, url in checks.items():
+        # Readiness probes are bounded and never infer Forge health from a Node lease.
+        timeout = min(self.server.settings.request_timeout, 10)
+        bindings = self.server.forge_bindings
+        selected = {}
+        if bindings is not None:
+            with bindings.lock:
+                selected = dict(bindings.bindings)
+        backend_url = (self.server.settings.control_url if bindings or self._control_mode()
+                       else self.orchestrator_url)
+
+        def probe(name):
+            source = "unavailable"
             try:
-                status, _ = request_json(url, self.server.settings.request_timeout)
-                services[name] = {"online": 200 <= status < 300}
+                if name == "archon_backend":
+                    source = "archon_health"
+                    status, body = request_json(f"{backend_url}/health", timeout)
+                    online = 200 <= status < 300 and body.get("ok") is True
+                elif name == "image_forge" and not self._control_mode():
+                    source = "image_health"
+                    status, body = request_json(f"{self.orchestrator_url}/image/health", timeout)
+                    online = 200 <= status < 300 and body.get("ok") is True
+                elif name in {"concept_forge", "audio_forge"} and selected.get(name.split("_")[0]):
+                    role = name.split("_")[0]
+                    source = "node_models" if role == "concept" else "node_audio_health"
+                    status, body = request_json(f"{self.server.settings.control_url}/nodes/task", timeout + 1, {
+                        "node_id": selected[role], "forge": role,
+                        "action": "models" if role == "concept" else "health",
+                        "message": "{}", "timeout": timeout,
+                    })
+                    value = json.loads(body["output"]) if 200 <= status < 300 and body.get("ok") is not False else None
+                    online = (isinstance(value, list) and all(isinstance(item, str) for item in value)
+                              if role == "concept" else isinstance(value, dict) and value.get("ok") is True)
+                else:
+                    return {"online": False, "status": "unavailable", "source": source,
+                            "reason": "health_unverified"}
+                return {"online": bool(online), "status": "online" if online else "offline", "source": source}
             except Exception as exc:
-                services[name] = {
-                    "online": False,
-                    "error": type(exc).__name__,
-                }
-        if self._control_mode():
-            services["image_forge"] = {"online": False}
-        elif self.server.forge_bindings and self.server.forge_bindings.url:
-            for role, state in self.server.forge_bindings.status()["nodes"].items():
-                services[f"{role}_node"] = {"online": state == "online"}
+                return {"online": False, "status": "unavailable", "source": source,
+                        "error": type(exc).__name__, "reason": "health_unverified"}
+
+        names = ("archon_backend", "concept_forge", "image_forge", "audio_forge")
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            services = dict(zip(names, pool.map(probe, names)))
+        if not self._control_mode():
+            # Compatibility only; the Portal presents a single Archon Backend card.
+            services["orchestrator"] = dict(services["archon_backend"])
         return services
 
     def _control_mode(self) -> bool:
@@ -522,8 +547,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "logging": logging_status,
                 "mode": "archon-only" if self._control_mode() else "full",
                 "remote": bool(self.server.forge_bindings and self.server.forge_bindings.url),
-                "ready": (services["archon_backend"]["online"] if self._control_mode()
-                          else all(item["online"] for item in services.values())),
+                "ready": services["archon_backend"]["online"] and (self._control_mode() or (
+                    services["concept_forge"]["online"] and (
+                        services["image_forge"]["online"] or services["audio_forge"]["online"]))),
             },
         )
 

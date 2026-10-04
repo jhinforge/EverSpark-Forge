@@ -389,25 +389,17 @@
           <div class="compute-tab-panel" id="runtimeView" data-compute-panel="runtime" role="tabpanel" aria-labelledby="computeRuntimeTab">
           <div class="section-toolbar">
             <div>
-              <p class="section-kicker">LOCAL RUNTIME</p>
+              <p class="section-kicker">EVERSPARK RUNTIME</p>
               <h2>Service readiness</h2>
-              <p class="section-copy">Local mode requires no Cloudflare or R2 configuration.</p>
+              <p class="section-copy">Archon Backend and Forge service availability.</p>
             </div>
             <button class="ghost-button" id="refreshRuntimeButton" type="button">Run checks</button>
           </div>
-          <div class="runtime-grid" id="runtimeGrid"></div>
-          <div class="setup-panel">
-            <div>
-              <p class="section-kicker">FIRST RUN</p>
-              <h3>Bring each layer online</h3>
-            </div>
-            <ol class="setup-steps">
-              <li><span>1</span><div><strong>Install runtime and models</strong><code>./everspark setup</code></div></li>
-              <li><span>2</span><div><strong>Start every local service</strong><code>./everspark start</code></div></li>
-              <li><span>3</span><div><strong>Verify readiness</strong><code>./everspark status</code></div></li>
-            </ol>
-            <p class="setup-note">Image generation also needs a configured Image Forge adapter and workflow. Optional remote storage and Cloudflare networking remain disabled until explicitly enabled.</p>
-          </div>
+          <div class="runtime-backend" id="runtimeBackend"></div>
+          <section class="runtime-forge-services" aria-labelledby="runtimeForgeHeading">
+            <div class="section-toolbar"><h3 id="runtimeForgeHeading">Forge services</h3></div>
+            <div class="runtime-grid" id="runtimeGrid"></div>
+          </section>
         </div>
         </section>
 

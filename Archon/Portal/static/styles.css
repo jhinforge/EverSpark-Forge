@@ -382,15 +382,6 @@ textarea:focus, input:focus, select:focus { border-color: var(--border-accent); 
 .download-card-label { color: var(--ember); font-size: var(--font-size-xs); font-weight: 750; letter-spacing: .13em; }
 .direct-download-card label small { color: var(--subtle); font-size: var(--font-size-xs); font-weight: 500; letter-spacing: 0; text-transform: none; }
 .direct-download-card .direct-download-start { justify-self: start; margin-top: 2px; }
-.setup-panel { margin-top: var(--spacing-lg); padding: var(--spacing-xl); border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
-.setup-panel h3 { margin-top: var(--spacing-sm); font-size: var(--font-size-lg); }
-.setup-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--card-gap); padding: 0; margin: var(--spacing-xl) 0 0; list-style: none; }
-.setup-steps li { display: flex; gap: var(--spacing-md); padding: var(--spacing-lg); border: 1px solid var(--line); border-radius: 11px; background: rgba(0, 0, 0, .15); }
-.setup-steps li > span { display: grid; place-items: center; flex: 0 0 auto; width: 23px; height: 23px; border: 1px solid var(--border-accent); border-radius: 7px; color: var(--ember-hot); font-size: var(--font-size-xs); }
-.setup-steps strong, .setup-steps code { display: block; }
-.setup-steps strong { font-size: var(--font-size-sm); }
-.setup-steps code { margin-top: var(--spacing-sm); color: var(--cyan); font-size: var(--font-size-xs); }
-.setup-note { margin-top: var(--spacing-lg); color: var(--muted); font-size: var(--font-size-xs); line-height: var(--line-height); }
 
 .modal { width: min(92vw, 600px); padding: 0; border: 1px solid var(--line-strong); border-radius: 18px; color: var(--text); background: #11161c; box-shadow: 0 35px 100px rgba(0, 0, 0, .55); }
 .modal.wide { width: min(92vw, 820px); }
@@ -421,8 +412,7 @@ textarea:focus, input:focus, select:focus { border-color: var(--border-accent); 
   min-width: 0; padding: var(--ui-panel-padding); border: 1px solid var(--line);
   border-radius: var(--ui-radius); background: var(--panel);
 }
-.panel, .result-card, .gallery-card, .setup-panel { border-radius: var(--ui-radius); }
-.setup-panel { padding: var(--ui-panel-padding); }
+.panel, .result-card, .gallery-card { border-radius: var(--ui-radius); }
 .subject-document, .storage-resource, .revision-item { min-width: 0; padding: var(--spacing-lg); }
 :is(.ui-panel, .storage-panel, .subject-card, .runtime-card, .model-service-card, .machine-card) h3 { font-size: var(--font-size-lg); font-weight: 650; }
 .ui-tabs, .asset-tabs, .compute-tabs, .settings-tabs { display: flex; gap: var(--action-gap); flex-wrap: wrap; margin-bottom: var(--section-gap); }
@@ -486,7 +476,7 @@ input[type="file"]::file-selector-button { margin-right: var(--spacing-md); padd
 .runtime-card p, .model-service-card p, .machine-card p, .conversation-message p {
   font-size: var(--font-size-base); line-height: var(--line-height);
 }
-.field-help, .setup-note, .form-row small, .direct-download-card label small {
+.field-help, .form-row small, .direct-download-card label small {
   font-size: var(--font-size-sm); line-height: var(--line-height);
 }
 .subject-document h4, .direct-download-card h4, .machine-section > h4 {
@@ -509,7 +499,7 @@ input[type="file"]::file-selector-button { margin-right: var(--spacing-md); padd
   .forge-layout { grid-template-columns: 1fr; }
   .subject-rail { min-height: auto; }
   .subject-empty { min-height: 240px; }
-  .runtime-grid, .setup-steps, .storage-resource-grid, .direct-download-grid, .model-service-list, .model-service-fields { grid-template-columns: 1fr; }
+  .runtime-grid, .storage-resource-grid, .direct-download-grid, .model-service-list, .model-service-fields { grid-template-columns: 1fr; }
   .subject-documents { grid-template-columns: 1fr; }
   .generation-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -616,3 +606,9 @@ input[type="file"]::file-selector-button { margin-right: var(--spacing-md); padd
 /* Character assets stay primary; backup controls share a secondary disclosure. */
 #subjectsView .asset-data-management { margin-top: var(--section-gap); padding: var(--spacing-lg); }
 #subjectsView .asset-data-management > summary { font-size: var(--font-size-base); }
+
+/* Control readiness precedes the shared Forge service cards. */
+#runtimeView .runtime-forge-services { margin-top: var(--section-gap); }
+#runtimeView .runtime-backend .runtime-card h3 { font-size: var(--font-size-xl); }
+#runtimeView .runtime-card-head { flex-wrap: wrap; gap: var(--spacing-sm); }
+#runtimeView .runtime-card-head h3 { margin-right: auto; }
