@@ -8,18 +8,20 @@ const navigation = source.slice(source.indexOf('const legacyViewSections ='),sou
 function setup() {
   const classes = (initial=[]) => {const values=new Set(initial);return {toggle(key,on){on?values.add(key):values.delete(key);},contains(key){return values.has(key);}};};
   const primary=['forge','assets','compute','resources','settings'];
-  const legacy=['machines','runtime','storage','models'];
+  const legacy=['machine-configuration','storage','models'];
   const buttons=primary.map(view=>({dataset:{view},classList:classes()}));
   const panels=[...primary,...legacy].map(viewPanel=>({dataset:{viewPanel},classList:classes()}));
   const assetButtons=['characters','images','audio'].map(assetTab=>({dataset:{assetTab},classList:classes(),setAttribute(key,value){this[key]=value;}}));
   const assetPanels=['characters','images','audio'].map(assetPanel=>({dataset:{assetPanel},classList:classes()}));
-  const nodes={'#refreshHistoryButton':{classList:classes()},'#legacyPageNavigation':{classList:classes(['hidden'])},'#returnToSectionButton':{dataset:{}},'#viewEyebrow':{},'#viewTitle':{}};
+  const computeButtons=['machines','runtime'].map(computeTab=>({dataset:{computeTab},classList:classes(),setAttribute(key,value){this[key]=value;}}));
+  const computePanels=['machines','runtime'].map(computePanel=>({dataset:{computePanel},classList:classes()}));
+  const nodes={'#computeView':panels.find(p=>p.dataset.viewPanel==='compute'),'#machinesView':computePanels[0],'#runtimeView':computePanels[1],'#refreshHistoryButton':{classList:classes()},'#legacyPageNavigation':{classList:classes(['hidden'])},'#returnToSectionButton':{dataset:{}},'#viewEyebrow':{},'#viewTitle':{}};
   const calls=[];
-  const context={state:{assetTab:'characters'},$$:selector=>selector==='.nav-item'?buttons:selector==='[data-asset-tab]'?assetButtons:selector==='[data-asset-panel]'?assetPanels:panels,$:selector=>nodes[selector],uiText(node,text){node.textContent=text;},Promise,
+  const context={state:{assetTab:'characters',computeTab:'machines'},$$:selector=>selector==='.nav-item'?buttons:selector==='[data-asset-tab]'?assetButtons:selector==='[data-asset-panel]'?assetPanels:selector==='[data-compute-tab]'?computeButtons:selector==='[data-compute-panel]'?computePanels:panels,$:selector=>nodes[selector],uiText(node,text){node.textContent=text;},Promise,
     nodeConnection:{refresh(){calls.push('nodeConnection');}}};
   for(const name of ['loadSubjects','loadHistory','loadRuntime','loadMachines','loadVastBalance','loadVastOffers','loadVastGpuNames','loadModelConnections','loadCloudConfiguration','loadDirectDownload']) context[name]=()=>calls.push(name);
   vm.createContext(context);vm.runInContext(copy+navigation,context);
-  return {context,buttons,panels,nodes,calls,assetButtons,assetPanels};
+  return {context,buttons,panels,nodes,calls,assetButtons,assetPanels,computeButtons,computePanels};
 }
 test('five primary sections display their own containers without starting unrelated loaders',()=>{
   const {context,buttons,panels,nodes,calls}=setup();
@@ -29,10 +31,10 @@ test('five primary sections display their own containers without starting unrela
     assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),[name]);
     assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
   }
-  assert.deepEqual(calls,['loadSubjects']);
+  assert.deepEqual(calls,['loadSubjects','nodeConnection','loadMachines','loadVastBalance','loadVastOffers','loadVastGpuNames']);
 });
 test('legacy shortcuts retain page loaders, parent highlighting and a return target',()=>{
-  const cases={machines:['compute',['nodeConnection','loadMachines','loadVastBalance','loadVastOffers','loadVastGpuNames']],runtime:['compute',['loadRuntime']],storage:['resources',['loadCloudConfiguration','loadDirectDownload']],models:['settings',['loadModelConnections']]};
+  const cases={'machine-configuration':['compute',['nodeConnection','loadMachines']],storage:['resources',['loadCloudConfiguration','loadDirectDownload']],models:['settings',['loadModelConnections']]};
   for(const [name,[parent,expected]] of Object.entries(cases)) {
     const {context,buttons,panels,nodes,calls}=setup();
     context.setView(name);
@@ -50,7 +52,7 @@ test('HTML keeps five primary entries and every old page accessible',()=>{
   const nav=html.slice(html.indexOf('<nav class="nav"'),html.indexOf('</nav>'));
   assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(m=>m[1]),['forge','assets','compute','resources','settings']);
   assert.equal([...html.matchAll(/data-primary-view/g)].length,5);
-  for(const name of ['machines','runtime','storage','models']) {
+  for(const name of ['machine-configuration','storage','models']) {
     assert.ok(html.includes(`data-view-panel="${name}"`));
     assert.ok(html.includes(`data-view-link="${name}"`));
   }
@@ -79,4 +81,49 @@ test('asset tabs reuse character/media loaders and preserve the selected tab whe
   context.setAssetTab('audio');context.setView('forge');context.setView('assets');
   assert.equal(context.state.assetTab,'audio');
   assert.deepEqual(calls,['loadSubjects','loadHistory','loadHistory','loadSubjects','loadHistory','loadHistory']);
+});
+
+
+test('Machines and Runtime aliases select compute tabs and reuse their existing loaders',()=>{
+  for(const [name,expected] of [['machines',['nodeConnection','loadMachines','loadVastBalance','loadVastOffers','loadVastGpuNames']],['runtime',['loadRuntime']]]) {
+    const {context,panels,nodes,calls,computePanels,computeButtons}=setup();
+    context.setView(name);
+    assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),['compute']);
+    assert.deepEqual(computePanels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.computePanel),[name]);
+    assert.equal(computeButtons.find(b=>b.dataset.computeTab===name)['aria-selected'],'true');
+    assert.deepEqual(calls,expected);
+    assert.ok(nodes['#legacyPageNavigation'].classList.contains('hidden'));
+  }
+});
+test('compute tab selection persists, and polling visibility stops when leaving Compute',()=>{
+  const {context,calls}=setup();
+  context.setView('compute');
+  assert.ok(context.computePanelVisible('machines'));
+  context.setComputeTab('runtime');
+  assert.ok(context.computePanelVisible('runtime'));
+  assert.ok(!context.computePanelVisible('machines'));
+  context.setView('forge');
+  assert.ok(!context.computePanelVisible('runtime'));
+  context.setView('compute');
+  assert.equal(context.state.computeTab,'runtime');
+  assert.ok(context.computePanelVisible('runtime'));
+  const before=calls.length;
+  context.setComputeTab('unknown');
+  assert.equal(calls.length,before);
+});
+test('Compute retains operational IDs while credentials stay outside its container',()=>{
+  const html=fs.readFileSync('Archon/Portal/static/index.html','utf8');
+  const compute=html.slice(html.indexOf('<section class="view" id="computeView"'),html.indexOf('<section class="view" id="resourcesView"'));
+  const config=html.slice(html.indexOf('<section class="view" id="machineConfigurationView"'),html.indexOf('<section class="view" id="modelsView"'));
+  for(const id of ['machinesView','runtimeView','refreshMachines','vastBalance','forgeNodeSummary','toggleVastOffers','vastOffersPanel','vastOfferForm','vastOfferList','vastInstanceList','moreVastInstances','refreshRuntimeButton','runtimeGrid']) {
+    assert.ok(compute.includes(`id="${id}"`),id);
+    assert.equal([...html.matchAll(new RegExp(`id="${id}"`,'g'))].length,1,id);
+  }
+  for(const id of ['vastCredentialForm','vastApiKey','saveVastKey','removeVastKey','nodeConnectionForm','nodeConnectionKey','nodeConnectionReusable','nodeConnectionStatus','nodeConnectionFeedback']) {
+    assert.ok(!compute.includes(`id="${id}"`),id);
+    assert.ok(config.includes(`id="${id}"`),id);
+    assert.equal([...html.matchAll(new RegExp(`id="${id}"`,'g'))].length,1,id);
+  }
+  assert.ok(!html.includes('data-view-panel="machines"'));
+  assert.ok(!html.includes('data-view-panel="runtime"'));
 });

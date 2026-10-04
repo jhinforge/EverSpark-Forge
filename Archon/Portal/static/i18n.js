@@ -1,6 +1,12 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Compute sections": "计算分类",
+    "Machines and Nodes": "机器与节点",
+    "Vast / Tailscale configuration": "Vast / Tailscale 配置",
+    "Connection credentials remain here until they move to Settings.": "连接凭据暂时保留在此，后续迁入设置。",
+    "Open Compute for service readiness": "打开计算查看运行状态",
+
     "Characters": "角色",
     "Images": "图像",
     "Audio": "音频",

@@ -288,36 +288,13 @@
         <section class="view" id="computeView" data-view-panel="compute" data-primary-view>
           <div class="section-toolbar">
             <div><h2>Compute</h2><p class="section-copy">Machines and service readiness.</p></div>
+            <button class="ghost-button" data-view-link="machine-configuration" type="button">Vast / Tailscale configuration</button>
           </div>
-          <div class="section-shortcuts">
-            <button class="secondary-button" data-view-link="machines" type="button">Machines</button>
-            <button class="secondary-button" data-view-link="runtime" type="button">Runtime</button>
+          <div class="compute-tabs" role="tablist" aria-label="Compute sections">
+            <button class="secondary-button active" id="computeMachinesTab" data-compute-tab="machines" role="tab" aria-selected="true" aria-controls="machinesView" type="button">Machines and Nodes</button>
+            <button class="secondary-button" id="computeRuntimeTab" data-compute-tab="runtime" role="tab" aria-selected="false" aria-controls="runtimeView" tabindex="-1" type="button">Service readiness</button>
           </div>
-        </section>
-
-        <section class="view" id="resourcesView" data-view-panel="resources" data-primary-view>
-          <div class="section-toolbar">
-            <div><h2>Resources</h2><p class="section-copy">Model downloads and remote libraries.</p></div>
-          </div>
-          <div class="section-shortcuts">
-            <button class="secondary-button" data-view-link="storage" type="button">Storage</button>
-          </div>
-        </section>
-
-        <section class="view" id="settingsView" data-view-panel="settings" data-primary-view>
-          <div class="section-toolbar">
-            <div><h2>Settings</h2><p class="section-copy">Model services and connection settings.</p></div>
-          </div>
-          <div class="section-shortcuts">
-            <button class="secondary-button" data-view-link="models" type="button">Model services</button>
-          </div>
-        </section>
-
-
-
-
-
-        <section class="view" id="machinesView" data-view-panel="machines">
+          <div class="compute-tab-panel active" id="machinesView" data-compute-panel="machines" role="tabpanel" aria-labelledby="computeMachinesTab">
           <div class="section-toolbar">
             <div>
               <p class="section-kicker">ARCHON / STEWARD</p>
@@ -330,36 +307,10 @@
             <p class="section-kicker">Vast available credit</p>
             <p class="vast-credit-amount" id="vastBalance" aria-live="polite">Unavailable</p>
           </aside>
-          <form class="storage-panel machine-credential" id="vastCredentialForm">
-            <div>
-              <p class="section-kicker">VAST ACCOUNT</p>
-              <h3>Vast API connection</h3>
-              <p class="section-copy" id="vastCredentialStatus">Checking local credential…</p>
-              <p class="section-copy">The key is saved in this Windows user's Credential Manager. EverSpark never displays it again.</p>
-            </div>
-            <label for="vastApiKey">Vast API Key</label>
-            <input id="vastApiKey" type="password" autocomplete="new-password" spellcheck="false" required placeholder="Enter or replace API Key">
-            <div class="machine-actions">
-              <button class="primary-button" id="saveVastKey" type="submit">Verify and save</button>
-              <button class="ghost-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
-            </div>
-          </form>
           <div class="storage-panel machine-credential">
             <h3>Remote Forge connections</h3>
             <p class="section-copy" id="forgeNodeSummary" role="status" aria-live="polite">Select the ready Concept and Image machines below to connect generation.</p>
           </div>
-          <form class="storage-panel machine-credential" id="nodeConnectionForm">
-            <div><p class="section-kicker">NODE CONNECTION</p><h3>Automatic Node connection</h3>
-              <p class="section-copy" id="nodeConnectionStatus">Checking Node connection…</p>
-              <p class="section-copy">Connect Tailscale on this Windows host, then enter a fresh auth key. EverSpark automatically joins the rented machine and starts its Agent. Choose the key mode to match Tailscale. The key is kept only for this Archon session.</p></div>
-            <label for="nodeConnectionKey">Tailscale auth key</label>
-            <input id="nodeConnectionKey" type="password" autocomplete="new-password" spellcheck="false" required>
-            <label for="nodeConnectionReusable">Key usage</label>
-            <select id="nodeConnectionReusable"><option value="once">Single use (one-off key)</option><option value="reusable">Long-term use (Reusable key)</option></select>
-            <p class="section-copy">Long expiry does not mean reusable. Enable Reusable in Tailscale to use this key for multiple rentals.</p>
-            <p class="section-copy" id="nodeConnectionFeedback" role="status" aria-live="polite"></p>
-            <button class="primary-button" type="submit">Configure automatic connection</button>
-          </form>
           <div class="section-toolbar machine-heading"><h3>Search Vast offers</h3><button class="ghost-button" id="toggleVastOffers" type="button" aria-expanded="true">Collapse</button></div>
           <div id="vastOffersPanel">
           <form class="storage-panel offer-search" id="vastOfferForm">
@@ -386,9 +337,8 @@
           <div class="section-toolbar machine-heading"><div><p class="section-kicker">MY PODS</p><h3>Existing instances</h3></div></div>
           <div class="machine-list" id="vastInstanceList" aria-live="polite"></div>
           <button class="secondary-button" id="moreVastInstances" type="button" hidden>Load more</button>
-        </section>
-
-        <section class="view" id="runtimeView" data-view-panel="runtime">
+        </div>
+          <div class="compute-tab-panel" id="runtimeView" data-compute-panel="runtime" role="tabpanel" aria-labelledby="computeRuntimeTab">
           <div class="section-toolbar">
             <div>
               <p class="section-kicker">LOCAL RUNTIME</p>
@@ -410,7 +360,63 @@
             </ol>
             <p class="setup-note">Image generation also needs a configured Image Forge adapter and workflow. Optional remote storage and Cloudflare networking remain disabled until explicitly enabled.</p>
           </div>
+        </div>
         </section>
+
+        <section class="view" id="resourcesView" data-view-panel="resources" data-primary-view>
+          <div class="section-toolbar">
+            <div><h2>Resources</h2><p class="section-copy">Model downloads and remote libraries.</p></div>
+          </div>
+          <div class="section-shortcuts">
+            <button class="secondary-button" data-view-link="storage" type="button">Storage</button>
+          </div>
+        </section>
+
+        <section class="view" id="settingsView" data-view-panel="settings" data-primary-view>
+          <div class="section-toolbar">
+            <div><h2>Settings</h2><p class="section-copy">Model services and connection settings.</p></div>
+          </div>
+          <div class="section-shortcuts">
+            <button class="secondary-button" data-view-link="models" type="button">Model services</button>
+          </div>
+        </section>
+
+
+
+
+
+        <section class="view" id="machineConfigurationView" data-view-panel="machine-configuration">
+          <div class="section-toolbar">
+            <div><h2>Vast / Tailscale configuration</h2><p class="section-copy">Connection credentials remain here until they move to Settings.</p></div>
+          </div>
+          <form class="storage-panel machine-credential" id="vastCredentialForm">
+            <div>
+              <p class="section-kicker">VAST ACCOUNT</p>
+              <h3>Vast API connection</h3>
+              <p class="section-copy" id="vastCredentialStatus">Checking local credential…</p>
+              <p class="section-copy">The key is saved in this Windows user's Credential Manager. EverSpark never displays it again.</p>
+            </div>
+            <label for="vastApiKey">Vast API Key</label>
+            <input id="vastApiKey" type="password" autocomplete="new-password" spellcheck="false" required placeholder="Enter or replace API Key">
+            <div class="machine-actions">
+              <button class="primary-button" id="saveVastKey" type="submit">Verify and save</button>
+              <button class="ghost-button" id="removeVastKey" type="button" hidden>Remove saved key</button>
+            </div>
+          </form>
+          <form class="storage-panel machine-credential" id="nodeConnectionForm">
+            <div><p class="section-kicker">NODE CONNECTION</p><h3>Automatic Node connection</h3>
+              <p class="section-copy" id="nodeConnectionStatus">Checking Node connection…</p>
+              <p class="section-copy">Connect Tailscale on this Windows host, then enter a fresh auth key. EverSpark automatically joins the rented machine and starts its Agent. Choose the key mode to match Tailscale. The key is kept only for this Archon session.</p></div>
+            <label for="nodeConnectionKey">Tailscale auth key</label>
+            <input id="nodeConnectionKey" type="password" autocomplete="new-password" spellcheck="false" required>
+            <label for="nodeConnectionReusable">Key usage</label>
+            <select id="nodeConnectionReusable"><option value="once">Single use (one-off key)</option><option value="reusable">Long-term use (Reusable key)</option></select>
+            <p class="section-copy">Long expiry does not mean reusable. Enable Reusable in Tailscale to use this key for multiple rentals.</p>
+            <p class="section-copy" id="nodeConnectionFeedback" role="status" aria-live="polite"></p>
+            <button class="primary-button" type="submit">Configure automatic connection</button>
+          </form>
+        </section>
+
 
         <section class="view" id="modelsView" data-view-panel="models">
           <div class="section-toolbar">

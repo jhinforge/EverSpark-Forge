@@ -6,6 +6,7 @@ const uiAttr = (node, property, key, args) => i18n.bind(node, key, args, propert
 const state = {
   subjects: [],
   assetTab: "characters",
+  computeTab: "machines",
   selectedSubject: null,
   selectingSubject: false,
   mode: "discuss",
@@ -165,6 +166,7 @@ const viewCopy = {
   runtime: ["WORKSPACE / RUNTIME", "Know what is ready."],
   models: ["WORKSPACE / MODEL SERVICES", "Connect language models."],
   machines: ["WORKSPACE / MACHINES", "Manage your machines."],
+  "machine-configuration": ["WORKSPACE / MACHINES", "Vast / Tailscale configuration"],
 };
 
 async function api(path, options = {}) {
@@ -1243,7 +1245,7 @@ async function testModelService() {
 // Legacy pages remain intact and accessible while the new sections are built.
 const legacyViewSections = {
   subjects: "assets", history: "assets", machines: "compute",
-  runtime: "compute", storage: "resources", models: "settings",
+  "machine-configuration": "compute", runtime: "compute", storage: "resources", models: "settings",
 };
 
 function setAssetTab(name) {
@@ -1261,11 +1263,33 @@ function setAssetTab(name) {
   else void loadHistory();
 }
 
+function setComputeTab(name) {
+  if (!["machines", "runtime"].includes(name)) return;
+  state.computeTab = name;
+  $$("[data-compute-tab]").forEach((button) => {
+    const active = button.dataset.computeTab === name;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  $$("[data-compute-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.computePanel === name));
+  if (name === "runtime") loadRuntime();
+  if (name === "machines") { nodeConnection.refresh(); loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
+}
+
+function computePanelVisible(name) {
+  return $("#computeView").classList.contains("active") && $(`#${name}View`).classList.contains("active");
+}
+
 function setView(name) {
   // Old callers still reach the relocated functions through these aliases.
   if (name === "subjects" || name === "history") {
     state.assetTab = name === "subjects" ? "characters" : "images";
     name = "assets";
+  }
+  if (name === "machines" || name === "runtime") {
+    state.computeTab = name;
+    name = "compute";
   }
   if (!viewCopy[name]) return;
   const section = legacyViewSections[name] || name;
@@ -1276,6 +1300,8 @@ function setView(name) {
   uiText($("#viewEyebrow"), viewCopy[name][0]);
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "assets") setAssetTab(state.assetTab);
+  if (name === "compute") setComputeTab(state.computeTab);
+  if (name === "machine-configuration") { nodeConnection.refresh(); loadMachines(); }
   if (name === "history") loadHistory();
   if (name === "runtime") loadRuntime();
   if (name === "machines") { nodeConnection.refresh(); loadMachines(); loadVastBalance(); loadVastOffers(); loadVastGpuNames(); }
@@ -2634,12 +2660,12 @@ async function loadRuntime() {
     );
     elements.healthDot.className = `pulse-dot ${data.ready ? "online" : "partial"}`;
     uiText(elements.healthTitle, controlOnly && data.ready ? "Archon ready" : data.ready ? "System ready" : "Setup required");
-    uiText(elements.healthDetail, controlOnly && data.ready ? "Control only · no Legate connected" : data.ready ? (data.remote ? "Remote Forge services responding" : "All local services responding") : "Open Runtime for details");
+    uiText(elements.healthDetail, controlOnly && data.ready ? "Control only · no Legate connected" : data.ready ? (data.remote ? "Remote Forge services responding" : "All local services responding") : "Open Compute for service readiness");
   } catch (error) {
     elements.healthDot.className = "pulse-dot partial";
     uiText(elements.healthTitle, "Status unavailable");
     uiText(elements.healthDetail, "WebUI could not complete checks");
-    if ($("#runtimeView").classList.contains("active")) showNotice(error.message);
+    if (computePanelVisible("runtime")) showNotice(error.message);
   }
 }
 
@@ -2670,6 +2696,20 @@ function bindEvents() {
       if (next < 0) return;
       event.preventDefault();
       setAssetTab(tabs[next].dataset.assetTab);
+      tabs[next].focus();
+    });
+  });
+  $$("[data-compute-tab]").forEach((button) => {
+    button.addEventListener("click", () => setComputeTab(button.dataset.computeTab));
+    button.addEventListener("keydown", (event) => {
+      const tabs = $$("[data-compute-tab]");
+      const index = tabs.indexOf(button);
+      const next = event.key === "ArrowRight" ? (index + 1) % tabs.length
+        : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
+        : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+      if (next < 0) return;
+      event.preventDefault();
+      setComputeTab(tabs[next].dataset.computeTab);
       tabs[next].focus();
     });
   });
@@ -2704,7 +2744,7 @@ function bindEvents() {
     hideNotice();
     await Promise.all([loadSubjects(), loadRuntime(), loadImagePlugins(), loadRemoteStorage()]);
     await loadResources();
-    if ($("#machinesView").classList.contains("active")) await Promise.all([loadMachines(), loadVastBalance(), loadVastOffers()]);
+    if (computePanelVisible("machines")) await Promise.all([loadMachines(), loadVastBalance(), loadVastOffers()]);
   });
   $("#vastCredentialForm").addEventListener("submit", saveVastKey);
   $("#vastOfferForm").addEventListener("submit", loadVastOffers);
@@ -2807,10 +2847,10 @@ async function initialize() {
   await loadResources();
   setInterval(loadRuntime, 20000);
   setInterval(() => {
-    if (!document.hidden && $("#machinesView").classList.contains("active")) void loadMachines("", true);
+    if (!document.hidden && computePanelVisible("machines")) void loadMachines("", true);
   }, 10000);
   setInterval(() => {
-    if (!document.hidden && $("#machinesView").classList.contains("active")) void loadVastBalance();
+    if (!document.hidden && computePanelVisible("machines")) void loadVastBalance();
   }, 60000);
 }
 
