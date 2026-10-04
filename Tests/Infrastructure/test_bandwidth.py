@@ -15,30 +15,36 @@ class DownloadTestTests(unittest.TestCase):
         self.directory = Path(self.temp.name)
         self.addCleanup(self.temp.cleanup)
 
-    def test_payload_average_uses_decimal_mb_and_shared_elapsed_window(self):
-        for size in [49_000_000, 50_000_000, 60_000_000]:
-            clock = [0.0]
-            class Response:
-                status = 200
-                headers = {"CF-Ray": "fixture-ICN"}
-                def __enter__(self): return self
-                def __exit__(self, *args): pass
-                def read1(self, count):
-                    clock[0] += 1
-                    return b"x" * size if clock[0] < 30 else b""
-            with patch.object(module.time, 'monotonic', side_effect=lambda: clock[0]), patch.object(module, 'build_opener') as opener:
-                opener.return_value.open.return_value = Response()
-                result = module.measure(workers=1)
-            self.assertEqual(result['bytes_received'], 29 * size)
-            self.assertEqual(result['download_mb_s'], 29 * size / 30 / 1_000_000)
-            # The whole 30-second sample includes startup / last-read overhead.
-            self.assertEqual(result['qualified'], result['download_mb_s'] >= 50)
-            self.assertEqual(result['server_colo'], 'ICN')
-            request = opener.return_value.open.call_args.args[0]
-            self.assertEqual(request.get_method(), 'GET')
-            self.assertEqual(request.get_header('Accept-encoding'), 'identity')
-            self.assertEqual(request.get_header('User-agent'), 'curl/8.5.0')
-            self.assertEqual(request.full_url, module.DOWNLOAD_URL + '?bytes=10000000')
+    def source(self):
+        return module.download_source()
+
+    def test_source_reuses_manifest_without_installing_models(self):
+        from dataclasses import replace
+        spec = next(spec for spec in module.load_specs() if spec.id == 'image-default')
+        with patch.object(module, 'load_specs', return_value=[replace(spec, repo_id='Example/Model', revision='revision name', filename='nested/model.safetensors')]):
+            source = module.download_source()
+        self.assertEqual(source['server_url'], 'https://huggingface.co/Example/Model/resolve/revision%20name/nested/model.safetensors')
+        self.assertEqual(source['model_filename'], 'nested/model.safetensors')
+        with patch.object(module, 'load_specs', return_value=[]):
+            with self.assertRaisesRegex(ValueError, 'unavailable'): module.download_source()
+
+    def test_deadline_timeout_with_payload_is_success_using_wall_clock(self):
+        clock = [0.0]
+        def transfer(args, **kwargs):
+            clock[0] = 30.02
+            return Mock(returncode=28, stdout='200 30.02 88536085')
+        with patch.object(module.time, 'monotonic', side_effect=lambda: clock[0]), patch.object(module.subprocess, 'run', side_effect=transfer) as curl:
+            result = module.measure()
+        self.assertAlmostEqual(result['download_mb_s'], 88536085 / 30.02 / 1_000_000)
+        self.assertFalse(result['qualified'])
+        self.assertEqual(result['method'], 'default_model_http')
+        self.assertTrue(validate(result)['download_mb_s'] > 0)
+        args = curl.call_args.args[0]
+        self.assertEqual(args[0], 'curl')
+        self.assertEqual(args[args.index('-o')+1], os.devnull)
+        self.assertEqual(args[args.index('--noproxy')+1], '*')
+        self.assertEqual(args[-1], self.source()['server_url'])
+        self.assertEqual(list(self.directory.iterdir()), [])
 
     def test_auto_once_and_manual_retry_without_waiting(self):
         process = Mock(pid=os.getpid())
@@ -58,82 +64,61 @@ class DownloadTestTests(unittest.TestCase):
             module.start(self.directory, force=True)
             self.assertEqual(spawn.call_count, 2)
 
-    def test_completed_small_downloads_repeat_for_entire_sample(self):
+    def test_completed_file_repeats_until_window_ends(self):
         clock = [0.0]
-        class Response:
-            status = 200
-            headers = {'Content-Type': 'application/octet-stream'}
-            def __init__(self): self.delivered = False
-            def __enter__(self): return self
-            def __exit__(self, *args): pass
-            def read1(self, count):
-                if self.delivered:
-                    clock[0] += .05
-                    return b''
-                self.delivered = True
-                clock[0] += 1
-                return b'x' * 10_000_000
-        with patch.object(module.time, 'monotonic', side_effect=lambda: clock[0]), patch.object(module, 'build_opener') as opener:
-            opener.return_value.open.side_effect = lambda *args, **kwargs: Response()
-            result = module.measure(duration=3, workers=1)
-        self.assertEqual(opener.return_value.open.call_count, 3)
-        self.assertEqual(result['elapsed_seconds'], 3)
-        self.assertEqual(result['bytes_received'], 20_000_000)
-        self.assertAlmostEqual(result['download_mb_s'], 20 / 3)
+        def transfer(args, **kwargs):
+            clock[0] += 10
+            return Mock(returncode=0, stdout='206 10 500000000')
+        with patch.object(module.time, 'monotonic', side_effect=lambda: clock[0]), patch.object(module.subprocess, 'run', side_effect=transfer) as curl:
+            result = module.measure()
+        self.assertEqual(curl.call_count, 3)
+        self.assertEqual([float(call.args[0][call.args[0].index('--max-time')+1]) for call in curl.call_args_list], [30,20,10])
+        self.assertEqual(result['elapsed_seconds'], 30)
+        self.assertEqual(result['bytes_received'], 1_500_000_000)
+        self.assertEqual(result['download_mb_s'], 50)
+        self.assertTrue(result['qualified'])
 
-    def test_actual_http_streams_share_one_window_and_discard_payload(self):
+    def test_actual_curl_discards_payload_and_accepts_sample_timeout(self):
+        import shutil
         import threading
         import time
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-        active = [0, 0]
-        guard = threading.Lock()
+        if not shutil.which('curl'): self.skipTest('curl unavailable')
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args): pass
             def do_GET(self):
-                if self.path != '/down?bytes=10000000' or self.headers.get('User-Agent') != 'curl/8.5.0':
-                    self.send_error(403)
-                    return
-                with guard:
-                    active[0] += 1
-                    active[1] = max(active)
                 try:
                     self.send_response(200)
-                    self.send_header('Content-Type','application/octet-stream')
-                    self.send_header('CF-Ray','fixture-NRT')
+                    self.send_header('Content-Length', '10000000')
                     self.end_headers()
                     for _ in range(100):
                         self.wfile.write(b'x' * 8192)
                         self.wfile.flush()
-                        time.sleep(.005)
+                        time.sleep(.01)
                 except (BrokenPipeError, ConnectionResetError): pass
-                finally:
-                    with guard: active[0] -= 1
-        server = ThreadingHTTPServer(('127.0.0.1',0),Handler)
+        server = ThreadingHTTPServer(('127.0.0.1',0), Handler)
         thread = threading.Thread(target=server.serve_forever,daemon=True)
         thread.start()
         try:
-            with patch.object(module,'DOWNLOAD_URL',f'http://127.0.0.1:{server.server_port}/down'):
-                result = module.measure(duration=.2,workers=3)
-            self.assertEqual(active[1],3)
-            self.assertGreater(result['bytes_received'],0)
-            self.assertEqual(result['server_colo'],'NRT')
-            self.assertAlmostEqual(result['elapsed_seconds'],.2)
-            self.assertAlmostEqual(result['download_mb_s'],result['bytes_received']/.2/1_000_000)
-            self.assertEqual(list(self.directory.iterdir()),[])
+            result = module.measure(duration=.3, source={**self.source(), 'server_url':f'http://127.0.0.1:{server.server_port}/model'})
+            self.assertGreater(result['bytes_received'], 0)
+            self.assertGreaterEqual(result['elapsed_seconds'], .27)
+            self.assertEqual(result['method'], 'default_model_http')
+            self.assertEqual(list(self.directory.iterdir()), [])
         finally:
-            server.shutdown();server.server_close();thread.join()
+            server.shutdown(); server.server_close(); thread.join()
 
     def test_worker_stores_source_and_measurement_without_credentials(self):
         module.save(self.directory/'bandwidth.json', {'status':'pending','run_id':'fixture','policy':2})
-        result = {'status':'completed', 'method':'cloudflare_http', 'download_mb_s':50,
+        result = {'status':'completed', 'method':'default_model_http', 'download_mb_s':50,
                   'elapsed_seconds':30, 'bytes_received':1_500_000_000,
-                  'server_name':'Cloudflare (ICN)', 'server_url':module.DOWNLOAD_URL, 'server_colo':'ICN'}
+                  'server_name':'Hugging Face', 'server_url':self.source()['server_url']}
         with patch.object(module, 'measure', return_value=result), patch.object(module.time, 'sleep'):
             module.run(self.directory, 'fixture')
         saved = module.snapshot(self.directory)
         self.assertEqual(saved['policy'],module.POLICY)
         self.assertEqual(saved['download_mb_s'],50)
-        self.assertEqual(saved['method'],'cloudflare_http')
+        self.assertEqual(saved['method'],'default_model_http')
         self.assertNotIn('pid',saved)
         self.assertTrue(validate(saved)['qualified'])
 
@@ -147,33 +132,32 @@ class DownloadTestTests(unittest.TestCase):
         self.assertIn('HTTP 503 fixture',result['error'])
         self.assertIn('HTTP 503 fixture',log.getvalue())
 
-    def test_network_failure_is_bounded_and_has_no_measurement(self):
-        with patch.object(module, 'build_opener') as opener:
-            opener.return_value.open.side_effect=OSError('connection unavailable')
-            with self.assertRaisesRegex(ValueError,'connection unavailable'):
-                module.measure(workers=1)
-        self.assertEqual(opener.return_value.open.call_count,3)
+    def test_invalid_http_exit_and_statistics_never_produce_speed(self):
+        for code, stats, elapsed in [(22,'403 1 0',1), (0,'200 1 0',1),
+                                      (7,'200 1 1000',1), (28,'200 1 1000',1),
+                                      (0,'200 nan 1000',1), (0,'malformed',1)]:
+            clock = [0.0]
+            def transfer(*args, **kwargs):
+                clock[0] = elapsed
+                return Mock(returncode=code, stdout=stats)
+            with patch.object(module.time,'monotonic',side_effect=lambda:clock[0]), patch.object(module.subprocess,'run',side_effect=transfer):
+                with self.assertRaises(ValueError): module.measure()
+        for exc in [FileNotFoundError('curl missing'), module.subprocess.TimeoutExpired('curl', 35)]:
+            with patch.object(module.subprocess,'run',side_effect=exc):
+                with self.assertRaises(type(exc)): module.measure()
 
-    def test_no_payload_or_non_200_cannot_qualify(self):
-        for status, headers in [(200,{}),(503,{}),(200,{"Content-Type":"text/html"}),(200,{"Content-Encoding":"gzip"})]:
-            response=Mock(status=status,headers=headers)
-            response.__enter__=Mock(return_value=response)
-            response.__exit__=Mock(return_value=False)
-            response.read1.return_value=b''
-            with patch.object(module,'build_opener') as opener:
-                opener.return_value.open.return_value=response
-                with self.assertRaises(ValueError): module.measure(workers=1)
-
-    def test_controller_validates_cloudflare_samples_and_keeps_legacy_guard(self):
-        value={'status':'completed','method':'cloudflare_http','server_url':module.DOWNLOAD_URL,
+    def test_controller_validates_model_sample_and_keeps_old_methods(self):
+        value={'status':'completed','method':'default_model_http','server_url':self.source()['server_url'],
                'elapsed_seconds':30,'bytes_received':1_500_000_000,'download_mb_s':50}
         self.assertTrue(validate(value)['qualified'])
-        self.assertFalse(validate({**value,'download_mb_s':49})['qualified'])
-        for field, invalid in [('elapsed_seconds',.5),('elapsed_seconds',True),('bytes_received',0),('download_mb_s',float('nan'))]:
+        self.assertFalse(validate({**value,'download_mb_s':49,'bytes_received':1_470_000_000})['qualified'])
+        for field, invalid in [('elapsed_seconds',.5),('elapsed_seconds',True),('bytes_received',0),
+                               ('download_mb_s',float('nan')),('download_mb_s',51),('server_url','https://untrusted.test/model')]:
             self.assertIsNone(validate({**value,field:invalid}))
         self.assertIsNone(validate({'status':'completed','download_mb_s':True}))
-        self.assertIsNone(validate({'status':'completed','download_mb_s':float('nan')}))
         self.assertTrue(validate({'status':'completed','download_mb_s':50,'region':'AS','server_region':'AS'})['qualified'])
+        old={**value,'method':'cloudflare_http','server_url':'https://speed.cloudflare.com/__down'}
+        self.assertTrue(validate(old)['qualified'])
 
 
 class RegionalDiscoveryTests(unittest.TestCase):

@@ -50,12 +50,22 @@
       if (speed.status === "completed" && Number.isFinite(speed.download_mb_s)) {
         const regional = ["AS", "EU", "NA", "SA", "AF", "OC"].includes(speed.region) && speed.region === speed.server_region;
         const cloudflare = speed.method === "cloudflare_http" && speed.server_url === "https://speed.cloudflare.com/__down";
-        const key = !regional && !cloudflare ? "Download speed: {speed} MB/s; region unverified, for reference only." : speed.download_mb_s >= 50
+        const modelSource = speed.method === "default_model_http";
+        const key = modelSource ? (speed.download_mb_s >= 50
+          ? "Default model source download speed: {speed} MB/s; meets the 50 MB/s target."
+          : "Default model source download speed: {speed} MB/s; below the 50 MB/s target.")
+          : !regional && !cloudflare ? "Download speed: {speed} MB/s; region unverified, for reference only." : speed.download_mb_s >= 50
           ? "This machine downloads at {speed} MB/s, qualified."
           : "This machine downloads at {speed} MB/s; consider replacing the Pod.";
         bind(note, key, { speed: speed.download_mb_s.toFixed(2) });
         panel.appendChild(note);
         field("Test server", speed.server_name || (cloudflare ? "Cloudflare" : "LibreSpeed"));
+        if (modelSource) {
+          const source = document.createElement("p");
+          bind(source, "Measures downloads from the default Hugging Face model source; R2 and other sources may have different speeds.");
+          panel.appendChild(source);
+          if (speed.model_filename) field("Test model", speed.model_filename);
+        }
         if (cloudflare) {
           const source = document.createElement("p");
           bind(source, "Measures downloads from Cloudflare; model sources may have different speeds.");

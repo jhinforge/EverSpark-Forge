@@ -72,3 +72,17 @@ test('Cloudflare samples are assessed without inventing a server region, and dis
     assert.doesNotMatch(texts(panel),/region unverified/);
   }
 });
+
+test('default model downloads disclose scope and compare the target without judging the whole Pod', () => {
+  for (const [speed, expected] of [[34.88, /below the 50 MB\/s target/], [50, /meets the 50 MB\/s target/]]) {
+    const panel = context.window.EverSparkNodeCard.render({status: 'online', bandwidth: {
+      status: 'completed', method: 'default_model_http', server_name: 'Hugging Face',
+      model_filename: 'Illustrious-XL-v1.0.safetensors', download_mb_s: speed
+    }}, options);
+    assert.match(texts(panel), /Default model source download speed/);
+    assert.match(texts(panel), expected);
+    assert.match(texts(panel), /R2 and other sources may have different speeds/);
+    assert.match(texts(panel), /Test model: Illustrious-XL-v1.0.safetensors/);
+    assert.doesNotMatch(texts(panel), /consider replacing|region unverified/);
+  }
+});

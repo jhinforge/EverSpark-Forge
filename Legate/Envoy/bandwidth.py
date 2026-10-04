@@ -1,10 +1,7 @@
 """One background download test per Node, independent of Forge execution."""
 import json
 import math
-import re
-import threading
 import traceback
-from concurrent.futures import ThreadPoolExecutor
 import os
 import secrets
 import subprocess
@@ -12,17 +9,14 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.request import Request, build_opener, ProxyHandler
+from urllib.parse import quote
+
+from Legate.Crucible.Models.model_manager import load_specs
 
 from .executor.storage import save
 
-POLICY = 4
-DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
+POLICY = 5
 DURATION = 30
-CONCURRENT = 3
-REQUEST_BYTES = 10_000_000
-READ_BYTES = 256 * 1024
-TIMEOUT = 5
 
 
 def now():
@@ -91,82 +85,61 @@ def start(directory, force=False):
         return {"status": "failed", "error": "Could not start download test"}
 
 
-def measure(duration=DURATION, workers=CONCURRENT):
-    """Count streamed payload bytes within one shared wall-clock window."""
+def download_source():
+    """Reuse the managed Image Forge model source; never invoke model installation."""
+    spec = next((spec for spec in load_specs() if spec.id == "image-default"), None)
+    if spec is None:
+        raise ValueError("Default Image Forge model source is unavailable")
+    url = (f"https://huggingface.co/{quote(spec.repo_id, safe='/')}/resolve/"
+           f"{quote(spec.revision, safe='')}/{quote(spec.filename, safe='/')}")
+    return {"method": "default_model_http", "server_name": "Hugging Face",
+            "server_url": url, "model_filename": spec.filename}
+
+
+def measure(duration=DURATION, source=None):
+    """Use the curl request verified on Pods, counting bytes without writing files."""
+    source = source or download_source()
     started = time.monotonic()
     deadline = started + duration
-    lock = threading.Lock()
     received = 0
-    colos = set()
-    errors = []
-
-    def download(worker):
-        nonlocal received
-        # Bypass the Agent's Tailscale proxy: measure the Pod's public egress.
-        opener = build_opener(ProxyHandler({}))
-        failures = 0
-        while time.monotonic() < deadline:
-            try:
-                # Keep each request at the 10 MB size verified on worker Pods;
-                # larger requests and urllib's default User-Agent can return 403.
-                # Repeat downloads for the shared window, without extra URL parameters.
-                request = Request(f"{DOWNLOAD_URL}?bytes={REQUEST_BYTES}",
-                                  headers={"User-Agent": "curl/8.5.0",
-                                           "Accept-Encoding": "identity", "Cache-Control": "no-cache"})
-                with opener.open(request, timeout=max(.1, min(TIMEOUT, deadline-time.monotonic()))) as response:
-                    if response.status != 200:
-                        raise ValueError(f"Unexpected HTTP status {response.status}")
-                    if response.headers.get("Content-Encoding", "identity").lower() not in {"identity", ""}:
-                        raise ValueError("Compressed test response cannot measure payload bandwidth")
-                    content_type = response.headers.get("Content-Type", "application/octet-stream").split(";", 1)[0].strip().lower()
-                    if content_type != "application/octet-stream":
-                        raise ValueError(f"Unexpected download content type {content_type}")
-                    colo = response.headers.get("CF-Ray", "").rsplit("-", 1)[-1]
-                    if re.fullmatch(r"[A-Z]{3}", colo):
-                        with lock:
-                            colos.add(colo)
-                    request_received = 0
-                    while time.monotonic() < deadline:
-                        # read1 avoids waiting for a full buffer on a slow link.
-                        chunk = response.read1(READ_BYTES)
-                        if not chunk:
-                            break
-                        if time.monotonic() >= deadline:
-                            break
-                        with lock:
-                            received += len(chunk)
-                        request_received += len(chunk)
-                    if not request_received and time.monotonic() < deadline:
-                        raise ValueError("Download endpoint returned no payload")
-                    failures = 0
-            except (OSError, ValueError) as exc:
-                if time.monotonic() >= deadline:
-                    break
-                error = f"{type(exc).__name__}: {exc}"
-                print(f"[bandwidth] worker={worker} {error}", flush=True)
-                with lock:
-                    errors.append(error)
-                failures += 1
-                if failures >= 3:
-                    break
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        list(pool.map(download, range(workers)))
-    elapsed = min(duration, time.monotonic()-started)
-    if received <= 0 or elapsed < duration * .9:
-        detail = errors[-1] if errors else "No sustained download sample"
-        raise ValueError(f"Cloudflare download test unavailable: {detail}")
+    while time.monotonic() < deadline:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        process = subprocess.run([
+            "curl", "--noproxy", "*", "-fL", "--silent", "--show-error",
+            "--connect-timeout", "5", "--max-time", str(remaining),
+            "-o", os.devnull, "-w", "%{http_code} %{time_total} %{size_download}",
+            source["server_url"],
+        ], stdin=subprocess.DEVNULL, capture_output=True, text=True,
+           timeout=remaining + 5)
+        try:
+            status, transfer_time, size = process.stdout.strip().split()
+            status, transfer_time, size = int(status), float(transfer_time), int(size)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("curl did not return valid download statistics") from exc
+        if status not in {200, 206}:
+            raise ValueError(f"Default model download returned HTTP {status}")
+        if (process.returncode not in {0, 28} or not math.isfinite(transfer_time)
+                or transfer_time <= 0 or size <= 0):
+            raise ValueError(f"Default model download failed (curl exit {process.returncode})")
+        received += size
+        if process.returncode == 28:
+            # A timeout is expected only at the end of the sampling window;
+            # connection / stalled partial downloads must never become a speed result.
+            if time.monotonic() < deadline - .1:
+                raise ValueError("Default model download timed out before the sample ended")
+            break
+        # A fast connection may finish the model; repeat to fill the same window.
+    elapsed = time.monotonic() - started
+    if received <= 0 or not duration * .9 <= elapsed <= duration + 5:
+        raise ValueError("Default model download did not produce a sustained sample")
     speed = received / elapsed / 1_000_000
     if not math.isfinite(speed):
         raise ValueError("Invalid download measurement")
-    edge = ", ".join(sorted(colos))
-    result = {"status": "completed", "method": "cloudflare_http", "download_mb_s": speed,
-              "bytes_received": received, "elapsed_seconds": elapsed,
-              "threshold_mb_s": 50, "qualified": speed >= 50,
-              "server_name": "Cloudflare" + (f" ({edge})" if edge else ""), "server_url": DOWNLOAD_URL}
-    if edge:
-        result["server_colo"] = edge
-    return result
+    return {**source, "status": "completed", "download_mb_s": speed,
+            "bytes_received": received, "elapsed_seconds": elapsed,
+            "threshold_mb_s": 50, "qualified": speed >= 50}
 
 
 def run(directory, run_id):
@@ -179,11 +152,11 @@ def run(directory, run_id):
             return
         try:
             time.sleep(secrets.randbelow(10))
-            value.update(status="running", policy=POLICY, method="cloudflare_http",
-                         server_name="Cloudflare", server_url=DOWNLOAD_URL)
+            source = download_source()
+            value.update(source, status="running", policy=POLICY)
             save(directory / "bandwidth.json", value)
-            print(f"[bandwidth] started run_id={run_id} source=Cloudflare duration={DURATION}s connections={CONCURRENT}", flush=True)
-            measured = measure()
+            print(f"[bandwidth] started run_id={run_id} source=default_model duration={DURATION}s", flush=True)
+            measured = measure(source=source)
             print(f"[bandwidth] completed speed={measured['download_mb_s']:.2f} MB/s bytes={measured['bytes_received']} elapsed={measured['elapsed_seconds']:.2f}s server={measured['server_name']}", flush=True)
         except Exception as exc:
             # Preserve the actual failure instead of silently replacing it with a
