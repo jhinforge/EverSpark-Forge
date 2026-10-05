@@ -15,6 +15,8 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 from unittest.mock import patch
+from types import SimpleNamespace
+from contextlib import nullcontext
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -69,6 +71,11 @@ class MockUpstreamHandler(BaseHTTPRequestHandler):
                 "id": query.get("job_id", [""])[0], "status": "completed",
                 "response": {"ok": True, "result": {
                     "count": 1, "items": [{"index": 1, "prompt_id": "prompt-1", "seed": 7}]}}}})
+        elif parsed.path in {"/image/archive/prepare", "/audio/archive/prepare"}:
+            forge = parsed.path.split("/")[1]
+            host = "100.64.0.2" if forge == "audio" else "100.64.0.1"
+            self._json(200, {"status": "ready", "job_id": query.get("job_id", [""])[0],
+                             "url": f"http://{host}:9000/archive?signature=fixture"})
         elif parsed.path == "/image/plugins":
             self._json(200, {"ok": True, "default": "comfyui", "plugins": [
                 {"id": "comfyui", "name": "ComfyUI", "installed": True, "online": True},
@@ -604,6 +611,32 @@ class WebUIIntegrationTests(unittest.TestCase):
                 self.assertEqual(MockUpstreamHandler.received_import, b"test archive")
                 self.assertEqual(list((root / "Data/Imports").iterdir()), [])
             MockUpstreamHandler.archive_root = None
+
+    def test_remote_image_and_audio_archive_requests_return_owner_urls_only(self):
+        bindings = SimpleNamespace(bindings={"image": "image-owner", "audio": "audio-owner"},
+                                   url=self.webui.settings.orchestrator_url,
+                                   request=lambda: nullcontext(self.webui.settings.orchestrator_url))
+        with patch.object(self.webui, "forge_bindings", bindings):
+            for forge, host in (("image", "100.64.0.1"), ("audio", "100.64.0.2")):
+                code, data = self.request_json(f"/api/outputs/archive/prepare?forge={forge}&job_id=fixture")
+                self.assertEqual(code, 200)
+                self.assertEqual(data["status"], "ready")
+                self.assertEqual(data["job_id"], "fixture")
+                self.assertIn(host, data["url"])
+
+    def test_local_audio_zip_filters_images_and_model_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "speech.wav").write_bytes(b"audio")
+            (root / "image.png").write_bytes(PNG_BYTES)
+            (root / "model.bin").write_bytes(b"model")
+            with patch("Archon.Vault.runtime_config.load_config", return_value={
+                    "audio_forge": {"output_directory": str(root)}}):
+                with urlopen(self.base_url + "/api/outputs/archive?forge=audio", timeout=5) as response:
+                    self.assertIn("Audio", response.headers["Content-Disposition"])
+                    with zipfile.ZipFile(io.BytesIO(response.read())) as archive:
+                        self.assertIn("EverSpark-Outputs/speech.wav", archive.namelist())
+                        self.assertFalse(any(name.endswith((".png", ".bin")) for name in archive.namelist()))
 
     def test_output_archive_contains_the_complete_output_tree(self) -> None:
         with urlopen(self.base_url + "/api/outputs/archive", timeout=5) as response:

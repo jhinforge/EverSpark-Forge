@@ -239,7 +239,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/audio/history": lambda: self._proxy_orchestrator_get("/audio/history", parsed.query),
             "/api/history": lambda: self._history(parse_qs(parsed.query)),
             "/api/image/view": lambda: self._proxy_image(parse_qs(parsed.query)),
-            "/api/outputs/archive": self._output_archive,
+            "/api/outputs/archive": lambda: self._output_archive(parse_qs(parsed.query).get("forge", ["image"])[0]),
+            "/api/outputs/archive/prepare": lambda: self._prepare_output_archive(parse_qs(parsed.query)),
             "/api/data/archive": self._data_archive,
         }
         if parsed.path in routes:
@@ -713,24 +714,53 @@ class RequestHandler(BaseHTTPRequestHandler):
             # Once headers are sent, terminate the stream instead of emitting JSON.
             self.close_connection = True
 
-    def _remote_output_archive(self):
-        if not self.server.archive_lock.acquire(blocking=False):
-            self._json(409, {"ok": False, "error": "An output archive is already being prepared"})
-            return
+    def _remote_output_archive(self, forge="image"):
+        # Compatibility for older download links: redirect bytes to their owner.
+        from Aegis.Storage.output_archives import validate_result
+        job_id = ""
+        deadline = time.monotonic() + 900
         try:
-            with urlopen(f"{self.orchestrator_url}/image/archive",
-                         timeout=self.server.settings.request_timeout) as source:
-                self._forward_output(source)
-        except HTTPError as exc:
-            self._json(exc.code, {"ok": False, "error": "Remote output archive unavailable"})
-        except (URLError, TimeoutError):
-            self._json(502, {"ok": False, "error": "Image Node output unavailable"})
-        finally:
-            self.server.archive_lock.release()
+            while time.monotonic() < deadline:
+                query = urlencode({"job_id": job_id})
+                status, job = request_json(f"{self.orchestrator_url}/{forge}/archive/prepare?{query}",
+                                          self.server.settings.request_timeout)
+                if status != 200:
+                    self._json(status, job)
+                    return
+                validate_result(job)
+                if job["status"] == "failed":
+                    self._json(502, {"error": job.get("error", "Output archive failed")})
+                    return
+                if job["status"] == "ready":
+                    self.send_response(302)
+                    self.send_header("Location", job["url"])
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                job_id = job["job_id"]
+                time.sleep(1)
+            self._json(504, {"error": "Archive preparation timed out"})
+        except (URLError, OSError, ValueError, KeyError):
+            self._json(502, {"error": "Remote output archive unavailable"})
 
-    def _output_archive(self) -> None:
-        if self.server.forge_bindings and self.server.forge_bindings.bindings.get("image"):
-            self._remote_output_archive()
+    def _prepare_output_archive(self, query):
+        forge = query.get("forge", ["image"])[0]
+        if forge not in {"image", "audio"}:
+            self._json(400, {"error": "Invalid output owner"})
+            return
+        if self.server.forge_bindings and self.server.forge_bindings.bindings.get(forge):
+            from urllib.parse import urlencode
+            self._proxy_orchestrator_get(f"/{forge}/archive/prepare", urlencode({"job_id": query.get("job_id", [""])[0]}))
+        else:
+            self._json(200, {"status": "ready", "url": f"/api/outputs/archive?forge={forge}"})
+
+    def _output_archive(self, forge="image") -> None:
+        if forge not in {"image", "audio"}:
+            self._json(400, {"error": "Invalid output owner"})
+            return
+        if self.server.forge_bindings and self.server.forge_bindings.bindings.get(forge):
+            self._remote_output_archive(forge)
             return
         if not self.server.archive_lock.acquire(blocking=False):
             self._json(409, {"ok": False, "error": "An output archive is already being prepared"})
@@ -739,6 +769,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         response_started = False
         try:
             output_root = self.server.settings.output_directory.resolve()
+            if forge == "audio":
+                from Archon.Vault.runtime_config import load_config
+                output_root = Path(load_config()["audio_forge"]["output_directory"]).resolve()
             output_root.mkdir(parents=True, exist_ok=True)
             archive_root = REPO_ROOT / "Data" / "Runtime" / "Archives"
             archive_root.mkdir(parents=True, exist_ok=True)
@@ -760,10 +793,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                 for path in sorted(output_root.rglob("*")):
                     if path.is_symlink() or not path.is_file():
                         continue
+                    if forge == "audio" and path.suffix.lower() != ".wav":
+                        continue
                     relative = path.relative_to(output_root)
                     archive.write(path, (Path("EverSpark-Outputs") / relative).as_posix())
                     file_count += 1
             filename = f"EverSpark-Outputs-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}.zip"
+            if forge == "audio":
+                filename = filename.replace("Outputs", "Audio")
             size = archive_path.stat().st_size
             self._log(
                 "info",

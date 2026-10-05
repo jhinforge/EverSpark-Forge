@@ -18,6 +18,9 @@ from image_forge.port import ImageRequest
 
 def run(action: str, payload: dict) -> dict:
     config = load_config()
+    if action == "archive":
+        from Aegis.Storage.node_media_access import archive_job
+        return archive_job(payload)
     if action == "stream":
         from Aegis.Storage.node_output_stream import send_output
         return send_output(config, payload)

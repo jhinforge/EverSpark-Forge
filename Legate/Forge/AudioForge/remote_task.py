@@ -14,6 +14,9 @@ from Legate.Forge.AudioForge.audio_forge.voxcpm import synthesize, validate_runt
 def run(action, payload, config=None):
     configuration = config or load_config()
     settings = configuration["audio_forge"]
+    if action == "archive":
+        from Aegis.Storage.node_media_access import archive_job
+        return archive_job(payload, forge="audio")
     if action == "stream":
         from Aegis.Storage.node_output_stream import send_output
         return send_output(configuration, payload, forge="audio")

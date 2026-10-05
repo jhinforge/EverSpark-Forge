@@ -109,6 +109,10 @@ class AudioService:
             **self.target_identity, "forge": "audio", "filename": filename})
         return urlopen(url, timeout=320)
 
+    def archive_job(self, job_id=""):
+        from Aegis.Storage.output_archives import validate_result
+        return validate_result(self._call("archive", {"job_id": job_id}))
+
     def audio_path(self, filename):
         if self.url:
             return self.outputs.receive(filename, "", lambda offset:

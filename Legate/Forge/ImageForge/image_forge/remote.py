@@ -130,6 +130,10 @@ class RemoteImageGateway:
     def open_archive(self):
         return self._open_output({"archive": "1"})
 
+    def archive_job(self, job_id=""):
+        from Aegis.Storage.output_archives import validate_result
+        return validate_result(self._call("archive", {"job_id": job_id}))
+
     def image_path(self, filename: str, subfolder: str = "", kind: str = "output") -> Path:
         if kind != "output":
             raise ValueError("Invalid image path")

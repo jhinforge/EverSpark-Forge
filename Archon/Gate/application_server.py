@@ -143,6 +143,15 @@ class RequestHandler(BaseHTTPRequestHandler):
             with path.open("rb") as stream:
                 while chunk := stream.read(1024 * 1024):
                     self.wfile.write(chunk)
+        elif parsed.path in {"/image/archive/prepare", "/audio/archive/prepare"}:
+            forge = parsed.path.split("/")[1]
+            gateway = (getattr(self.server.application.image, "gateway", None) if forge == "image"
+                       else getattr(self.server.application, "audio", None))
+            try:
+                job_id = parse_qs(parsed.query).get("job_id", [""])[0]
+                self._send(200, gateway.archive_job(job_id))
+            except (AttributeError, OSError, ValueError, RuntimeError) as exc:
+                self._send(502, {"ok": False, "error": str(exc)})
         elif parsed.path == "/image/archive":
             gateway = getattr(self.server.application.image, "gateway", None)
             if not hasattr(gateway, "open_archive"):

@@ -21,7 +21,7 @@ from Archon.Vault.runtime_config import load_config
 
 STATE = ROOT / "Data/Runtime/media-access/image"
 ENDPOINT = STATE / "endpoint.json"
-VERSION = 1
+VERSION = 2
 
 
 def signature(key, filename, subfolder, expires):
@@ -31,9 +31,24 @@ def signature(key, filename, subfolder, expires):
 
 class ImageServer(ThreadingHTTPServer):
     daemon_threads = True
-    def __init__(self, address, outputs, key):
+    def __init__(self, address, outputs, key, archive_directory=None):
         self.outputs, self.key = outputs, key
+        from Aegis.Storage.output_archives import OutputArchives
+        import threading
+        self.archives = OutputArchives(outputs, archive_directory)
+        self.cleanup_stop = threading.Event()
         super().__init__(address, ImageHandler)
+        def cleanup():
+            while not self.cleanup_stop.wait(60):
+                try:
+                    self.archives.cleanup()
+                except OSError:
+                    pass  # Retry transient filesystem errors on the next sweep.
+        threading.Thread(target=cleanup, daemon=True).start()
+
+    def server_close(self):
+        self.cleanup_stop.set()
+        super().server_close()
 
 
 class ImageHandler(BaseHTTPRequestHandler):
@@ -55,6 +70,24 @@ class ImageHandler(BaseHTTPRequestHandler):
         return hmac.compare_digest(value, "Bearer " + self.server.key)
 
     def do_POST(self):
+        if self.path == "/archives" and self._authorized():
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 1000:
+                    raise ValueError("Invalid archive request")
+                payload = json.loads(self.rfile.read(length))
+                if not isinstance(payload, dict) or set(payload) - {"job_id"}:
+                    raise ValueError("Invalid archive request")
+                job = self.server.archives.request(payload.get("job_id", ""))
+                if job["status"] == "ready":
+                    host, port = self.server.server_address
+                    query = urlencode({"filename": job["job_id"], "expires": job["expires"],
+                        "signature": signature(self.server.key, job["job_id"], "archive", job["expires"])})
+                    job["url"] = f"http://{host}:{port}/archive?{query}"
+                self._json(200, job)
+            except (ValueError, TypeError, KeyError, OSError):
+                self._json(400, {"error": "Archive expired or unavailable; prepare a new ZIP"})
+            return
         if self.path != "/sign" or not self._authorized():
             self._json(403, {"error": "Forbidden"})
             return
@@ -92,14 +125,15 @@ class ImageHandler(BaseHTTPRequestHandler):
             return
         from urllib.parse import urlsplit
         parsed = urlsplit(self.path)
-        if parsed.path != "/file":
+        if parsed.path not in {"/file", "/archive"}:
             self._json(404, {"error": "Not found"})
             return
         started = False
         try:
             query = parse_qs(parsed.query)
             filename = query["filename"][0]
-            subfolder = query.get("subfolder", [""])[0]
+            archive = parsed.path == "/archive"
+            subfolder = "archive" if archive else query.get("subfolder", [""])[0]
             expires = int(query["expires"][0])
             supplied = query["signature"][0]
             now = int(time.time())
@@ -107,9 +141,9 @@ class ImageHandler(BaseHTTPRequestHandler):
                     supplied, signature(self.server.key, filename, subfolder, expires)):
                 self._json(403, {"error": "Image URL expired or invalid"})
                 return
-            path = self.server.outputs.path(filename, subfolder)
+            path = self.server.archives.path(filename) if archive else self.server.outputs.path(filename, subfolder)
             size = path.stat().st_size
-            if not 0 < size <= self.server.outputs.max_bytes:
+            if not 0 < size <= (2 * 1024 * 1024 * 1024 if archive else self.server.outputs.max_bytes):
                 raise ValueError("Image too large")
             start, end, status = 0, size - 1, 200
             requested = self.headers.get("Range")
@@ -141,6 +175,9 @@ class ImageHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "audio/wav" if path.suffix.lower() == ".wav" else (mimetypes.guess_type(path.name)[0] or "application/octet-stream"))
                 self.send_header("Content-Length", str(end-start+1))
                 self.send_header("Accept-Ranges", "bytes")
+                if archive:
+                    name = "Audio" if self.server.outputs.suffixes == frozenset({".wav"}) else "Images"
+                    self.send_header("Content-Disposition", f'attachment; filename="EverSpark-{name}.zip"')
                 if status == 206:
                     self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
                 self.send_header("Cache-Control", f"private, max-age={max(0, expires-now)}")
@@ -228,6 +265,12 @@ def media_urls(images, forge="image"):
         return images
 
 
+def archive_job(payload, forge="image"):
+    if not isinstance(payload, dict) or set(payload) - {"job_id"}:
+        raise ValueError("Invalid archive request")
+    return _request(endpoint(forge), "/archives", payload)
+
+
 def serve(host, forge):
     global STATE, ENDPOINT
     if forge not in {"image", "audio"}:
@@ -238,7 +281,7 @@ def serve(host, forge):
     config = load_config()
     outputs = OutputResources(config[forge + "_forge"]["output_directory"], {".wav"} if forge == "audio" else {".png", ".jpg", ".jpeg", ".webp"})
     key = secrets.token_hex(32)
-    server = ImageServer((host, 0), outputs, key)
+    server = ImageServer((host, 0), outputs, key, STATE / "archives")
     data = {"host": host, "port": server.server_port, "pid": os.getpid(), "token": key}
     temporary = ENDPOINT.with_suffix(".tmp")
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

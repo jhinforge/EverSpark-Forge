@@ -9,13 +9,13 @@ function element(tag) {
 }
 const stage = element('stage'), audioHistory = element('history'), gallery = element('gallery'), progress = element('progress');
 const completedImage = {forge: 'image', status: 'completed', result: {outputs: [{images: [{filename: 'ready.png'}]}]}};
-const context = {window: {location: {protocol: 'http:'}}, document: {createElement: element}, elements: {resultStage: stage, galleryGrid: gallery, creationProgress: progress}, uiText: (el, value, args={}) => {el.textContent = value.replace(/\{(\w+)\}/g, (_, key) => args[key]);},
+const context = {state: {}, window: {location: {protocol: 'http:'}}, document: {createElement: element}, elements: {resultStage: stage, galleryGrid: gallery, creationProgress: progress, downloadOutputsButton: element('button'), downloadAudioOutputsButton: element('button')}, uiText: (el, value, args={}) => {el.textContent = value.replace(/\{(\w+)\}/g, (_, key) => args[key]);},
   URLSearchParams, encodeURIComponent, t: x => x, setGenerationState() {},
   transientApiError: () => false, setTimeout: fn => fn(),
   imageButton: image => ({tag: 'image', ...image}), $: () => audioHistory};
 vm.createContext(context);
 vm.runInContext(extract('function renderCreationProgress(', 'async function generate(')
-  + extract('function renderCreation(', 'function downloadOutputsArchive('), context);
+  + extract('function renderCreation(', 'async function downloadOutputsArchive('), context);
 (async () => {
   context.api = async () => ({job: {status: 'failed', error: 'Audio Forge synthesize failed: backend detail',
     tasks: [completedImage, {forge: 'audio', status: 'failed'}]}});

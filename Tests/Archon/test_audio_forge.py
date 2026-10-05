@@ -24,6 +24,22 @@ from Archon.Gate.forge_bindings import ForgeBindings
 
 
 class AudioTests(unittest.TestCase):
+    def test_audio_archive_uses_its_own_node_and_existing_command_allowlist(self):
+        config = load_config()
+        config["remote_nodes"]["audio_node_id"] = "b" * 32
+        service = AudioService(config)
+        result = {"status": "ready", "url": "http://100.64.0.2:9000/archive?signature=fixture"}
+        with patch.object(service, "_call", return_value=result) as call:
+            self.assertEqual(service.archive_job(), result)
+            call.assert_called_once_with("archive", {"job_id": ""})
+            self.assertEqual(service.target_identity, {"node_id": "b" * 32})
+        with patch("Aegis.Storage.node_media_access.archive_job", return_value=result) as prepare:
+            self.assertEqual(run("archive", {"job_id": ""}, config), result)
+            prepare.assert_called_once_with({"job_id": ""}, forge="audio")
+        for forge in ("audio", "image"):
+            self.assertIsNotNone(command(forge, "archive", '{}'))
+            self.assertIsNone(command(forge, "archive", '[]'))
+
     def test_source_pin_accepts_exact_git_commit_and_rejects_old_or_untracked_installs(self):
         revision = "f0c787f0937dc1c9a8f4f64d9a332d9c5da2e629"
         provenance = {"url": "https://github.com/OpenBMB/VoxCPM.git",

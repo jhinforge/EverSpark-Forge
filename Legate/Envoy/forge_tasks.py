@@ -45,7 +45,7 @@ def command(forge: str, action: str, message: str) -> tuple[list[str], int] | No
         if action == "discuss" and isinstance(message, str) and 1 <= len(message.strip()) <= 500:
             return ["python3", str(REPO / "Legate/Forge/ConceptForge/verify.py"), message.strip()], 240
     if forge == "image":
-        if action in {"resources", "plugins", "default_negative", "submit", "poll", "history", "fetch", "stream"} and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
+        if action in {"resources", "plugins", "default_negative", "submit", "poll", "history", "fetch", "stream", "archive"} and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
             try:
                 if isinstance(json.loads(message), dict):
                     return ["python3", str(REPO / "Legate/Forge/ImageForge/remote_task.py"),
@@ -60,7 +60,7 @@ def command(forge: str, action: str, message: str) -> tuple[list[str], int] | No
     if forge == "audio":
         if action == "deploy":
             return ["bash", str(REPO / "Legate/Forge/AudioForge/Scripts/deploy.sh")], 3600
-        if action in {"health", "synthesize", "fetch", "history", "stream"} and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
+        if action in {"health", "synthesize", "fetch", "history", "stream", "archive"} and isinstance(message, str) and len(message.encode("utf-8")) <= 60000:
             try:
                 if isinstance(json.loads(message or "{}"), dict):
                     return [str(REPO / "Data/Runtime/audio-venv/bin/python"),

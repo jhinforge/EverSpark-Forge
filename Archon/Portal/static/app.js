@@ -71,6 +71,7 @@ const elements = {
   generateModeButton: $("#generateModeButton"),
   galleryGrid: $("#galleryGrid"),
   downloadOutputsButton: $("#downloadOutputsButton"),
+  downloadAudioOutputsButton: $("#downloadAudioOutputsButton"),
   downloadDataButton: $("#downloadDataButton"),
   localDataFile: $("#localDataFile"),
   restoreDataButton: $("#restoreDataButton"),
@@ -2706,6 +2707,9 @@ async function loadAudioHistory() {
   grid.appendChild(message);
   try {
     const data = await api("/api/audio/history?limit=36");
+    if (elements.downloadAudioOutputsButton) {
+      elements.downloadAudioOutputsButton.disabled = !data.audio?.length || !!state.outputArchiveBusy?.audio;
+    }
     grid.replaceChildren();
     if (!data.audio?.length) {
       uiText(message, "No audio results yet. Select an Audio Forge node and generate audio first.");
@@ -2731,6 +2735,7 @@ async function loadImageHistory() {
   elements.galleryGrid.appendChild(loading);
   try {
     const data = await api("/api/history?limit=36");
+    elements.downloadOutputsButton.disabled = !data.images?.length || !!state.outputArchiveBusy?.image;
     elements.galleryGrid.replaceChildren();
     if (!data.images?.length) {
       const empty = document.createElement("div");
@@ -2749,20 +2754,45 @@ async function loadImageHistory() {
   }
 }
 
-function downloadOutputsArchive() {
+async function downloadOutputsArchive(forge = "image") {
+  if (forge !== "image" && forge !== "audio") forge = "image";
   hideNotice();
-  elements.downloadOutputsButton.disabled = true;
-  uiText(elements.downloadOutputsButton, "Preparing ZIP…");
-  const link = document.createElement("a");
-  link.href = `/api/outputs/archive?requested_at=${Date.now()}`;
-  link.download = "EverSpark-Outputs.zip";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => {
-    elements.downloadOutputsButton.disabled = false;
-    uiText(elements.downloadOutputsButton, "Download outputs ZIP");
-  }, 1500);
+  const button = forge === "audio" ? elements.downloadAudioOutputsButton : elements.downloadOutputsButton;
+  state.outputArchiveBusy ||= {};
+  if (state.outputArchiveBusy[forge]) return;
+  state.outputArchiveBusy[forge] = true;
+  button.disabled = true;
+  uiText(button, "Preparing ZIP…");
+  try {
+    let jobId = "";
+    const deadline = Date.now() + 15 * 60 * 1000;
+    while (true) {
+      const query = new URLSearchParams({forge, job_id: jobId});
+      const job = await api(`/api/outputs/archive/prepare?${query}`);
+      if (job.status === "failed") throw new Error(job.error || "Output archive failed");
+      if (job.status === "ready") {
+        const url = new URL(job.url, window.location.href);
+        const local = url.origin === window.location.origin && url.pathname === "/api/outputs/archive";
+        const direct = url.protocol === "http:" && /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(url.hostname) && url.pathname === "/archive";
+        if ((!local && !direct) || url.username || url.password) throw new Error("Invalid output archive URL");
+        const link = document.createElement("a");
+        link.href = url.href;
+        link.download = forge === "audio" ? "EverSpark-Audio.zip" : "EverSpark-Images.zip";
+        document.body.appendChild(link); link.click(); link.remove();
+        break;
+      }
+      if (job.status !== "preparing" || !job.job_id) throw new Error("Invalid output archive response");
+      jobId = job.job_id;
+      if (Date.now() >= deadline) throw new Error("Archive preparation timed out. Retry the download.");
+      await new Promise(resolve => window.setTimeout(resolve, 1000));
+    }
+  } catch (error) {
+    showNotice(error.message, "error");
+  } finally {
+    state.outputArchiveBusy[forge] = false;
+    button.disabled = false;
+    uiText(button, forge === "audio" ? "Download audio ZIP" : "Download images ZIP");
+  }
 }
 
 async function downloadDataArchive() {
@@ -2983,7 +3013,8 @@ function bindEvents() {
     if (state.vastNextToken) void loadMachines(state.vastNextToken);
   });
   $("#refreshHistoryButton").addEventListener("click", loadHistory);
-  elements.downloadOutputsButton.addEventListener("click", downloadOutputsArchive);
+  elements.downloadOutputsButton.addEventListener("click", () => downloadOutputsArchive("image"));
+  elements.downloadAudioOutputsButton.addEventListener("click", () => downloadOutputsArchive("audio"));
   elements.downloadDataButton.addEventListener("click", downloadDataArchive);
   elements.restoreDataButton.addEventListener("click", restoreDataArchive);
   $("#refreshRuntimeButton").addEventListener("click", loadRuntime);

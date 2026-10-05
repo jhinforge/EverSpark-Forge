@@ -7,6 +7,18 @@ from image_forge.remote import RemoteImageGateway
 
 
 class RemoteImageHistoryTests(unittest.TestCase):
+    def test_archive_returns_a_validated_node_url_without_opening_a_stream(self):
+        with tempfile.TemporaryDirectory() as directory:
+            gateway = RemoteImageGateway('a' * 32, 'http://127.0.0.1:8765', directory, 'comfyui')
+            value = {"status": "ready", "url": "http://100.64.0.1:9000/archive?signature=fixture"}
+            gateway._call = Mock(return_value=value)
+            self.assertEqual(gateway.archive_job('b' * 32), value)
+            gateway._call.assert_called_once_with('archive', {"job_id": 'b' * 32})
+            gateway._call.return_value = {"status": "ready", "url": "https://example.com/archive"}
+            with self.assertRaises(ValueError):
+                gateway.archive_job()
+            self.assertEqual(gateway.outputs.files(), [])
+
     def test_history_returns_uncached_descriptors_then_file_request_transfers_and_caches(self):
         with tempfile.TemporaryDirectory() as directory:
             gateway = RemoteImageGateway('a' * 32, 'http://127.0.0.1:8765', directory, 'comfyui')
