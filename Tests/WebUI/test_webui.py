@@ -623,6 +623,9 @@ class WebUIIntegrationTests(unittest.TestCase):
                 self.assertEqual(data["status"], "ready")
                 self.assertEqual(data["job_id"], "fixture")
                 self.assertIn(host, data["url"])
+                with self.assertRaises(HTTPError) as caught:
+                    urlopen(self.base_url + f"/api/outputs/archive?forge={forge}")
+                self.assertEqual(caught.exception.code, 410)
 
     def test_local_audio_zip_filters_images_and_model_files(self):
         with tempfile.TemporaryDirectory() as directory:

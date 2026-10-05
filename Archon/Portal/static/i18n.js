@@ -422,7 +422,6 @@
     "IMAGE FORGE OUTPUT": "IMAGE FORGE 输出",
     "Recent gallery": "最近生成",
     "Recent images reported by the configured image execution adapter.": "查看 Image Forge 最近生成的图像。",
-    "Download outputs ZIP": "下载全部输出 ZIP",
     "Download images ZIP": "下载图片 ZIP",
     "Download audio ZIP": "下载音频 ZIP",
     "Archive preparation timed out. Retry the download.": "打包等待超时，请重试下载。",

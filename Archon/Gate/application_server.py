@@ -152,12 +152,6 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send(200, gateway.archive_job(job_id))
             except (AttributeError, OSError, ValueError, RuntimeError) as exc:
                 self._send(502, {"ok": False, "error": str(exc)})
-        elif parsed.path == "/image/archive":
-            gateway = getattr(self.server.application.image, "gateway", None)
-            if not hasattr(gateway, "open_archive"):
-                self._send(404, {"ok": False, "error": "Remote output archive unavailable"})
-                return
-            self._stream_remote_output(gateway.open_archive)
         elif parsed.path == "/image/file":
             query = parse_qs(parsed.query)
             gateway = getattr(self.server.application.image, "gateway", None)

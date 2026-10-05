@@ -11,12 +11,10 @@ from .identity import validate_id
 
 BLOCK = 64 * 1024
 MAX_IMAGE = 100 * 1024 * 1024
-MAX_ARCHIVE = 2 * 1024 * 1024 * 1024
 
 
 class Transfer:
-    def __init__(self, archive=False):
-        self.archive = archive
+    def __init__(self):
         self.blocks = queue.Queue(maxsize=8)
         self.ready = threading.Event()
         self.closed = threading.Event()
@@ -69,24 +67,24 @@ class OutputStreams:
         forge = query.get("forge", ["image"])[0]
         if forge not in {"image", "audio"}:
             raise NodeError("Invalid output owner", 400)
-        archive = query.get("archive", ["0"])[0] == "1"
+        if "archive" in query:
+            raise NodeError("ZIPs use the private archive URL service, not output streams", 410)
         filename = query.get("filename", [""])[0]
         subfolder = query.get("subfolder", [""])[0]
-        if not archive and (not filename or "/" in filename or "\\" in filename
+        if (not filename or "/" in filename or "\\" in filename
                             or ".." in filename or subfolder.startswith(("/", "\\"))
                             or ".." in subfolder or "\\" in subfolder
                             or query.get("type", ["output"])[0] != "output"):
             raise NodeError("Invalid image path", 400)
         if self.manager.status(node_id).get("status") != "online":
             raise NodeError("Image Node is offline", 503)
-        transfer = Transfer(archive)
+        transfer = Transfer()
         token = secrets.token_hex(32)
         with self.lock:
             if len(self.active) >= 4:
                 raise NodeError("Too many output streams; retry shortly", 429)
             self.active[token] = transfer
-        message = json.dumps({"token": token, "archive": archive,
-                              "filename": filename, "subfolder": subfolder})
+        message = json.dumps({"token": token, "filename": filename, "subfolder": subfolder})
         def request():
             try:
                 self.manager.execute(node_id, "stream", message, timeout=300, forge=forge)
@@ -100,12 +98,10 @@ class OutputStreams:
             if not transfer.ready.wait(60) or transfer.error:
                 raise NodeError("Image Node output stream unavailable", 502)
             handler.send_response(200)
-            mime = "application/zip" if archive else ("audio/wav" if forge == "audio" else (mimetypes.guess_type(filename)[0] or "application/octet-stream"))
+            mime = "audio/wav" if forge == "audio" else (mimetypes.guess_type(filename)[0] or "application/octet-stream")
             handler.send_header("Content-Type", mime)
             handler.send_header("Content-Length", str(transfer.size))
             handler.send_header("Cache-Control", "no-store")
-            if archive:
-                handler.send_header("Content-Disposition", 'attachment; filename="EverSpark-Outputs.zip"')
             handler.end_headers()
             started = True
             remaining = transfer.size
@@ -136,8 +132,7 @@ class OutputStreams:
             transfer.claimed = True
         try:
             size = int(handler.headers.get("Content-Length", "0"))
-            limit = MAX_ARCHIVE if transfer.archive else MAX_IMAGE
-            if handler.headers.get("Transfer-Encoding") or not 0 < size <= limit:
+            if handler.headers.get("Transfer-Encoding") or not 0 < size <= MAX_IMAGE:
                 raise NodeError("Invalid output size", 413)
             transfer.size = size
             transfer.ready.set()

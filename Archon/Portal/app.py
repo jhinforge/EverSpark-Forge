@@ -714,36 +714,6 @@ class RequestHandler(BaseHTTPRequestHandler):
             # Once headers are sent, terminate the stream instead of emitting JSON.
             self.close_connection = True
 
-    def _remote_output_archive(self, forge="image"):
-        # Compatibility for older download links: redirect bytes to their owner.
-        from Aegis.Storage.output_archives import validate_result
-        job_id = ""
-        deadline = time.monotonic() + 900
-        try:
-            while time.monotonic() < deadline:
-                query = urlencode({"job_id": job_id})
-                status, job = request_json(f"{self.orchestrator_url}/{forge}/archive/prepare?{query}",
-                                          self.server.settings.request_timeout)
-                if status != 200:
-                    self._json(status, job)
-                    return
-                validate_result(job)
-                if job["status"] == "failed":
-                    self._json(502, {"error": job.get("error", "Output archive failed")})
-                    return
-                if job["status"] == "ready":
-                    self.send_response(302)
-                    self.send_header("Location", job["url"])
-                    self.send_header("Cache-Control", "no-store")
-                    self.send_header("Content-Length", "0")
-                    self.end_headers()
-                    return
-                job_id = job["job_id"]
-                time.sleep(1)
-            self._json(504, {"error": "Archive preparation timed out"})
-        except (URLError, OSError, ValueError, KeyError):
-            self._json(502, {"error": "Remote output archive unavailable"})
-
     def _prepare_output_archive(self, query):
         forge = query.get("forge", ["image"])[0]
         if forge not in {"image", "audio"}:
@@ -760,7 +730,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(400, {"error": "Invalid output owner"})
             return
         if self.server.forge_bindings and self.server.forge_bindings.bindings.get(forge):
-            self._remote_output_archive(forge)
+            self._json(410, {"error": "Remote ZIP downloads use /api/outputs/archive/prepare"})
             return
         if not self.server.archive_lock.acquire(blocking=False):
             self._json(409, {"ok": False, "error": "An output archive is already being prepared"})

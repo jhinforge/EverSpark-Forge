@@ -138,9 +138,6 @@ class RemoteImageGateway:
         self.outputs.path(filename, subfolder, require_file=False)
         return self._open_output({"filename": filename, "subfolder": subfolder, "type": kind})
 
-    def open_archive(self):
-        return self._open_output({"archive": "1"})
-
     def archive_job(self, job_id=""):
         from Aegis.Storage.output_archives import validate_result
         return validate_result(self._call("archive", {"job_id": job_id}))

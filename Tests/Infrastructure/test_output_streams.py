@@ -1,11 +1,9 @@
-"""Exercise actual binary HTTP forwarding, node ZIP ownership and stream limits."""
-import io
+"""Exercise binary media fallback streams and reject obsolete ZIP transfers."""
 import json
 import sys
 import tempfile
 import threading
 import unittest
-import zipfile
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -95,13 +93,15 @@ class OutputStreamTests(unittest.TestCase):
             call.assert_called_once_with("poll", {"prompt_id": "job"})
         self.assertEqual(self.calls, [])
 
-    def test_explicit_archive_contains_node_outputs_without_host_cache(self):
-        with self.gateway.open_archive() as source:
-            self.assertEqual(source.headers["Content-Type"], "application/zip")
-            with zipfile.ZipFile(io.BytesIO(source.read())) as archive:
-                self.assertEqual(archive.read("EverSpark-Outputs/render.png"), self.data)
-        self.assertFalse((self.root / "host").exists())
-        self.assertEqual(self.calls, [("a" * 32, "stream")])
+    def test_obsolete_archive_stream_is_rejected_without_executing_node_task(self):
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(f"http://127.0.0.1:{self.control.server_port}/nodes/output?node_id={'a' * 32}&archive=1")
+        self.assertEqual(caught.exception.code, 410)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.manager.outputs.active, {})
+        for archive in (True, False):
+            with self.assertRaisesRegex(ValueError, "ZIPs use"):
+                send_output(self.config, {"token": "f" * 64, "archive": archive})
 
     def test_unsafe_paths_are_rejected_before_node_task(self):
         for filename, subfolder in (("../private.png", ""), ("render.png", "../outside")):
