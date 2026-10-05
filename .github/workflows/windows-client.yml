@@ -1,0 +1,60 @@
+name: Windows portable client
+on:
+  workflow_dispatch:
+  push:
+    branches: ["refactor/distributed-architecture"]
+    paths:
+      - "Archon/Client/Windows/**"
+      - "Archon/Gate/CLI/archon.py"
+      - "everspark.cmd"
+      - "Tests/Client/**"
+      - ".github/workflows/windows-client.yml"
+  pull_request:
+    paths:
+      - "Archon/Client/Windows/**"
+      - "Archon/Gate/CLI/archon.py"
+      - "everspark.cmd"
+      - "Tests/Client/**"
+      - ".github/workflows/windows-client.yml"
+permissions:
+  contents: read
+jobs:
+  portable:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.9"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Control backend lifecycle and packaging tests
+        run: python -m unittest discover -s Tests/Client -p 'test_*.py' -v
+      - name: Rust checks
+        working-directory: Archon/Client/Windows
+        run: |
+          cargo fmt -- --check
+          cargo test --locked
+      - name: Compile once and package both variants
+        shell: pwsh
+        run: ./Archon/Client/Windows/build.ps1
+      - name: Launch both portable ZIPs without Python on PATH
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/*.zip | ForEach-Object { ./Tests/Client/smoke_windows.ps1 -Zip $_.FullName }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EverSpark-Windows-portable
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          compression-level: 0
+          retention-days: 14
+      - name: Preserve diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-client-diagnostics
+          path: |
+            ${{ runner.temp }}/EverSpark*/EverSpark-Forge/Data/Logs/**
+          if-no-files-found: ignore

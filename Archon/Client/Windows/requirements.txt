@@ -1,0 +1,2 @@
+# Windows control host: Python 3.11 standard library only.
+# Forge GPU dependencies are installed on execution nodes, not on the client.

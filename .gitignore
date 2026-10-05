@@ -43,3 +43,9 @@ Thumbs.db
 .cloudflared/
 cloudflared.log
 *.pid
+
+# Portable desktop build inputs and outputs
+Runtime/
+Archon/Client/Windows/target/
+Archon/Client/Windows/.cache/
+Archon/Client/Windows/gen/

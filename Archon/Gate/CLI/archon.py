@@ -45,7 +45,7 @@ def _load_local_settings() -> None:
         os.environ["EVERSPARK_ARCHON_ONLY"] = "1"
 
 
-def start() -> int:
+def start(*, stop_event=None, ready_callback=None) -> int:
     _load_local_settings()
     sys.path.insert(0, str(REPO_ROOT))
     from Archon.Gate.CLI.windows_console import disable_quick_edit
@@ -70,6 +70,7 @@ def start() -> int:
     backend = None
     portal = None
     worker = None
+    portal_worker = None
     remote_server = None
     remote_worker = None
     bridge = None
@@ -100,6 +101,10 @@ def start() -> int:
         backend = ControlServer(("127.0.0.1", backend_port), machines, offers, deployments,
                                 image_deployments=image_deployments, node_manager=nodes,
                                 audio_deployments=audio_deployments, logger=backend_logger)
+        control_url = f"http://127.0.0.1:{backend.server_port}"
+        os.environ["EVERSPARK_ARCHON_CONTROL_URL"] = control_url
+        if os.environ["EVERSPARK_ORCHESTRATOR_URL"] == f"http://127.0.0.1:{backend_port}":
+            os.environ["EVERSPARK_ORCHESTRATOR_URL"] = control_url
         forge_bindings = ForgeBindings(nodes, node_state.with_name("forge_bindings.json"),
             f"http://127.0.0.1:{backend.server_port}")
         backend.forge_bindings = forge_bindings
@@ -115,6 +120,7 @@ def start() -> int:
             remote_port = int(os.environ.get("EVERSPARK_REMOTE_ORCHESTRATOR_PORT", str(backend_port + 2)))
             remote_server = OrchestratorServer(("127.0.0.1", remote_port),
                                                GateApplication(load_config()))
+            os.environ["EVERSPARK_ORCHESTRATOR_URL"] = f"http://127.0.0.1:{remote_server.server_port}"
         portal = WebUIServer(load_settings(), logger, forge_bindings=forge_bindings)
         worker = threading.Thread(target=backend.serve_forever, name="archon-backend", daemon=True)
         worker.start()
@@ -126,7 +132,15 @@ def start() -> int:
         logger.ok("server.ready", "Archon Portal is ready", port=portal.server_port)
         print(f"Archon backend: http://127.0.0.1:{backend.server_port}", flush=True)
         print(f"Portal: http://127.0.0.1:{portal.server_port}", flush=True)
-        portal.serve_forever()
+        if stop_event is None:
+            portal.serve_forever()
+        else:
+            portal_worker = threading.Thread(target=portal.serve_forever,
+                                             name="archon-portal", daemon=True)
+            portal_worker.start()
+            if ready_callback:
+                ready_callback(f"http://127.0.0.1:{portal.server_port}")
+            stop_event.wait()
     except KeyboardInterrupt:
         pass
     except (OSError, ValueError, RuntimeError) as exc:
@@ -134,6 +148,9 @@ def start() -> int:
         return 1
     finally:
         if portal is not None:
+            if portal_worker is not None:
+                portal.shutdown()
+                portal_worker.join(timeout=5)
             portal.server_close()
         if forge_bindings is not None:
             forge_bindings.close()

@@ -99,6 +99,8 @@ class RemoteCreationWebUITests(unittest.TestCase):
             "submit": lambda _: {"prompt_id": "remote-job", "selection": {"workflow": "base", "checkpoint": "model.safetensors", "vae": "", "loras": []}},
             "poll": lambda _: {"prompt_id": "remote-job", "status": "completed", "images": [{"filename": "render.png", "subfolder": "", "type": "output"}]},
             "fetch": lambda p: self.output_chunk(role, p),
+            "archive": lambda _: {"status": "ready", "job_id": "d" * 32,
+                                    "url": "http://100.64.0.2:9000/archive?token=fixture"},
             "synthesize": lambda p: {"status": "completed", "audio": [{
                 "filename": "speech.wav", "sample_rate": 48000, "text": p["text"],
                 **({"voice_description": p["voice_description"]} if p.get("voice_description") else {})}]},
@@ -119,14 +121,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
                 if task["action"] == "synthesize":
                     self.speech_inputs.append(payload)
                 if task["action"] == "stream":
-                    import io
-                    import zipfile
                     data = self.audio_bytes if task["forge"] == "audio" else self.image_bytes
-                    if payload.get("archive"):
-                        buffer = io.BytesIO()
-                        with zipfile.ZipFile(buffer, "w") as archive:
-                            archive.writestr("EverSpark-Outputs/render.png", data)
-                        data = buffer.getvalue()
                     request = Request(self.nodes.url + "/node/output", data=data, method="POST",
                         headers={"Content-Type": "application/octet-stream",
                                  "Authorization": "Bearer " + payload["token"]})
@@ -393,19 +388,20 @@ class RemoteCreationWebUITests(unittest.TestCase):
         for role in ("concept", "image"):
             self.call("/api/forge-bindings", {"forge": role, "node_id": self.identities[role]})
 
-    def test_results_do_not_transfer_files_and_archive_is_created_on_demand(self):
-        import io
-        import zipfile
+    def test_results_and_zip_preparation_do_not_stream_remote_files(self):
         self.select_pair()
         result = self.call("/api/results?prompt_id=remote-job")
         self.assertEqual(result["results"][0]["status"], "completed")
         self.assertNotIn(("image", "image", "fetch"), self.seen)
         self.assertNotIn(("image", "image", "stream"), self.seen)
-        with urlopen(self.url + "/api/outputs/archive", timeout=5) as response:
-            self.assertEqual(response.headers["Content-Type"], "application/zip")
-            with zipfile.ZipFile(io.BytesIO(response.read())) as archive:
-                self.assertEqual(archive.read("EverSpark-Outputs/render.png"), self.image_bytes)
-        self.assertEqual(self.seen.count(("image", "image", "stream")), 1)
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(self.url + "/api/outputs/archive", timeout=5)
+        self.assertEqual(caught.exception.code, 410)
+        archive = self.call("/api/outputs/archive/prepare?forge=image")
+        self.assertEqual(archive["status"], "ready")
+        self.assertEqual(archive["url"], "http://100.64.0.2:9000/archive?token=fixture")
+        self.assertEqual(self.seen.count(("image", "image", "archive")), 1)
+        self.assertNotIn(("image", "image", "stream"), self.seen)
         self.assertFalse(list((self.root / "outputs").rglob("*.png")))
         self.assertEqual(self.agent_errors, [])
 

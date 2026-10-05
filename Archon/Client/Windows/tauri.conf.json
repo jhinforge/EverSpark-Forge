@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "EverSpark Forge",
+  "version": "0.1.0",
+  "identifier": "io.jhinforge.everspark",
+  "build": {"frontendDist": "ui"},
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'",
+      "capabilities": []
+    }
+  },
+  "bundle": {"active": false, "icon": ["icons/icon.ico", "icons/icon.png"]}
+}
