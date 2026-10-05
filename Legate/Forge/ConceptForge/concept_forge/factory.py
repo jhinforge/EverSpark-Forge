@@ -36,4 +36,4 @@ def create_service(config, logger=None):
     else:
         connections = (APIOnlyConnections(settings, logger=logger) if remote.get("remote_only")
                        else ConceptConnections(settings, logger=logger))
-    return ConceptService(connections.gateway), connections
+    return ConceptService(connections.gateway, settings.get("max_model_retries", 3)), connections

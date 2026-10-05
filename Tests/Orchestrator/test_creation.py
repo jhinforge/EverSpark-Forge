@@ -214,6 +214,64 @@ class ConceptStageTests(unittest.TestCase):
         service.generate_speech("Translate welcome", {"request": "Translate welcome into Chinese"})
         self.assertIn("translate the spoken content", service.gateway.chat.call_args.args[0].messages[0]["content"])
 
+    def test_audio_example_contains_only_audio_and_preserves_request(self):
+        plan = {"steps": [{"key": "speech", "forge": "audio", "brief": "年轻少女用中文说你好", "depends_on": []}]}
+        service = self.service(json.dumps(plan))
+        text = "给她配上年轻少女的声音用中文说你好"
+        self.assertEqual(service.decompose(text, [], ["audio"], generation_mode="audio"), plan)
+        request = service.gateway.chat.call_args.args[0]
+        self.assertNotIn('"forge": "image"', request.messages[0]["content"])
+        self.assertIn('"forge": "audio"', request.messages[0]["content"])
+        self.assertEqual(json.loads(request.messages[-1]["content"])["request"], text)
+        service.gateway.chat.assert_called_once()
+
+    def test_audio_format_failure_is_corrected_before_returning_plan(self):
+        valid = {"steps": [{"key": "speech", "forge": "audio", "brief": "少女用中文说你好", "depends_on": []}]}
+        invalid_plans = [
+            "not JSON",
+            json.dumps({"steps": [STEPS[1]]}),
+            json.dumps({"steps": [{"key": "speech", "forge": "audio", "brief": "你好"}]}),
+            json.dumps({"steps": [{**valid["steps"][0], "depends_on": ["frame"]}]}),
+        ]
+        for invalid in invalid_plans:
+            with self.subTest(invalid=invalid):
+                service = self.service(invalid)
+                requests = []
+                responses = iter([invalid, json.dumps(valid)])
+                def chat(request, provider=""):
+                    requests.append([dict(message) for message in request.messages])
+                    return SimpleNamespace(content=next(responses))
+                service.gateway.chat.side_effect = chat
+                self.assertEqual(service.decompose("给她配上年轻少女的声音用中文说你好", [], ["audio"],
+                                                  model="everspark-concept", generation_mode="audio"), valid)
+                self.assertEqual(len(requests), 2)
+                self.assertIn("failed validation", requests[1][-1]["content"])
+                self.assertIn("generation_mode=audio", requests[1][-1]["content"])
+                self.assertEqual(service.gateway.chat.call_args.args[0].model, "everspark-concept")
+
+    def test_decomposition_retries_are_bounded_and_errors_explain_the_field(self):
+        service = self.service('{"steps":[{"text":"你好"}]}')
+        service.max_model_retries = 1
+        with self.assertRaisesRegex(ConceptError, "after 2 attempts: Step 1 must have exactly"):
+            service.decompose("说你好", [], ["audio"], generation_mode="audio")
+        self.assertEqual(service.gateway.chat.call_count, 2)
+
+    def test_decomposition_does_not_retry_transport_errors(self):
+        service = self.service("")
+        service.gateway.chat.side_effect = ConceptError("Cannot connect to Ollama")
+        with self.assertRaisesRegex(ConceptError, "Cannot connect"):
+            service.decompose("说你好", [], ["audio"], generation_mode="audio")
+        service.gateway.chat.assert_called_once()
+
+    def test_dependency_cycle_and_missing_multimodal_output_are_rejected(self):
+        for steps, reason in (([{**STEPS[0]}, {**STEPS[1], "depends_on": ["voice"]}], "cycle"),
+                              ([STEPS[1]], "requires exactly")):
+            with self.subTest(reason=reason):
+                service = self.service(json.dumps({"steps": steps}))
+                service.max_model_retries = 0
+                with self.assertRaisesRegex(ConceptError, reason):
+                    service.decompose("图像和声音", [], ["image", "audio"], generation_mode="image_audio")
+
     def test_creative_json_and_speech_are_distinct_model_calls(self):
         service = self.service(json.dumps({"steps": STEPS}))
         self.assertEqual(service.decompose("create", [], ["image", "audio"]), {"steps": STEPS})

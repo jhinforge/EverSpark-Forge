@@ -52,10 +52,9 @@ Reply in the user's language.
 """
 
 CREATION_SYSTEM_PROMPT = """You are EverSpark Concept Forge's creative planning stage.
-Understand the user's request and decompose the creative work. Return JSON only:
-{"steps":[{"key":"scene-1","forge":"image","brief":"complete creative brief",
-"depends_on":[]},{"key":"speech-1","forge":"audio","brief":"spoken content brief",
-"depends_on":["scene-1"]}]}
+Understand the user's request and decompose the creative work. Return one JSON
+object with a steps array. Each step has exactly key, forge, brief, depends_on.
+key and brief are nonempty strings; depends_on is an array of step keys, or [].
 Honor generation_mode as an explicit output constraint. For audio, create only
 speech steps, even if the user mentions a portrait or character as context. For
 image_audio, create at least one image and one audio step; if dialogue is absent,
@@ -122,8 +121,9 @@ class GenerationPlan:
 
 
 class ConceptService:
-    def __init__(self, gateway: ConceptGateway):
+    def __init__(self, gateway: ConceptGateway, max_model_retries: int = 3):
         self.gateway = gateway
+        self.max_model_retries = max(0, min(int(max_model_retries), 3))
 
     @property
     def model(self) -> str:
@@ -138,28 +138,84 @@ class ConceptService:
         return self.gateway.list_models(provider)
 
     def decompose(self, text, history, available_forges, model="", provider="", generation_mode="plan"):
-        response = self._chat([
-            {"role": "system", "content": CREATION_SYSTEM_PROMPT},
+        # Give small models an example that matches the requested output mode.
+        # An image/audio example in audio mode can make them invent image steps.
+        example_steps = []
+        for forge in available_forges:
+            example_steps.append({"key": f"{forge}-1", "forge": forge,
+                "brief": ("Preserve the requested spoken words, language and voice"
+                          if forge == "audio" else "Preserve the requested image details"),
+                "depends_on": []})
+        example = json.dumps({"steps": example_steps}, ensure_ascii=False)
+        messages = [
+            {"role": "system", "content": CREATION_SYSTEM_PROMPT +
+                "\nFormat example for the available Forges (replace briefs with the user's intent):\n" + example},
             *(history or []),
             {"role": "user", "content": json.dumps({"request": text,
                 "available_forges": available_forges, "generation_mode": generation_mode}, ensure_ascii=False)},
-        ], model, json_mode=True, provider=provider)
+        ]
+        attempts = self.max_model_retries + 1
+        for attempt in range(attempts):
+            # Transport and authentication failures must not trigger format retries.
+            response = self._chat(messages, model, json_mode=True, provider=provider)
+            try:
+                return self._validate_decomposition(response, available_forges, generation_mode)
+            except ValueError as exc:
+                if attempt == attempts - 1:
+                    raise ConceptError("Concept Forge returned an invalid creative decomposition "
+                        f"after {attempts} attempts: {exc}") from exc
+                # Repeat the original request and constraints, without accumulating
+                # large malformed outputs or copying them into diagnostics.
+                correction = {"role": "user", "content":
+                    f"Your creative plan failed validation: {exc}. "
+                    "Return the complete corrected steps JSON for the original request. "
+                    f"Use only these Forge names: {', '.join(available_forges)}. "
+                    f"Honor generation_mode={generation_mode}. Format example: {example}"}
+                if attempt:
+                    messages[-1] = correction
+                else:
+                    messages.append(correction)
+
+    @staticmethod
+    def _validate_decomposition(response, available_forges, generation_mode):
         try:
             value = json.loads(response)
-            steps = value["steps"]
-            if not isinstance(steps, list) or not 1 <= len(steps) <= 64:
-                raise ValueError("Expected 1 to 64 creative steps")
-            for step in steps:
-                if (not isinstance(step, dict) or set(step) != {"key", "forge", "brief", "depends_on"}
-                        or step["forge"] not in available_forges
-                        or any(not isinstance(step[k], str) or not step[k].strip()
-                               or len(step[k]) > 12000 for k in ("key", "brief"))
-                        or not isinstance(step["depends_on"], list)
-                        or any(not isinstance(k, str) for k in step["depends_on"])):
-                    raise ValueError("Invalid creative step")
-            return {"steps": steps}
-        except (ValueError, KeyError, TypeError) as exc:
-            raise ConceptError("Concept Forge returned an invalid creative decomposition") from exc
+        except (ValueError, TypeError) as exc:
+            raise ValueError("Response must be one JSON object without Markdown or commentary") from exc
+        if not isinstance(value, dict) or "steps" not in value:
+            raise ValueError("Response must contain a steps array")
+        steps = value["steps"]
+        if not isinstance(steps, list) or not 1 <= len(steps) <= 64:
+            raise ValueError("steps must contain 1 to 64 creative steps")
+        for index, step in enumerate(steps, 1):
+            if not isinstance(step, dict) or set(step) != {"key", "forge", "brief", "depends_on"}:
+                raise ValueError(f"Step {index} must have exactly key, forge, brief, depends_on")
+            if not isinstance(step["forge"], str) or step["forge"] not in available_forges:
+                raise ValueError(f"Step {index} forge must be one of: {', '.join(available_forges)}")
+            for field in ("key", "brief"):
+                if not isinstance(step[field], str) or not step[field].strip() or len(step[field]) > 12000:
+                    raise ValueError(f"Step {index} {field} must be a nonempty string up to 12000 characters")
+            if not isinstance(step["depends_on"], list) or any(not isinstance(k, str) for k in step["depends_on"]):
+                raise ValueError(f"Step {index} depends_on must be an array of step keys; use [] for no dependencies")
+        keys = {step["key"] for step in steps}
+        if len(keys) != len(steps):
+            raise ValueError("Step keys must be unique")
+        for index, step in enumerate(steps, 1):
+            if any(key not in keys or key == step["key"] for key in step["depends_on"]):
+                raise ValueError(f"Step {index} dependencies must refer to other steps in this plan")
+        resolved = set()
+        remaining = list(steps)
+        while remaining:
+            ready = next((step for step in remaining if set(step["depends_on"]) <= resolved), None)
+            if ready is None:
+                raise ValueError("Creative dependencies must not contain a cycle")
+            resolved.add(ready["key"])
+            remaining.remove(ready)
+        targets = {step["forge"] for step in steps}
+        required = {"audio"} if generation_mode == "audio" else {"image", "audio"} if generation_mode == "image_audio" else None
+        if required is not None and targets != required:
+            raise ValueError(f"generation_mode={generation_mode} requires exactly these Forge targets: {', '.join(sorted(required))}")
+        return {"steps": steps}
 
     def generate_speech(self, brief, context, model="", provider=""):
         response = self._chat([
