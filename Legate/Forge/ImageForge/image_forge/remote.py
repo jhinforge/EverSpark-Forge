@@ -52,7 +52,18 @@ class RemoteImageGateway:
             with urlopen(request, timeout=320) as response:
                 envelope = json.load(response)
         except HTTPError as exc:
-            raise RuntimeError(f"Remote Image Forge failed (HTTP {exc.code})") from exc
+            try:
+                failure = json.loads(exc.read(60000))
+                if not isinstance(failure, dict):
+                    raise ValueError("Expected error object")
+            except (ValueError, UnicodeError):
+                failure = {}
+            finally:
+                exc.close()
+            detail = failure.get("detail") or failure.get("error") or exc.reason
+            code = failure.get("exit_code")
+            suffix = f", exit code {code}" if code is not None else ""
+            raise RuntimeError(f"Remote Image Forge {action} failed (HTTP {exc.code}{suffix}): {detail}") from exc
         except (URLError, OSError, ValueError) as exc:
             raise RuntimeError("Remote Image Forge is unavailable") from exc
         try:

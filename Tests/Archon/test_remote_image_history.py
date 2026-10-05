@@ -2,11 +2,32 @@
 import base64
 import tempfile
 import unittest
-from unittest.mock import Mock
+import io
+import json
+from urllib.error import HTTPError
+from unittest.mock import Mock, patch
 from image_forge.remote import RemoteImageGateway
 
 
 class RemoteImageHistoryTests(unittest.TestCase):
+    def test_archive_failure_preserves_node_diagnostic_and_exit_code(self):
+        with tempfile.TemporaryDirectory() as directory:
+            gateway = RemoteImageGateway('a' * 32, 'http://127.0.0.1:8765', directory, 'comfyui')
+            failure = HTTPError(gateway.url, 503, 'Service Unavailable', {}, io.BytesIO(json.dumps({
+                'error': 'Node Agent execution failed', 'detail': 'Image URL service unavailable',
+                'exit_code': 1}).encode()))
+            with patch('image_forge.remote.urlopen', side_effect=failure):
+                with self.assertRaisesRegex(RuntimeError, r'archive failed .*HTTP 503, exit code 1.*Image URL service unavailable'):
+                    gateway.archive_job()
+
+    def test_non_json_node_error_still_reports_http_status_and_action(self):
+        with tempfile.TemporaryDirectory() as directory:
+            gateway = RemoteImageGateway('a' * 32, 'http://127.0.0.1:8765', directory, 'comfyui')
+            failure = HTTPError(gateway.url, 503, 'Service Unavailable', {}, io.BytesIO(b'not json'))
+            with patch('image_forge.remote.urlopen', side_effect=failure):
+                with self.assertRaisesRegex(RuntimeError, r'archive failed .*HTTP 503.*Service Unavailable'):
+                    gateway.archive_job()
+
     def test_archive_returns_a_validated_node_url_without_opening_a_stream(self):
         with tempfile.TemporaryDirectory() as directory:
             gateway = RemoteImageGateway('a' * 32, 'http://127.0.0.1:8765', directory, 'comfyui')
