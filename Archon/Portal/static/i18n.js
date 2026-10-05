@@ -1,6 +1,14 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Creation task progress": "创作任务进度",
+    "{forge} Forge · Task {number}": "{forge} Forge · 任务 {number}",
+    "Execution node: {node}": "执行节点：{node}",
+    "Execution Pod: {pod}": "执行 Pod：{pod}",
+    "Local machine": "本机",
+    "Waiting to start": "等待开始",
+    "Waiting for task status": "等待任务状态恢复",
+    "Not run": "未执行",
     "EVERSPARK RUNTIME": "EVERSPARK 运行状态",
     "Forge services": "Forge 服务",
     "Archon Backend and Forge service availability.": "Archon 后端与各 Forge 服务的可用状态。",

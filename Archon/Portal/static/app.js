@@ -62,6 +62,7 @@ const elements = {
   subjectPicker: $("#subjectPicker"),
   useSubjectButton: $("#useSubjectButton"),
   resultStage: $("#resultStage"),
+  creationProgress: $("#creationProgress"),
   generationState: $("#generationState"),
   scenePrompt: $("#scenePrompt"),
   generateButton: $("#generateButton"),
@@ -2297,6 +2298,8 @@ async function discuss() {
 }
 
 async function newConversation() {
+  elements.creationProgress.hidden = true;
+  elements.creationProgress.replaceChildren();
   state.sessionId = crypto.randomUUID();
   localStorage.setItem("everspark.session", state.sessionId);
   state.selectedSubject = null;
@@ -2314,6 +2317,7 @@ function setGenerationState(label, mode = "idle", args = {}) {
 }
 
 function renderWaiting(items) {
+  elements.resultStage.hidden = false;
   elements.resultStage.replaceChildren();
   const grid = document.createElement("div");
   grid.className = "result-grid";
@@ -2392,6 +2396,7 @@ function imageButton(image, className) {
 }
 
 function renderResults(results) {
+  elements.resultStage.hidden = false;
   elements.resultStage.replaceChildren();
   const grid = document.createElement("div");
   grid.className = "result-grid";
@@ -2463,6 +2468,43 @@ function scheduleResultPoll(items, delay = 1800) {
   }, delay);
 }
 
+function renderCreationProgress(tasks) {
+  const container = elements.creationProgress;
+  container.hidden = !tasks?.length;
+  container.replaceChildren();
+  const labels = {queued: "Waiting to start", preparing: "Concept Forge is preparing task input",
+    running: "{forge} Forge is generating", completed: "Complete", failed: "Failed", skipped: "Not run"};
+  for (const [index, task] of (tasks || []).entries()) {
+    const card = document.createElement("div");
+    card.className = "creation-task-card";
+    card.dataset.status = task.status;
+    const heading = document.createElement("strong");
+    const forge = task.forge === "audio" ? "Audio" : "Image";
+    uiText(heading, "{forge} Forge · Task {number}", {forge, number: index + 1});
+    const target = document.createElement("span");
+    target.className = "creation-task-target";
+    if (task.target_node_id) {
+      uiText(target, "Execution node: {node}", {node: task.target_node_id.slice(0, 8)});
+      target.title = task.target_node_id;
+    } else if (task.target_instance_id) {
+      uiText(target, "Execution Pod: {pod}", {pod: task.target_instance_id});
+    } else {
+      uiText(target, "Local machine");
+    }
+    const status = document.createElement("p");
+    status.className = "creation-task-status";
+    uiText(status, labels[task.status] || "Waiting to start", {forge});
+    card.append(heading, target, status);
+    if (task.error) {
+      const error = document.createElement("p");
+      error.className = "creation-task-error";
+      error.textContent = task.error;
+      card.appendChild(error);
+    }
+    container.appendChild(card);
+  }
+}
+
 async function waitForGeneration(jobId) {
   let failedChecks = 0;
   let renderedResults = "";
@@ -2474,19 +2516,22 @@ async function waitForGeneration(jobId) {
       failedChecks = 0;
     } catch (error) {
       if (++failedChecks < (transientApiError(error) ? 36 : 3)) {
-        setGenerationState("Waiting for image service", "running");
+        setGenerationState("Waiting for task status", "running");
         continue;
       }
       throw error;
     }
-    if (data.job.status === "completed") return data.job.response;
-    if (data.job.tasks?.some((task) => task.status === "completed")) {
+    if (data.job.tasks?.length) {
+      // Update task cards even before the first result exists. Otherwise the
+      // initial Concept placeholder stays visible throughout Audio synthesis.
+      renderCreationProgress(data.job.tasks);
       const completed = JSON.stringify(data.job.tasks.filter((task) => task.status === "completed"));
       if (completed !== renderedResults) {
         renderCreation({tasks: data.job.tasks});
         renderedResults = completed;
       }
     }
+    if (data.job.status === "completed") return data.job.response;
     if (data.job.status === "failed") throw new Error(data.job.error || t("Generation failed"));
     const active = data.job.tasks?.find((task) => ["preparing", "running"].includes(task.status));
     if (active) setGenerationState(active.status === "preparing" ? "Concept Forge is preparing task input"
@@ -2506,11 +2551,14 @@ async function generate() {
   }
   if (state.pollTimer) clearTimeout(state.pollTimer);
   state.pollFailures = 0;
+  elements.creationProgress.hidden = true;
+  elements.creationProgress.replaceChildren();
   hideNotice();
   appendConversation("user", message);
   elements.scenePrompt.value = "";
   elements.generateButton.disabled = true;
   setGenerationState("Planning", "running");
+  elements.resultStage.hidden = false;
   elements.resultStage.replaceChildren();
   const pending = document.createElement("div");
   pending.className = "stage-empty";
@@ -2576,6 +2624,7 @@ function renderCreation(result) {
   }
   const resources = result.audio || result.tasks.flatMap((task) => task.result?.audio || []);
   for (const resource of resources) grid.appendChild(audioCard(resource));
+  elements.resultStage.hidden = !grid.children.length;
   elements.resultStage.appendChild(grid);
 }
 

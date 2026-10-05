@@ -244,6 +244,17 @@ h1, h2, h3, h4 { line-height: var(--line-height-heading); }
 .state-chip[data-state="success"] { color: var(--green); }
 .state-chip[data-state="error"] { color: var(--red); }
 .result-stage { display: grid; min-height: 390px; padding: var(--spacing-lg); }
+.creation-progress { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: var(--spacing-md); padding: var(--spacing-lg); }
+.creation-task-card { min-width: 0; padding: var(--spacing-lg); border: 1px solid var(--line); border-radius: var(--ui-control-radius); background: var(--panel-soft); }
+.creation-task-card strong { display: block; font-size: var(--font-size-base); }
+.creation-task-target { display: block; margin-top: var(--spacing-xs); color: var(--muted); font-size: var(--font-size-sm); }
+.creation-task-status { margin-top: var(--spacing-md); color: var(--muted); font-size: var(--font-size-base); }
+.creation-task-card[data-status="preparing"], .creation-task-card[data-status="running"] { border-color: var(--border-accent); }
+.creation-task-card[data-status="preparing"] .creation-task-status, .creation-task-card[data-status="running"] .creation-task-status { color: var(--primary-text); }
+.creation-task-card[data-status="completed"] .creation-task-status { color: var(--green); }
+.creation-task-card[data-status="failed"] .creation-task-status, .creation-task-error { color: var(--red); }
+.creation-task-error { margin-top: var(--spacing-sm); overflow-wrap: anywhere; font-size: var(--font-size-sm); }
+.canvas-panel[data-work-mode="discuss"] .creation-progress { display: none; }
 .stage-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 350px; border: 1px dashed rgba(255, 255, 255, .075); border-radius: 13px; background: var(--panel); text-align: center; }
 .spark-glyph { margin-bottom: var(--spacing-lg); color: var(--ember); font-size: 29px; text-shadow: none; }
 .stage-empty h3 { font-size: var(--font-size-lg); font-weight: 560; }

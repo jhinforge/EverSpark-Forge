@@ -4,17 +4,17 @@ const vm = require('node:vm');
 const source = fs.readFileSync('Archon/Portal/static/app.js', 'utf8');
 function extract(start, end) { return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))); }
 function element(tag) {
-  return {tag, children: [], addEventListener() {}, append(...items) {this.children.push(...items);},
+  return {tag, dataset: {}, children: [], addEventListener() {}, append(...items) {this.children.push(...items);},
     appendChild(item) {this.children.push(item);}, replaceChildren(...items) {this.children = items;}};
 }
-const stage = element('stage'), audioHistory = element('history'), gallery = element('gallery');
+const stage = element('stage'), audioHistory = element('history'), gallery = element('gallery'), progress = element('progress');
 const completedImage = {forge: 'image', status: 'completed', result: {outputs: [{images: [{filename: 'ready.png'}]}]}};
-const context = {window: {location: {protocol: 'http:'}}, document: {createElement: element}, elements: {resultStage: stage, galleryGrid: gallery}, uiText: (el, value, args={}) => {el.textContent = value.replace(/\{(\w+)\}/g, (_, key) => args[key]);},
+const context = {window: {location: {protocol: 'http:'}}, document: {createElement: element}, elements: {resultStage: stage, galleryGrid: gallery, creationProgress: progress}, uiText: (el, value, args={}) => {el.textContent = value.replace(/\{(\w+)\}/g, (_, key) => args[key]);},
   URLSearchParams, encodeURIComponent, t: x => x, setGenerationState() {},
   transientApiError: () => false, setTimeout: fn => fn(),
   imageButton: image => ({tag: 'image', ...image}), $: () => audioHistory};
 vm.createContext(context);
-vm.runInContext(extract('async function waitForGeneration(', 'async function generate(')
+vm.runInContext(extract('function renderCreationProgress(', 'async function generate(')
   + extract('function renderCreation(', 'function downloadOutputsArchive('), context);
 (async () => {
   context.api = async () => ({job: {status: 'failed', error: 'Audio Forge synthesize failed: backend detail',

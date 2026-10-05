@@ -21,7 +21,10 @@ class GateApplication:
         self.audio = AudioService(config) if (not remote.get("remote_only") and not remote_concept
             or remote.get("audio_node_id") or remote.get("audio_instance_id")) else None
         self.storage = StorageService(config)
-        self.orchestrator = Orchestrator(TaskRunner(self.concept, self.image, self.audio), logger)
+        execution_targets = {role: remote.get(f"{role}_node_id") or remote.get(f"{role}_instance_id")
+                             for role in ("image", "audio")}
+        self.orchestrator = Orchestrator(TaskRunner(self.concept, self.image, self.audio,
+                                                   execution_targets=execution_targets), logger)
 
     def audio_history(self, limit=24):
         return self.audio.history(limit) if self.audio is not None else []

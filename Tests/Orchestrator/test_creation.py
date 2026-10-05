@@ -78,6 +78,23 @@ class CreationTests(unittest.TestCase):
         self.assertEqual(result["items"], [])
         self.assertEqual(len(result["audio"]), 1)
 
+    def test_creation_reports_all_task_states_and_pinned_execution_nodes(self):
+        for audio_node in ("a" * 32, "b" * 32):
+            with self.subTest(audio_node=audio_node):
+                targets = {"image": "a" * 32, "audio": audio_node}
+                runner = TaskRunner(self.concept, self.image, self.audio, execution_targets=targets)
+                events = []
+                result = runner.run("portrait and speech", "session", {"creation_mode": "image_audio"}, events.append)
+                snapshots = [event["tasks"] for event in events if isinstance(event, dict)]
+                self.assertEqual([t["status"] for t in snapshots[0]], ["queued", "queued"])
+                self.assertEqual([t["status"] for t in snapshots[3]], ["completed", "queued"])
+                self.assertEqual([t["status"] for t in snapshots[5]], ["completed", "running"])
+                for snapshot in snapshots:
+                    for task in snapshot:
+                        self.assertEqual(task["target_node_id"], targets[task["forge"]])
+                        self.assertNotIn("specification", task)
+                self.assertEqual([t["status"] for t in result["tasks"]], ["completed", "completed"])
+
     def test_selected_mode_rejects_wrong_outputs_before_execution(self):
         for mode, steps in (("audio", STEPS), ("image_audio", [STEPS[1]])):
             self.concept.service.decompose = Mock(return_value={"steps": steps})

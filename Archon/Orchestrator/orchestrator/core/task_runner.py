@@ -3,9 +3,10 @@ from Aegis.Shared.errors import TaskError
 import uuid
 
 class TaskRunner:
-    def __init__(self, concept, image, audio=None):
+    def __init__(self, concept, image, audio=None, *, execution_targets=None):
         self.concept = concept
         self.image = image
+        self.execution_targets = dict(execution_targets or {})
         self.forges = {"image": image}
         if audio is not None:
             self.forges["audio"] = audio
@@ -43,6 +44,10 @@ class TaskRunner:
             tasks.append({"id": identities[step["key"]], "forge": step["forge"],
                 "depends_on": [identities[k] for k in dependencies],
                 "status": "queued", "specification": step})
+            target = self.execution_targets.get(step["forge"])
+            if target:
+                key = "target_node_id" if isinstance(target, str) and len(target) == 32 else "target_instance_id"
+                tasks[-1][key] = target
         ordered, remaining = [], list(tasks)
         while remaining:
             done = {t["id"] for t in ordered}
@@ -66,6 +71,7 @@ class TaskRunner:
             targets = {task["forge"] for task in tasks}
             if required and (targets != required):
                 raise TaskError("Concept Forge task list does not match the selected generation mode")
+            notify({"tasks": self._public_tasks(tasks)})
             results = {}
             for task in tasks:
                 try:
