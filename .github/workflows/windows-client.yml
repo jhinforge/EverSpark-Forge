@@ -28,16 +28,23 @@ jobs:
         with:
           python-version: "3.11.9"
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "Archon/Client/Windows"
+          cache-on-failure: true
       - name: Control backend lifecycle and packaging tests
         run: python -m unittest discover -s Tests/Client -p 'test_*.py' -v
       - name: Rust checks
         working-directory: Archon/Client/Windows
         run: |
           cargo fmt -- --check
-          cargo test --locked
+          cargo check --tests --locked
       - name: Compile once and package both variants
         shell: pwsh
         run: ./Archon/Client/Windows/build.ps1
+      - name: Rust unit tests using release dependencies
+        working-directory: Archon/Client/Windows
+        run: cargo test --release --locked
       - name: Launch both portable ZIPs without Python on PATH
         shell: pwsh
         run: |

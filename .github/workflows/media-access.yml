@@ -45,15 +45,15 @@ jobs:
         run: python -m unittest discover -s Tests/WebUI -p 'test_*.py'
       - name: JavaScript UI regression
         run: node --test Tests/WebUI/*.js
-      - name: Verify pinned LibreSpeed installer
+      - name: Verify pinned Ookla CLI installer
         run: |
           python - <<'PYTEST'
           import tempfile, subprocess
           from pathlib import Path
-          from Legate.Envoy.bandwidth import install
+          from Legate.Envoy.bandwidth import cli, VERSION
           with tempfile.TemporaryDirectory() as directory:
-              binary = install(Path(directory))
+              binary = cli(Path(directory))
               version = subprocess.check_output([str(binary), '--version'], text=True)
-              assert '1.0.14' in version, version
+              assert 'Ookla' in version and VERSION in version, version
               print(version)
           PYTEST

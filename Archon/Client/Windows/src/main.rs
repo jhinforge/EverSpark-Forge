@@ -84,9 +84,24 @@ fn run() -> Result<(), String> {
                     {
                         return true;
                     }
+                    if url.scheme() == "blob" {
+                        return url
+                            .as_str()
+                            .strip_prefix("blob:")
+                            .and_then(|value| value.parse::<tauri::Url>().ok())
+                            .is_some_and(|source| {
+                                navigation_state
+                                    .origin
+                                    .lock()
+                                    .unwrap()
+                                    .as_ref()
+                                    .is_some_and(|origin| origin.origin() == source.origin())
+                            });
+                    }
                     // Media download URLs must remain in WebView2 so its native
                     // download dialog receives the attachment response.
                     if url.scheme() == "http"
+                        && ["/archive", "/file"].contains(&url.path())
                         && url.host_str().is_some_and(|host| {
                             host.parse::<std::net::Ipv4Addr>()
                                 .map(|ip| {

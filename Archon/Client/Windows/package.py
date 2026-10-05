@@ -116,7 +116,8 @@ def make_packages(executable: Path, output: Path, *, python_archive: Path,
         prepare_python(python_archive, stage / "Runtime/Python")
         if os.name == "nt":
             subprocess.run([str(stage / "Runtime/Python/python.exe"), "-I", "-X", "utf8", "-c",
-                "import sys; assert sys.version_info[:3] == (3,11,9); "
+                "import sys; from pathlib import Path; sys.path.insert(0, str(Path.cwd())); "
+                "assert sys.version_info[:3] == (3,11,9); "
                 "from Archon.Gate.CLI.archon import _load_local_settings; "
                 "from Archon.Portal.app import WebUIServer; "
                 "from Archon.Gate.remote_runtime import create_runtime; "
