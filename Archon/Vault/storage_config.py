@@ -15,6 +15,7 @@ from .import_config import parse_env, _render_env, _atomic_write
 MANAGED = 'everspark-ui-image-models'
 KEYS = ('EVERSPARK_STORAGE_BACKEND', 'RCLONE_CONFIG', 'RCLONE_BIN',
         'IMAGE_FORGE_RCLONE_REMOTE', 'CONCEPT_FORGE_RCLONE_REMOTE')
+IMAGE_TYPES = {'checkpoint', 'diffusion_model', 'lora', 'vae'}
 
 
 def parse_rclone(text):
@@ -136,6 +137,12 @@ class StorageConfiguration:
             if not isinstance(images, list) or not 1 <= len(images) <= 8:
                 raise ValueError('Select between one and eight image model directories')
             images = list(dict.fromkeys(self.validate_path(p, parser) for p in images))
+            source_types = body.get('image_source_types', {})
+            if not isinstance(source_types, dict) or len(source_types) > 8:
+                raise ValueError('Invalid image source types')
+            if any(path not in images or not isinstance(kind, str) or kind not in IMAGE_TYPES
+                   for path, kind in source_types.items()):
+                raise ValueError('Choose a valid model type for each selected image directory')
             concept = self.validate_path(body.get('concept_source'), parser)
             binary = self.executable(str(body.get('binary', '')).strip())
             for path in dict.fromkeys([*images, concept]):
@@ -165,7 +172,8 @@ class StorageConfiguration:
             values = {'EVERSPARK_STORAGE_BACKEND': 'rclone', 'RCLONE_CONFIG': str(destination),
                       'RCLONE_BIN': binary, 'IMAGE_FORGE_RCLONE_REMOTE': image_remote,
                       'CONCEPT_FORGE_RCLONE_REMOTE': concept}
-            selected = {'image_sources': images, 'concept_source': concept, 'managed_remote': managed}
+            selected = {'image_sources': images, 'image_source_types': source_types,
+                        'concept_source': concept, 'managed_remote': managed}
             self.commit(values, text, selected)
             return self.status()
 
@@ -187,6 +195,7 @@ class StorageConfiguration:
             mapping['image_manual'] = {}
         if previous_selection.get('concept_source') != selected['concept_source']:
             mapping['concept_manual'] = []
+        mapping['image_source_types'] = selected.get('image_source_types', {})
         paths = [self.directory / 'rclone.conf', env_path, self.selection, mapping_path]
         previous = {p: p.read_bytes() if p.exists() else None for p in paths}
         old_env = {key: os.environ.get(key) for key in values}

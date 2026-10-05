@@ -1,6 +1,10 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "Auto-detect model folders": "自动识别模型目录",
+    "Model type for {path}": "{path} 的模型类型",
+    "Select a model library or a category folder such as checkpoints, loras or vae. For custom folder names, choose the model type beside the selected path.": "选择模型库或 checkpoints、loras、vae 等分类目录。自定义目录名称可在已选路径旁指定模型类型。",
+    "No recognized model folders in: {paths}. Choose a model type for these directories in Cloud storage configuration.": "这些路径下未识别到模型分类目录：{paths}。请在云端存储配置中为这些目录指定模型类型。",
     "Creation task progress": "创作任务进度",
     "{forge} Forge · Task {number}": "{forge} Forge · 任务 {number}",
     "Execution node: {node}": "执行节点：{node}",

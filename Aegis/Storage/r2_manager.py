@@ -335,6 +335,7 @@ class R2StorageManager:
             "image": image,
             "concept": {"models": concept_models},
             "paths": {"discovered": image_roots, "configured": self.paths.read(),
+                      "unclassified_image_sources": self.paths.unclassified_sources,
                       "backup_remote": self.paths.backup_root(), "concept_native": native_roots,
                       "concept_gguf": gguf_roots},
         }

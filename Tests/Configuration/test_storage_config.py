@@ -166,6 +166,26 @@ class StorageConfigurationTests(unittest.TestCase):
         self.assertEqual(updated['backup_remote'], 'drive:backups')
         self.assertEqual(updated['image_upload'], {'lora': 'drive:uploads'})
 
+    def test_custom_image_source_types_persist_and_keep_upload_preferences(self):
+        self.service.import_file(CONFIG)
+        body = self.selection(['r2-assets:bucket/custom'])
+        body['image_source_types'] = {'r2-assets:bucket/custom': 'lora'}
+        status = self.service.save(body)
+        mapping = self.service.directory / 'model_paths.json'
+        self.assertEqual(status['selection']['image_source_types'], body['image_source_types'])
+        self.assertEqual(json.loads(mapping.read_text())['image_source_types'], body['image_source_types'])
+        # Switching back to automatic discovery removes the type override.
+        self.service.save(self.selection(['r2-assets:bucket/custom']))
+        self.assertEqual(json.loads(mapping.read_text())['image_source_types'], {})
+
+    def test_invalid_image_source_types_do_not_activate_configuration(self):
+        self.service.import_file(CONFIG)
+        for value in ([], {'r2-assets:bucket/custom': 'lora'},
+                      {'r2-assets:bucket/cold': 'audio'}, {'r2-assets:bucket/cold': []}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.service.save({**self.selection(), 'image_source_types': value})
+        self.assertFalse((self.root / '.env').exists())
+
     def test_old_cli_configuration_remains_enabled(self):
         self.service.directory.mkdir(parents=True)
         active = self.service.directory / 'rclone.conf'

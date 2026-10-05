@@ -585,10 +585,27 @@ function renderCloudSources() {
   (selection.image_sources || []).forEach((path, index) => {
     const row = document.createElement("div");
     const name = document.createElement("span"); name.textContent = path;
+    const type = document.createElement("select");
+    uiAttr(type, "aria-label", "Model type for {path}", {path});
+    for (const [value, label] of [["", "Auto-detect model folders"], ["checkpoint", "Checkpoint"],
+      ["diffusion_model", "Diffusion model"], ["lora", "LoRA"], ["vae", "VAE"]]) {
+      const option = document.createElement("option");
+      option.value = value; uiText(option, label); type.appendChild(option);
+    }
+    type.value = selection.image_source_types?.[path] || "";
+    type.addEventListener("change", () => {
+      selection.image_source_types ||= {};
+      if (type.value) selection.image_source_types[path] = type.value;
+      else delete selection.image_source_types[path];
+    });
     const remove = document.createElement("button"); remove.type = "button";
     remove.className = "ghost-button"; uiText(remove, "Remove");
-    remove.addEventListener("click", () => { selection.image_sources.splice(index, 1); renderCloudSources(); });
-    row.append(name, remove); container.append(row);
+    remove.addEventListener("click", () => {
+      selection.image_sources.splice(index, 1);
+      if (selection.image_source_types) delete selection.image_source_types[path];
+      renderCloudSources();
+    });
+    row.append(name, type, remove); container.append(row);
   });
   $("#cloudConceptSource").textContent = selection.concept_source || "—";
   $("#saveCloudConfiguration").disabled = !selection.image_sources?.length || !selection.concept_source;
@@ -717,6 +734,11 @@ async function loadRemoteStorage(force = false) {
     if (scan.status !== "running") uiText(elements.storageSummary, data.enabled
       ? "Cloud storage is connected. Downloads use the selected Forge nodes."
       : "Remote storage is disabled in local mode. Configure the rclone backend to enable it.");
+    const unclassified = data.paths?.unclassified_image_sources || [];
+    if (data.enabled && scan.status !== "running" && unclassified.length) {
+      uiText(elements.storageSummary, "No recognized model folders in: {paths}. Choose a model type for these directories in Cloud storage configuration.",
+        {paths: unclassified.join(", ")});
+    }
     updateStorageButtons();
     const jobs = await api("/api/storage/jobs");
     const active = jobs.job;
@@ -741,6 +763,7 @@ async function loadRemoteStorage(force = false) {
 async function saveRemotePaths(event) {
   event.preventDefault();
   const paths = { image_manual: {}, image_upload: {}, concept_manual: [],
+    image_source_types: state.remoteStorage?.paths?.configured?.image_source_types || {},
     concept_upload: elements.conceptUploadPath.value.trim(),
     backup_remote: elements.dataBackupPath.value.trim() };
   const split = (text) => text.split(/[,\n]+/).map((value) => value.trim()).filter(Boolean);

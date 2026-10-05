@@ -9,7 +9,9 @@ function node() {
   return {value:'', disabled:false, textContent:'', children:[], classList:{
     toggle(key,on){on ? classes.add(key) : classes.delete(key);},
     add(key){classes.add(key);}, contains(key){return classes.has(key);}},
-    replaceChildren(){this.children=[];}, append(...children){this.children.push(...children);}, addEventListener(){}};
+    listeners:{}, setAttribute(key,value){this[key]=value;},
+    replaceChildren(){this.children=[];}, append(...children){this.children.push(...children);},
+    appendChild(child){this.children.push(child);}, addEventListener(event,handler){this.listeners[event]=handler;}};
 }
 function setup(data) {
   const nodes = {}, panels = [node(),node(),node()];
@@ -17,7 +19,7 @@ function setup(data) {
   const context = {state:{cloudBrowserPath:'', cloudConfiguration:null, cloudConfigurationEpoch:0},
     $: id => nodes[id] ||= node(), $$: selector => selector === '[data-cloud-storage]' ? panels : [],
     document:{createElement:node}, i18n:{unbind(){}}, t:text=>text,
-    uiText(node,text){node.textContent=text;}, api:async()=>data,
+    uiText(node,text){node.textContent=text;}, uiAttr(node,key,text){node.setAttribute(key,text);}, api:async()=>data,
     loadRemoteStorage:async()=>{cloudLoads++;}, loadBackup:async()=>{cloudLoads++;}, loadRestorePoints:async()=>{cloudLoads++;}, showNotice(){}};
   vm.createContext(context); vm.runInContext(functions,context);
   return {context,nodes,panels,cloudLoads:()=>cloudLoads};
@@ -70,4 +72,26 @@ test('a late status response cannot hide a newer active configuration', async()=
   await older;
   assert.equal(context.state.cloudConfiguration.enabled,true);
   assert.ok(panels.every(p=>!p.classList.contains('hidden')));
+});
+
+test('custom image directories can select a model type, persist it and remove stale selections', async()=>{
+  const data={enabled:true,imported:true,remotes:[],revision:'r',selection:{image_sources:['cloud:bucket/custom'],concept_source:'cloud:llm',image_source_types:{'cloud:bucket/custom':'lora'}}};
+  const {context,nodes}=setup(data);
+  context.renderCloudConfiguration(data);
+  let row=nodes['#cloudImageSources'].children[0];
+  assert.equal(row.children[1].value,'lora');
+  row.children[1].value='checkpoint'; row.children[1].listeners.change();
+  assert.equal(context.state.cloudConfiguration.selection.image_source_types['cloud:bucket/custom'],'checkpoint');
+  let payload;
+  context.api=async(path,options)=>{payload=JSON.parse(options.body);return data;};
+  nodes['#configureCloudButton'].setAttribute=()=>{};
+  await context.saveCloudConfiguration();
+  assert.equal(payload.image_source_types['cloud:bucket/custom'],'checkpoint');
+  row=nodes['#cloudImageSources'].children[0];
+  row.children[1].value=''; row.children[1].listeners.change();
+  assert.equal(Object.keys(context.state.cloudConfiguration.selection.image_source_types).length,0);
+  row.children[1].value='vae'; row.children[1].listeners.change();
+  row.children[2].listeners.click();
+  assert.equal(context.state.cloudConfiguration.selection.image_sources.length,0);
+  assert.equal(Object.keys(context.state.cloudConfiguration.selection.image_source_types).length,0);
 });

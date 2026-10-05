@@ -37,6 +37,8 @@ class FakeRclone:
                 output = "flat.safetensors\nSDXL/illustration.safetensors\n"
             elif source.endswith("/manifests"):
                 output = "registry.ollama.ai/library/gemma3test/latest\n"
+            elif source.endswith("/models_cold"):
+                output = "checkpoints/Hero.SAFETENSORS\ndiffusion_models/flux.safetensors\nloras/style.safetensors\nvae/flat.safetensors\nvae/SDXL/illustration.safetensors\n"
             else:
                 output = ""
             return subprocess.CompletedProcess(command, 0, output, "")
@@ -218,6 +220,52 @@ class R2StorageTests(unittest.TestCase):
             started = manager.start_pull("lora", lora["id"])
             self.assertEqual(self.wait_for_job(manager, started["job_id"])["status"], "completed")
             self.assertEqual((root / "image/loras/styles/hero.safetensors").read_bytes(), b"model")
+
+    @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
+    def test_image_library_discovers_only_existing_categories(self, _which):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = "r2-assets:comfyui-assets/models_cold"
+            fake = TreeRclone({source + "/checkpoints/hero.safetensors": b"model",
+                               source + "/loras/styles/hero.safetensors": b"lora"})
+            manager = self.make_manager(root, fake)
+            data = manager.resources()
+            self.assertEqual(data["paths"]["discovered"]["checkpoint"], [source + "/checkpoints"])
+            self.assertEqual(data["paths"]["discovered"]["vae"], [])
+            self.assertEqual(data["paths"]["unclassified_image_sources"], [])
+
+    @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
+    def test_category_sources_scan_directly_and_download_nested_models(self, _which):
+        for kind, category in (("checkpoint", "checkpoints"), ("lora", "loras"),
+                               ("vae", "vae"), ("diffusion_model", "diffusion_models")):
+            with self.subTest(category=category), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                source = "r2-assets:comfyui-assets/models_cold/" + category
+                fake = TreeRclone({source + "/nested/model.safetensors": b"model"})
+                manager = self.make_manager(root, fake)
+                manager.settings = replace(manager.settings, image_remote=source)
+                manager.paths.settings = manager.settings
+                data = manager.resources()
+                self.assertEqual(data["paths"]["discovered"][kind], [source])
+                item = data["image"][kind][0]
+                self.assertEqual(item["source"], source)
+                started = manager.start_pull(kind, item["id"])
+                self.assertEqual(self.wait_for_job(manager, started["job_id"])["status"], "completed")
+                self.assertEqual((root / "image" / category / "nested/model.safetensors").read_bytes(), b"model")
+
+    @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
+    def test_custom_source_requires_type_without_inventing_category_paths(self, _which):
+        with tempfile.TemporaryDirectory() as directory:
+            source = "r2-assets:comfyui-assets/models_cold"
+            manager = self.make_manager(Path(directory), TreeRclone({source + "/hero.safetensors": b"model"}))
+            data = manager.resources()
+            self.assertTrue(all(not paths for paths in data["paths"]["discovered"].values()))
+            self.assertEqual(data["paths"]["unclassified_image_sources"], [source])
+            manager.paths.save({"image_source_types": {source: "checkpoint"}})
+            data = manager.resources()
+            self.assertEqual(data["paths"]["discovered"]["checkpoint"], [source])
+            self.assertEqual(data["image"]["checkpoint"][0]["name"], "hero.safetensors")
+            self.assertEqual(data["paths"]["unclassified_image_sources"], [])
 
     def make_manager(self, root: Path, fake: FakeRclone) -> R2StorageManager:
         config_file = root / "rclone.conf"

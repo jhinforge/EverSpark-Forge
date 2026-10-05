@@ -542,6 +542,9 @@ input[type="file"]::file-selector-button { margin-right: var(--spacing-md); padd
 .cloud-directory-list { display: flex; gap: var(--spacing-sm); flex-wrap: wrap; max-height: 240px; overflow: auto; padding: var(--spacing-md) 0; }
 .cloud-browser-path { overflow-wrap: anywhere; color: var(--muted); }
 .cloud-source-list > div { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); margin: var(--spacing-sm) 0; overflow-wrap: anywhere; }
+.cloud-source-list > div { flex-wrap: wrap; }
+.cloud-source-list > div > span { flex: 1 1 220px; min-width: 0; }
+.cloud-source-list select { max-width: 100%; padding: var(--spacing-sm); border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel-soft); }
 #cloudConfigurationMessage { color: var(--muted); overflow-wrap: anywhere; }
 
 #cloudConfigurationEditor input[type="file"] { max-width: 100%; color: var(--muted); }

@@ -129,6 +129,30 @@ class RemoteModelTests(unittest.TestCase):
         self.assertEqual(config_file.stat().st_mode & 0o777, 0o600)
         self.assertNotIn("private-fixture", json.dumps(done))
 
+    def test_custom_source_type_survives_host_payload_and_node_download(self):
+        conf = self.root / "rclone.conf"
+        conf.write_text("[cloud]\ntype = s3\n")
+        self.config["storage"] = {"backend": "rclone", "rclone": {
+            "enabled": True, "config_file": str(conf),
+            "image_remote": "cloud:custom-images", "concept_remote": "cloud:concept"}}
+        service = StorageService(self.config)
+        service.storage.paths.save({"image_source_types": {"cloud:custom-images": "lora"}})
+        cloud = service.remote.cloud_config()
+        models = self.make_worker()
+        real_manager = worker.R2StorageManager
+        def manager(config):
+            with patch("r2_manager.REPO_ROOT", self.root):
+                return real_manager(config, run=TreeRclone({
+                    "cloud:custom-images/nested/girl.safetensors": b"custom-model"}))
+        with patch.object(worker, "STATE", self.root / "service"), \
+                patch.object(worker, "R2StorageManager", side_effect=manager), \
+                patch("r2_manager.shutil.which", return_value="/usr/bin/rclone"):
+            job = models.dispatch("models_pull_start", {"kind": "lora",
+                "name": "cloud:custom-images::nested/girl.safetensors", "cloud": cloud}, "image")
+            done = self.wait(models, "models_pull_job", job["job_id"], "image")
+        self.assertEqual(done["status"], "completed", done)
+        self.assertEqual((self.root / "Data/Models/ImageForge/loras/nested/girl.safetensors").read_bytes(), b"custom-model")
+
     def test_storage_http_uses_private_token_and_background_jobs_outlive_the_request(self):
         models = self.make_worker()
         models.downloads._open_url = FakeOpener(b"http-model", "http.safetensors")

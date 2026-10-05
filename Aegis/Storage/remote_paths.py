@@ -32,6 +32,7 @@ def safe_relative(name: str) -> bool:
 class RemotePathMap:
     def __init__(self, settings: StorageSettings):
         self.settings = settings
+        self.unclassified_sources = []
         self.path = (settings.config_file.with_name("model_paths.json") if settings.config_file
                      else None)
 
@@ -43,7 +44,7 @@ class RemotePathMap:
         return {}
 
     def save(self, value: dict[str, Any]) -> dict[str, Any]:
-        if not isinstance(value, dict) or set(value) - {"image_manual", "concept_manual", "image_upload", "concept_upload", "backup_remote"}:
+        if not isinstance(value, dict) or set(value) - {"image_manual", "concept_manual", "image_upload", "concept_upload", "backup_remote", "image_source_types"}:
             raise StorageError("Invalid remote mapping")
         images = value.get("image_manual", {})
         uploads = value.get("image_upload", {})
@@ -53,6 +54,14 @@ class RemotePathMap:
                 or not isinstance(concept, list)):
             raise StorageError("Invalid model directory mapping")
         normalized = {"image_manual": {}, "concept_manual": [], "image_upload": {}}
+        source_types = value.get("image_source_types", {})
+        if not isinstance(source_types, dict) or len(source_types) > 8:
+            raise StorageError("Invalid image source types")
+        normalized["image_source_types"] = {}
+        for source, kind in source_types.items():
+            if not isinstance(kind, str) or kind not in IMAGE_KINDS:
+                raise StorageError("Invalid image source type")
+            normalized["image_source_types"][safe_remote(source)] = kind
         for kind, roots in images.items():
             if not isinstance(roots, list) or len(roots) > 10:
                 raise StorageError("Specify up to 10 paths per model type")
@@ -123,11 +132,24 @@ class RemotePathMap:
     def image_roots(self, client) -> dict[str, list[str]]:
         roots: dict[str, list[str]] = {kind: [] for kind in IMAGE_KINDS}
         sources = self.sources(self.settings.image_remote)
+        mapping = self.read()
+        source_types = mapping.get("image_source_types", {})
+        self.unclassified_sources = []
         for source in sources:
+            kind = source_types.get(source)
+            if kind is None:
+                leaf = source.split(":", 1)[1].rstrip("/").rsplit("/", 1)[-1].casefold()
+                kind = next((key for key, directory in IMAGE_KINDS.items() if leaf == directory.casefold()), None)
+            if kind in roots:
+                # This source already IS a category. Never append that category again.
+                if source not in roots[kind]:
+                    roots[kind].append(source)
+                continue
             # One bounded listing per source; never traverse the entire bucket.
             paths = client.list_files(source, recursive=True, max_depth=7)
             if len(paths) > 20000:
                 raise StorageError("Remote model scan exceeded 20000 files; specify directories manually")
+            classified = False
             for path in paths:
                 if not safe_relative(path):
                     continue
@@ -135,18 +157,16 @@ class RemotePathMap:
                 for index, segment in enumerate(parts[:-1]):
                     for kind, directory in IMAGE_KINDS.items():
                         if segment.casefold() == directory:
+                            classified = True
                             root = f"{source}/{'/'.join(parts[:index + 1])}"
                             if root not in roots[kind]:
                                 roots[kind].append(root)
-        for kind, values in self.read().get("image_manual", {}).items():
+            if not classified:
+                self.unclassified_sources.append(source)
+        for kind, values in mapping.get("image_manual", {}).items():
             for root in values:
                 if root not in roots[kind]:
                     roots[kind].append(root)
-        # Retain the old direct-category layout for empty directories. A path
-        # seen in the listing or supplied manually wins over guessed paths.
-        for kind, directory in IMAGE_KINDS.items():
-            if not roots[kind]:
-                roots[kind].extend(f"{source}/{directory}" for source in sources)
         return roots
 
     def concept_roots(self, client) -> tuple[list[str], list[str]]:

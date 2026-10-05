@@ -103,6 +103,8 @@ class BackupUploadTests(unittest.TestCase):
                 manager.settings = replace(manager.settings, image_root=root / "image")
                 manager.client = FakeRclone()
                 name = "models/image/loras/fresh.safetensors"
+                manager.client.remote.update({"r2:bucket/cold/loras/.keep": b"",
+                                              "r2:bucket/live/loras/.keep": b""})
                 targets = manager._targets(name)
                 self.assertEqual(targets, ["r2:bucket/cold/loras/fresh.safetensors",
                                            "r2:bucket/live/loras/fresh.safetensors"])
@@ -165,6 +167,7 @@ class BackupUploadTests(unittest.TestCase):
                 manager = BackupManager(config)
                 manager.settings = replace(manager.settings, image_root=root / "image")
                 fake = FakeRclone()
+                fake.remote.update({"r:images/checkpoints/.keep": b"", "r:images/vae/.keep": b""})
                 manager.client = fake
                 names = ["models/image/checkpoints/new.safetensors", "models/image/vae/SDXL/custom.safetensors", "models/concept/new.gguf", "outputs/sub/image.png", "subjects/subject-1/subject.json"]
                 job = manager.start(names, memory=True)
