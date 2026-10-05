@@ -7,11 +7,13 @@ import unittest
 import io
 import zipfile
 from unittest.mock import patch
+import subprocess
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from Aegis.Storage.node_media_access import ImageServer, signature
+from Aegis.Storage import node_media_access as media
 from Aegis.Storage.output_resources import OutputResources
 
 
@@ -138,6 +140,60 @@ class MediaAccessTests(unittest.TestCase):
         with urlopen(newer["url"]) as source:
             with zipfile.ZipFile(io.BytesIO(source.read())) as archive:
                 self.assertEqual(archive.read("EverSpark-Outputs/new.png"), b"new-output")
+
+    def test_local_signing_and_health_use_loopback_but_urls_advertise_overlay(self):
+        self.server.public_address = ("100.64.0.10", 18781)
+        endpoint = {"host": "100.64.0.10", "port": 18781,
+                    "local_host": "127.0.0.1", "local_port": self.server.server_port,
+                    "token": "private-key"}
+        self.assertEqual(media._request(endpoint, "/health")["version"], media.VERSION)
+        result = media._request(endpoint, "/sign", [{"filename": "render.png"}])
+        self.assertTrue(result["images"][0]["url"].startswith("http://100.64.0.10:18781/file?"))
+        job = media._request(endpoint, "/archives", {})
+        deadline = time.monotonic() + 3
+        while job["status"] == "preparing" and time.monotonic() < deadline:
+            time.sleep(.01)
+            job = media._request(endpoint, "/archives", {"job_id": job["job_id"]})
+        self.assertEqual(job["status"], "ready")
+        self.assertTrue(job["url"].startswith("http://100.64.0.10:18781/archive?"))
+
+    def test_forwarder_preserves_existing_ports_and_replaces_only_owned_stale_route(self):
+        old = self.root / "endpoint.json"
+        old.write_text(json.dumps({"port": 18781, "local_port": 23456}))
+        reserved = str(self.server.server_port)
+        routes = {reserved: {"TCPForward": "127.0.0.1:8080"},
+                  "18781": {"TCPForward": "127.0.0.1:23456"}}
+        chosen = 65535 if self.server.server_port != 65535 else 65534
+        def run(args, **kwargs):
+            output = json.dumps({"TCP": routes}) if args[2] == "status" else ""
+            return subprocess.CompletedProcess(args, 0, output, "")
+        with patch.object(media, "ENDPOINT", old), patch.object(media.subprocess, "run", side_effect=run) as calls, \
+                patch.object(media.secrets, "randbelow", return_value=chosen - 49152):
+            port = media._publish(self.server, "100.64.0.10")
+        self.assertEqual(port, chosen)
+        args = [call.args[0] for call in calls.call_args_list]
+        self.assertIn(["tailscale", "serve", "--bg", "--tcp=18781", "off"], args)
+        self.assertIn(["tailscale", "serve", "--bg", f"--tcp={chosen}",
+                       f"tcp://127.0.0.1:{self.server.server_port}"], args)
+        self.assertFalse(any(call[-1] == "off" and f"--tcp={reserved}" in call for call in args))
+
+    def test_service_startup_never_binds_the_userspace_overlay_address(self):
+        for forge in ("image", "audio"):
+            with self.subTest(forge=forge), patch.object(media, "ROOT", self.root), \
+                    patch.object(media, "STATE", self.root), patch.object(media, "ENDPOINT", self.root / "unused.json"), \
+                    patch.object(media, "load_config", return_value={forge + "_forge": {"output_directory": str(self.root)}}), \
+                    patch.object(media, "_publish", return_value=18781), \
+                    patch.object(media.ImageServer, "serve_forever"):
+                media.serve("100.64.0.10", forge)
+                value = json.loads(media.ENDPOINT.read_text())
+                self.assertEqual(value["host"], "100.64.0.10")
+                self.assertEqual(value["local_host"], "127.0.0.1")
+                self.assertEqual(value["port"], 18781)
+
+    def test_forwarder_failure_reports_cli_diagnostic(self):
+        with patch.object(media.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "", "permission denied")):
+            with self.assertRaisesRegex(RuntimeError, "permission denied"):
+                media._forward(18781, "tcp://127.0.0.1:12345")
 
     def test_empty_and_oversized_archives_fail_without_retaining_partial_files(self):
         for max_bytes in (0, 1):

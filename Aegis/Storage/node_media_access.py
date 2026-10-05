@@ -21,7 +21,7 @@ from Archon.Vault.runtime_config import load_config
 
 STATE = ROOT / "Data/Runtime/media-access/image"
 ENDPOINT = STATE / "endpoint.json"
-VERSION = 2
+VERSION = 3
 
 
 def signature(key, filename, subfolder, expires):
@@ -38,6 +38,7 @@ class ImageServer(ThreadingHTTPServer):
         self.archives = OutputArchives(outputs, archive_directory)
         self.cleanup_stop = threading.Event()
         super().__init__(address, ImageHandler)
+        self.public_address = self.server_address
         def cleanup():
             while not self.cleanup_stop.wait(60):
                 try:
@@ -80,7 +81,7 @@ class ImageHandler(BaseHTTPRequestHandler):
                     raise ValueError("Invalid archive request")
                 job = self.server.archives.request(payload.get("job_id", ""))
                 if job["status"] == "ready":
-                    host, port = self.server.server_address
+                    host, port = self.server.public_address
                     query = urlencode({"filename": job["job_id"], "expires": job["expires"],
                         "signature": signature(self.server.key, job["job_id"], "archive", job["expires"])})
                     job["url"] = f"http://{host}:{port}/archive?{query}"
@@ -100,7 +101,7 @@ class ImageHandler(BaseHTTPRequestHandler):
                 raise ValueError("Invalid request")
             values = []
             expires = int(time.time()) + 3600
-            host, port = self.server.server_address
+            host, port = self.server.public_address
             for image in images:
                 if not isinstance(image, dict) or image.get("type", "output") != "output":
                     raise ValueError("Invalid image")
@@ -204,7 +205,9 @@ class ImageHandler(BaseHTTPRequestHandler):
 
 
 def _request(endpoint, path, images=None):
-    url = f"http://{endpoint['host']}:{endpoint['port']}{path}"
+    host = endpoint.get("local_host", endpoint["host"])
+    port = endpoint.get("local_port", endpoint["port"])
+    url = f"http://{host}:{port}{path}"
     body = json.dumps(images, ensure_ascii=False).encode() if images is not None else None
     request = Request(url, data=body, headers={"Authorization": "Bearer " + endpoint["token"],
                                              "Content-Type": "application/json"})
@@ -236,18 +239,20 @@ def endpoint(forge="image"):
         current = _existing()
         if current:
             return current
-        # Only bind the private overlay address, never 0.0.0.0/public interfaces.
+        # The overlay IP is advertised by tailscaled; userspace Pods cannot bind it.
         done = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=3, check=True)
         host = done.stdout.strip().splitlines()[0]
         import ipaddress
         if ipaddress.ip_address(host) not in ipaddress.ip_network("100.64.0.0/10"):
             raise ValueError("Private Node address unavailable")
         with (STATE / "service.log").open("ab") as log:
-            subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve", host, forge],
+            child = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve", host, forge],
                              cwd=ROOT, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                              start_new_session=True)
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + 40
         while time.monotonic() < deadline:
+            if child.poll() is not None:
+                raise RuntimeError(f"{forge.title()} URL service failed to start; inspect {STATE / 'service.log'}")
             current = _existing()
             if current:
                 return current
@@ -271,6 +276,44 @@ def archive_job(payload, forge="image"):
     return _request(endpoint(forge), "/archives", payload)
 
 
+def _serve_status():
+    result = subprocess.run(["tailscale", "serve", "status", "--json"],
+                            capture_output=True, text=True, timeout=10)
+    if result.returncode:
+        raise RuntimeError("Tailscale Serve status failed: " + (result.stderr or result.stdout)[-2000:])
+    value = json.loads(result.stdout or "{}") or {}
+    if not isinstance(value, dict):
+        raise ValueError("Invalid Tailscale Serve status")
+    return value.get("TCP", {}) or {}
+
+
+def _forward(port, target=None):
+    args = ["tailscale", "serve", "--bg", f"--tcp={port}", target or "off"]
+    result = subprocess.run(args, capture_output=True, text=True, timeout=10)
+    if result.returncode:
+        raise RuntimeError("Tailscale media forwarding failed: " + (result.stderr or result.stdout)[-2000:])
+
+
+def _publish(server, host):
+    routes = _serve_status()
+    # Remove only a stale forwarder recorded as ours, never reset other services.
+    try:
+        previous = json.loads(ENDPOINT.read_text())
+        old_port = str(previous["port"])
+        old_target = f"127.0.0.1:{previous['local_port']}"
+        if routes.get(old_port, {}).get("TCPForward") == old_target:
+            _forward(int(old_port))
+            routes.pop(old_port, None)
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    port = server.server_port
+    while str(port) in routes:
+        port = 49152 + secrets.randbelow(16384)
+    _forward(port, f"tcp://127.0.0.1:{server.server_port}")
+    server.public_address = (host, port)
+    return port
+
+
 def serve(host, forge):
     global STATE, ENDPOINT
     if forge not in {"image", "audio"}:
@@ -281,8 +324,15 @@ def serve(host, forge):
     config = load_config()
     outputs = OutputResources(config[forge + "_forge"]["output_directory"], {".wav"} if forge == "audio" else {".png", ".jpg", ".jpeg", ".webp"})
     key = secrets.token_hex(32)
-    server = ImageServer((host, 0), outputs, key, STATE / "archives")
-    data = {"host": host, "port": server.server_port, "pid": os.getpid(), "token": key}
+    # Always use loopback, compatible with both kernel and userspace Tailscale.
+    server = ImageServer(("127.0.0.1", 0), outputs, key, STATE / "archives")
+    try:
+        port = _publish(server, host)
+    except BaseException:
+        server.server_close()
+        raise
+    data = {"host": host, "port": port, "local_host": "127.0.0.1",
+            "local_port": server.server_port, "pid": os.getpid(), "token": key}
     temporary = ENDPOINT.with_suffix(".tmp")
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as file:
