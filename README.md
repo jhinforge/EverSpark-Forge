@@ -1,5 +1,7 @@
 # EverSpark Forge · v0.1
 
+⚠️ # This document describes an earlier architecture and is not authoritative for the current distributed architecture.
+
 **English** · [中文](README.zh-CN.md)
 
 EverSpark Forge treats compute environments as disposable, while preserving workflows, configuration, and user-owned data as persistent state.
