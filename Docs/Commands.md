@@ -1,8 +1,19 @@
-# EverSpark Forge command reference (v0.1)
+# Command reference
 
-This reference describes the current `./everspark` entry point, its options, and their effects. Run these commands from the **repository root on cloud Linux**. A successful `./everspark setup` installs the unprefixed `everspark` command automatically; `setup --plan` does not. Running the stack locally on Windows has not been verified.
+## Windows distributed host
 
-For deployment steps see [Getting started](Getting-Started.md), for private files see [Configuration](Configuration.md), and for data locations see [Runtime and data](Runtime-and-Data.md). Run `./everspark help` for the top-level list. Square brackets indicate optional arguments; angle brackets are placeholders to replace, not characters to type literally.
+ZIP clients start by double-clicking `EverSpark.exe`; no Linux installation commands are required. From a source checkout root:
+
+```powershell
+.\everspark.cmd archon start
+.\everspark.cmd configure --from D:\private-config
+```
+
+`archon start` runs the local control backend and Portal without installing GPU Forges on Windows. Default ports are 8765/8780; Ctrl+C stops it. `configure` imports private configuration; a complete environment file replaces `.env`. The Windows entry does not implement every Linux command below.
+
+## Linux managed single-machine and development commands
+
+Run below from a Linux checkout root. These remain for single-machine operation and development, not mandatory distributed Pod deployment steps. Manage remote Forges through Compute. Use `./everspark help` and subcommand help for actual options. `./everspark archon start` can run the control entry, but the built-in Vast account flow currently relies on Windows Credential Manager.
 
 ## 1. Initialization, configuration, and installation
 

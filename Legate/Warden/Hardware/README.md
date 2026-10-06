@@ -7,8 +7,11 @@ NVIDIA GPU discovery and optional module-to-GPU assignment.
   `cu126`/`cu128` compatibility profile. Driver capability takes precedence
   over the base-image CUDA toolkit; users do not select wheel families.
 - `gpu_assignment.sh` leaves zero- and one-GPU hosts unchanged.
-- On multi-GPU hosts, Image Forge defaults to GPU 0 and Concept Forge to GPU 1.
+- For the legacy managed single-machine policy, on multi-GPU hosts, Image Forge defaults to GPU 0 and Concept Forge to GPU 1.
 - `IMAGE_FORGE_GPU_INDEX` and `CONCEPT_FORGE_GPU_INDEX` override those defaults.
 
 The existing `core_*` function names remain temporarily available while the
 execution modules are migrated from the source repository.
+
+Distributed Forge deployment has its own selected-Node context; these defaults
+do not allocate GPUs globally across the tailnet.

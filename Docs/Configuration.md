@@ -1,142 +1,44 @@
-# Configure EverSpark Forge (v0.1)
+# Configuration
 
-This guide covers the default local mode, private configuration, models, remote storage, and network access. See [Getting started](Getting-Started.md) for installation. “Local” means on the machine running EverSpark, including when that machine is in the cloud.
+Cloud storage is disabled by default. The Windows control host does not need GPU models installed locally. Configure Node connectivity using [Getting started](Getting-Started.md).
 
-## 1. Without configuration files
+## Model services
 
-Run `./everspark setup` and `./everspark start` from source. Storage stays local, services bind to localhost, and R2/rclone and Cloudflare Tunnel remain disabled. Models, outputs, memory, and runtime files live under the Git-ignored `Data/` directory. The WebUI **Storage** page can download compatible models from public direct URLs without remote storage. For cloud access, use SSH forwarding as printed by `./everspark access`, or run `./everspark share` after WebUI starts for a temporary public link. The latter needs no SSH key, `.env`, Cloudflare account, or Named Tunnel credentials, but exposes a WebUI with no login protection. Close it with `./everspark share stop`. Neither option requires the Named Tunnel below; see [Getting started](Getting-Started.md).
+Under **Settings → Model services**, enter a name, the provider's API base URL (usually ending in `/v1`), exact model ID and API Key. Test and save, then select the connection in Creation. The system does not enumerate every remote model automatically.
 
-## 2. Private environment files
+The adapter uses OpenAI Compatible Chat Completions. Selected upstream errors can trigger response-mode retries; authentication failures do not. The host calls APIs directly and does not forward keys to the Concept Node. Connections persist in `Data/Configuration/ConceptForge/connections.json`; saved keys are not returned by the API. For Ollama, choose a deployed Concept Node instead.
 
-`env.txt` and `.env` use **exactly the same `KEY=VALUE` format**. The `env.txt` filename makes it convenient to view, save, and upload from your own computer. `./everspark configure` imports it as the repository root `.env`. If both names exist in the import directory, their parsed settings must agree; normally keep one.
+## Cloud model library
 
-Use `.env.example` as a field reference; **do not import the entire example unchanged**. Include only settings you need. A partial set of Cloudflare fields, even for an integration you do not intend to use, can fail validation.
+1. Open **Settings → Cloud storage configuration → Enable cloud storage**.
+2. Choose your `rclone.conf` and **Import connection**. No `.env` or Cloudflare credential is required for this UI workflow.
+3. If rclone cannot be found, enter its actual path, for example `C:\rclone\rclone.exe`. It is not bundled in the client.
+4. Browse a connection and choose **Use for image models** or **Use for Concept models**. Images support multiple sources.
+5. Select at least one model directory, then **Validate and enable**. The two roles are independent; unconfigured roles are not scanned. An existing Concept selection can be removed.
+6. Return to **Resources**, scan and select models, then pull to the corresponding Forge Node. Transfers execute on the Node rather than staging models on the host.
 
-For example, to provide SSH details when the cloud platform does not supply them:
+An image path may be a library root or a category such as checkpoints, loras or vae. Choose the model type for custom category names. Do not assume another `checkpoints` level is always appended. Native Ollama directories normally contain `manifests` and `blobs`; independent GGUF files are also discoverable.
 
-```dotenv
-EVERSPARK_SSH_HOST=example.com
-EVERSPARK_SSH_PORT=22
-EVERSPARK_SSH_USER=root
-```
+Example structures are `r2-assets:comfyui-assets/models_cold` and `r2-assets:ollama-forge/.ollama/models`. Substitute your own remotes and paths. Multiple image sources create a read-only union; uploads require a real writable destination.
 
-Replace these with your actual connection details. Quote values containing spaces correctly. Do not define the same key twice in a file or commit passwords, tokens, and private remote paths.
+Backup destinations differ from model sources. Set `EVERSPARK_BACKUP_REMOTE` explicitly if needed; otherwise the configured image or Concept source determines the backup prefix. Scanning is not automatic backup, and a readable source need not be writable.
 
-## 3. Import and update
+## Private configuration and source import
 
-Place `env.txt` **or** `.env` in `Archon/Vault/Import/`, then run:
-
-```bash
-./everspark configure
-./everspark setup --plan
-./everspark setup
-./everspark doctor
-./everspark start
-```
-
-Uploaded files remain in the inbox. The root `.env` is ignored by Git; required credentials are copied into `Data/Configuration/` with permissions restricted to the current user. To update settings, upload the **complete** environment file and rerun `configure`: it replaces the root `.env` rather than merging new keys into old values. Use `--from <directory>` for another source directory or `--env <file>` to explicitly select one of two conflicting environment files. Restart affected running services with `./everspark restart` after changing their configuration.
-
-See the [command reference for initialization and configuration](Commands.md#1-initialization-configuration-and-installation) for options and effects of `configure`, `setup`, and `doctor`.
-
-## 4. Models, workflows, and outputs
-
-**Models are not part of the source release.** Default setup downloads starter models. Later you can download a checkpoint/diffusion model, LoRA, VAE, or Concept Forge GGUF by public direct URL in separate **Storage** cards. Enable rclone only if you need a remote model library. Select installed resources in Forge instead of listing each checkpoint or LoRA in your environment file.
-
-| Content | Default location |
-| --- | --- |
-| Image models | Category directories under `Data/Models/ImageForge/` |
-| Concept Forge models | `Data/Models/ConceptForge/Ollama/` |
-| Outputs | `Data/Outputs/`; Gallery exports the entire directory as a ZIP |
-| Workflows | API Format JSON and adjacent manifests in `Legate/Forge/ImageForge/Workflows/` |
-
-ComfyUI is the default drawing tool. In Forge, select the optional Diffusers plugin, click **Install tool**, then enable it if prompted. **Set as default** saves your choice without an `.env` edit. Diffusers currently accepts SDXL single-file checkpoints with compatible LoRA and VAE files. ComfyUI uses registered API Format workflows; advanced users can point `EVERSPARK_WORKFLOW_TEMPLATE` to another one. A regular ComfyUI interface workflow is not directly executable as an API Format file. See [Image Forge](../Legate/Forge/ImageForge/README.md) for plugin and node requirements.
-
-For a hosted language model, open **Model services** in the WebUI sidebar. Enter a name, API base URL ending in `/v1`, API Key, and the provider's exact model ID; test the connection, then select its service and model in Forge. You can also set the default used for subject revisions. The OpenAI Compatible adapter calls Chat Completions (`/chat/completions`) without streaming by default and retries selected HTTP errors with streaming, collecting the text before continuing. Existing streaming preferences are preserved. Existing JSON-mode connections retry without `response_format` if the provider rejects it. It does not discover remote model IDs. Connections and keys are kept in `Data/Configuration/ConceptForge/connections.json` with owner-only permissions; the WebUI API does not return stored keys. A hosted provider receives the prompts sent to that service. Ollama remains available locally.
-
-DeepSeek uses the OpenAI-format Chat Completions adapter. **Fill DeepSeek settings** fills the currently documented `https://api.deepseek.com/v1` base and `deepseek-flash` model. Enter your own official API Key, test, save, then select DeepSeek in Forge. Response mode is handled automatically; verify current model IDs in DeepSeek documentation when configuring later versions.
-
-Character subjects, memory, and outputs are runtime data: save what you need before replacing a cloud machine. Even without rclone, use **Storage → Character and Memory ZIP** to download character JSON and Memory SQLite together; choose the saved ZIP and click **Validate and restore** to import it, then restart EverSpark. Save outputs, models, and private settings, including model service connections, separately. A model source URL never enables automatic backups; see [Runtime and data](Runtime-and-Data.md).
-
-## 5. rclone remote storage (optional)
-
-Place your existing `rclone.conf` and `env.txt` in `Archon/Vault/Import/`. Explicitly enable the backend and set both model scanning roots:
-
-```dotenv
-EVERSPARK_STORAGE_BACKEND=rclone
-IMAGE_FORGE_RCLONE_REMOTE=myremote:path/to/image-models
-CONCEPT_FORGE_RCLONE_REMOTE=myremote:path/to/ollama-models
-```
-
-The `myremote:` name must match your `rclone.conf`; replace all example paths. `configure` imports the file to `Data/Configuration/rclone/rclone.conf` and sets `RCLONE_CONFIG` in the generated `.env`. Importing `rclone.conf` alone **does not enable remote storage**. With the backend explicitly enabled, setup installs rclone on supported apt-based Linux systems.
-
-These remote addresses are **scanning roots**. Storage discovers model categories below them; save manual paths and writable upload destinations in the UI for unusual layouts. Read-only or aggregate remotes can be scanned, but uploads require a real writable destination.
-
-To choose a writable destination for outputs and character backups, optionally add:
-
-```dotenv
-EVERSPARK_BACKUP_REMOTE=myremote:path/to/everspark-backups
-```
-
-Otherwise the system attempts an `everspark-backups` prefix in the first image model source bucket. Outputs synchronize as a whole folder; character JSON and SQLite are uploaded and restored in verified batch snapshots. Uploads do not delete existing remote files. After importing and installing, run `./everspark doctor` to check remote access.
-
-## 6. Cloudflare Named Tunnel (optional)
-
-The following persistent entry point uses your own hostname and credentials. The temporary `./everspark share` link does not import these files and does not start automatically with `./everspark start`.
-
-For an existing Named Tunnel, import `<CF_TUNNEL_UUID>.json` with `env.txt` and complete settings:
-
-```dotenv
-EVERSPARK_NETWORK_BACKEND=cloudflare
-CF_TUNNEL_UUID=your-tunnel-uuid
-CF_HOSTNAME=your.domain.example
-CF_LOCAL_PORT=8780
-```
-
-Use your real UUID and hostname. The credential JSON `TunnelID` must match. `CF_LOCAL_PORT` must equal the WebUI listen port (default `8780`). The importer validates and copies credentials into `Data/Configuration/cloudflare/`; the launcher then manages the Tunnel. Omit `CF_*` fields when not using it.
-
-## 7. Source and personal data
-
-| Suitable for source control | Keep private or back up separately |
-| --- | --- |
-| Code, public examples, shareable workflows | `.env`, `env.txt`, `rclone.conf`, Tunnel credentials |
-| Public configuration field descriptions | Models, outputs, subjects, and memory under `Data/` |
-
-`.gitignore` excludes `.env`, private imports under `Archon/Vault/Import/`, and `Data/`. Ignored files are not backups; do not force-add them to a public repository. See [`Archon/Vault/README.md`](../Archon/Vault/README.md) for importer details and [`.env.example`](../.env.example) for optional fields.
-
-### Configure cloud storage in the WebUI
-
-Storage always shows direct URL model downloads and local character/Memory ZIP export and restore. Cloud operations appear after configuration is enabled.
-
-1. Click **Enable cloud storage**, select your local `rclone.conf`, and click **Import connections**. No `env.txt` or Cloudflare UUID credential is required.
-2. Select an imported connection and click **Browse connection**. Navigate to a model root and select **Use for image models** or **Use for Concept models**. Image models can use multiple roots.
-3. If rclone is missing, expand **rclone executable** and supply its path, such as `C:\rclone\rclone.exe`. Windows also checks this default location automatically.
-4. Click **Validate and enable**. EverSpark checks directory access, saves private configuration and updates the current runtime immediately. Cloud model scanning, pulling and backups become visible.
-
-One image source uses its original remote directly; multiple sources generate a read-only union. EverSpark fills the storage fields in `.env` while preserving other settings and original rclone connections. Changing model roots clears the corresponding old manual source mappings so models are rediscovered. Advanced upload and backup mappings remain available under **Advanced directory mappings**.
-
-Use **Manage cloud configuration** to edit settings. Imports remain drafts until validated and saved; a failed connection or save retains the active configuration. Wait for active tasks, scans and local backup operations before saving. Private files live under `Data/Configuration/rclone/`; API responses never return credential contents.
-
-The host still needs rclone for browsing and scanning. Model downloads run on the selected Forge nodes. Cloudflare named-tunnel credentials belong to the separate optional network integration.
-
-### Windows command-line import (optional)
-
-The existing importer remains supported; the WebUI flow above does not require these handwritten fields.
-
-
-
-Place `env.txt` and `rclone.conf` in `Archon/Vault/Import/`. Set `EVERSPARK_STORAGE_BACKEND=rclone` and the real `IMAGE_FORGE_RCLONE_REMOTE` and `CONCEPT_FORGE_RCLONE_REMOTE` paths in `env.txt`. If rclone is not on PATH, also set:
-
-```dotenv
-RCLONE_BIN=C:\rclone\rclone.exe
-```
-
-From PowerShell in the repository root:
+`.env` and `env.txt` share the same `KEY=VALUE` format. Place the file and any required `rclone.conf` in `Archon/Vault/Import/`, then run at the repository root:
 
 ```powershell
 .\everspark.cmd configure
-.\everspark.cmd archon start
 ```
 
-The importer creates the root `.env` and imports rclone credentials. The Windows launcher reads storage settings from `.env`. Stop the existing service and start it again after configuration changes. Existing process environment variables take precedence; use a new terminal if an earlier session contains stale overrides.
+Linux uses `./everspark configure`. Import preserves the originals and writes private settings. A complete environment import replaces the root `.env`; it does not append keys. Use `--from DIRECTORY` or `--env FILE` to select the source. Restart affected services; existing process environment values may override file values. See the [configuration example](../.env.example), but do not import every example field unchanged.
 
-The host needs its own rclone to scan cloud directories. Model downloads run on the relevant Forge node. The host's `RCLONE_BIN` is never sent with cloud credentials to nodes, which use their own rclone. Importing configuration does not install rclone. Storage shows scan progress or the specific failure when you click “Scan cloud models”.
+Saving cloud settings in the UI updates the host runtime immediately. Old Pod model-storage processes still need updating and restarting; see [Updating](Updating.md).
+
+## Optional Cloudflare and Linux managed mode
+
+Named Tunnel uses `EVERSPARK_NETWORK_BACKEND=cloudflare`, `CF_TUNNEL_UUID`, `CF_HOSTNAME`, `CF_LOCAL_PORT` and matching UUID credentials. Its port must match the actual WebUI. Desktop ports are dynamic; do not blindly copy port 8780 into tunnel settings.
+
+In Linux single-machine mode, `./everspark share` provides a separate temporary sharing option without Named Tunnel credentials. WebUI has no application login; stop sharing after use. Distributed first use relies on Tailscale and does not require Cloudflare.
+
+See [Runtime and data](Runtime-and-Data.md) for storage locations, credentials and backups.

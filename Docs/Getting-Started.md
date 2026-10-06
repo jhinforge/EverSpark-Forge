@@ -1,173 +1,78 @@
-# First run: EverSpark Forge (v0.1)
+# Getting started with EverSpark Forge
 
-This guide targets a **cloud Linux x86_64 machine with an NVIDIA GPU**. The author's full test used the base image `nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04`. Running the stack locally on Windows has not been verified; Windows can be used for the browser and SSH client.
+EverSpark Forge is a distributed AI OS. The host handles control and orchestration; selected Forge Nodes execute model tasks. This guide follows the tested Windows host and Linux NVIDIA GPU Pod setup.
 
-EverSpark Forge ships as source code. The first `setup` installs managed runtimes and downloads starter models over the network; allow time and disk space for both. You can also connect your own models and remote storage. **R2, Cloudflare, and private configuration files are not required for the default local mode.**
+## 1. Choose a launcher
 
-## 1. Prepare the machine
+| Launcher | Requirements | Entry point |
+| --- | --- | --- |
+| Windows standard ZIP | Windows x64, installed WebView2 | Extract and double-click `EverSpark.exe` |
+| Windows full ZIP | Windows x64; fixed WebView2 included | Extract and double-click `EverSpark.exe` |
+| Windows source | Git and Python 3.11.9 | PowerShell: `.everspark.cmd archon start` |
 
-- Linux x86_64 with an NVIDIA GPU, network access, `bash`, `python3`, and `git`.
-- Space for runtimes and models; inspect sources and destinations with `setup --plan` first.
-- Browser access from your own computer can use SSH forwarding or an optional temporary Cloudflare link.
+Both ZIPs include portable Python; neither requires a separate Python installation. Models, Tailscale, SSH and rclone are not bundled. Choose full when WebView2 is absent. The software is free; GPU rental, bandwidth and third-party model services may incur charges.
 
-The base image's CUDA version differs from the PyTorch CUDA build installed by EverSpark. The source selects `cu126` or `cu128` from **NVIDIA driver capability and GPU architecture**; it consults the base image CUDA runtime only if driver capability cannot be read. Blackwell GPUs require a driver supporting CUDA 12.8 and the `cu128` profile.
+Use download information published in the [official repository](https://github.com/jhinforge/EverSpark-Forge). The current development branch is `refactor/distributed-architecture`. Successful Windows portable client Actions runs provide both ZIPs and SHA-256 files. Actions artifacts are temporary test distribution, not permanent release URLs.
 
-## 2. Start from source without private configuration
+Extract the chosen ZIP completely into a writable directory such as `D:\EverSpark-Forge`, then run the EXE. Do not run inside the ZIP. For an Actions artifact, unpack the outer artifact first, then extract its standard or full ZIP. An open window means the host started; generation still requires ready Forges.
 
-Run on the cloud machine:
+### Start from source
 
-```bash
-git clone https://github.com/jhinforge/EverSpark-Forge.git
+Run on your Windows computer:
+
+```powershell
+git clone --branch refactor/distributed-architecture https://github.com/jhinforge/EverSpark-Forge.git
 cd EverSpark-Forge
-./everspark setup --plan
-./everspark setup
-./everspark doctor
-./everspark start
-./everspark status
+python --version
+.\everspark.cmd archon start
 ```
 
-To open WebUI **immediately via a temporary link** on your own computer, run this on the cloud machine after `start` succeeds:
+Open the printed Portal URL, normally `http://127.0.0.1:8780/`. Keep the terminal running; Ctrl+C stops it. Avoid running the CLI host and desktop client together. The desktop client assigns dynamic loopback ports; use its window rather than assuming port 8780.
 
-```bash
-./everspark share
-```
+### SSH tools and existing machines (when needed)
 
-Open the printed `https://*.trycloudflare.com` URL in your computer's browser. When finished, run `./everspark share stop` on the cloud machine. `share` is optional; `start` does not create a public link. For SSH access, skip `share` and follow the [forwarding steps below](#get-and-run-the-forwarding-command).
+OpenSSH is not bundled. SSH deployment/connectivity fallback requires `ssh` and `ssh-keygen` on the host; check `ssh -V` in PowerShell. New automatic Nodes normally need no manual login. For existing machines or direct SSH, use the provider's actual user, address, port and public-key registration entry.
 
-`setup --plan` lists intended runtimes, model sources, and local destinations without changing the machine. `setup` creates the Git-ignored `Data/` directory, installs managed ComfyUI, Ollama, and Python environments, downloads starter models, and imports the Concept Forge model into Ollama. Check the plan for actual download sizes and destinations.
+To create your own key, run `ssh-keygen -t ed25519 -C "everspark-cloud"` locally without overwriting an existing private key. Display the default public key with `Get-Content "$HOME/.ssh/id_ed25519.pub"` and register its complete line. Keep the private key locally. This manual flow differs from EverSpark's automatically managed deployment identity; do not replace its identity files arbitrarily.
 
-`doctor` checks basic commands, configuration, and GPU visibility. `start` launches Concept Forge, Image Forge, Orchestrator, and WebUI in dependency order. `status` checks their health. If setup fails, fix the reported dependency or network issue and rerun it. An accessible WebUI alone does not establish that the models are ready for generation.
+## 2. Configure accounts and Node connectivity
 
-For options, effects, and file changes see the command reference for [installation](Commands.md#1-initialization-configuration-and-installation) and [service management](Commands.md#2-service-management).
+1. Install Tailscale on the Windows host, sign in and connect to your tailnet.
+2. In **Settings → Accounts and Nodes**, enter your Vast API Key and click **Verify and save**. It is stored in this Windows user's Credential Manager.
+3. Under **Automatic Node connection**, enter a Tailscale auth key. Match single-use or reusable mode to the key's Reusable setting; a long expiry does not imply reuse.
+4. Click **Configure automatic connection** and confirm readiness. This key is held for the current Archon session only. Configure it again before renting new Pods after restarting the client. Existing Nodes have independent identities.
 
-Without `.env`, storage stays on the machine running EverSpark and services bind to localhost by default. On that machine, open `http://127.0.0.1:8780`. Neither SSH forwarding nor a temporary link requires a private EverSpark configuration file.
+Tailnet policy and the Windows firewall must permit Nodes to reach the host's reported Agent port (default TCP 8766) and permit the host to access Node media services. Allowing only registration can leave playback and direct downloads inaccessible; media services use dynamic ports.
 
-## 3. Access the cloud WebUI from your computer
+## 3. Rent a Pod and deploy Forges
 
-| Method | Open on your computer | Requirements | Best for |
-| --- | --- | --- | --- |
-| SSH forwarding | Run `./everspark access` on the cloud machine, execute the printed SSH command on your computer, then open its local URL (normally `http://127.0.0.1:8080`) | SSH login to the cloud machine, its public SSH address and mapped port, usually an SSH key; keep the session open | Regular personal access while WebUI stays bound to the cloud machine's localhost |
-| Temporary link | Run `./everspark share` on the cloud machine, then open the printed public HTTPS URL on your computer | Outbound access from the cloud machine to Cloudflare; no SSH key, Cloudflare account, or `.env` | Short tests or demos; WebUI has no login protection, so anyone with the link can operate it. Close with `./everspark share stop` |
+1. In **Compute → Rent GPU**, choose GPU, region and disk filters, then search offers. Searching does not rent anything. Review the cost and machine requirements before renting.
+2. In **Compute → My machines**, wait for the Pod and Node Agent to become online. New automatic Pods join Tailscale and start their Agent through the startup flow; an initial manual SSH session is normally unnecessary.
+3. If the optional network test requests Ookla terms confirmation, review and decide in the UI. Testing does not block Forge deployment.
+4. Deploy the required Concept, Image or Audio Forge from the machine card. Select its machine as the corresponding execution Node after deployment, source verification and health checks succeed.
 
-### Temporary link without SSH
+Forges may share a machine or use separate machines. Shared deployment does not guarantee enough VRAM to load every model together. Start with image generation, then deploy Audio to test speech. Preserve the stage, exit code and diagnostic details on failure; see [Troubleshooting](Troubleshooting.md).
 
-On the cloud machine, after `./everspark start` succeeds, run:
+## 4. Generate the first result
 
-```bash
-./everspark share
-```
-
-Open the printed `https://*.trycloudflare.com` URL on your computer. This
-optional Quick Tunnel requires no `.env`, Cloudflare account, domain, SSH key,
-or tunnel credentials; the cloud machine must still reach Cloudflare. If
-`cloudflared` is missing, the command uses the existing installer (which
-requires root and network access for the download). View the link again with
-`./everspark access` or `./everspark share status`; close it with
-`./everspark share stop` or `./everspark stop`. A new sharing session may have
-a different URL. Quick Tunnel startup is rejected if `~/.cloudflared/config.yaml`
-or `config.yml` exists. For failure details check `Data/Logs/quick-tunnel.log`
-(or `EVERSPARK_LOG_DIR` when configured). The WebUI has no login protection:
-anyone holding this URL can use it. Use this option for short tests or demos,
-not public deployment.
-
-### First-time SSH key setup (optional)
-
-**Already able to SSH into this cloud machine from your computer? Skip to [Get and run the forwarding command](#get-and-run-the-forwarding-command).** Otherwise, open Windows PowerShell or a Linux/macOS terminal **on your own computer** and run:
-
-```bash
-ssh-keygen -t ed25519 -C "everspark-cloud"
-```
-
-Choose a location and passphrase at the prompts; first-time users can accept the default path. **Do not overwrite an existing private key** if prompted: use that key or choose another filename. This creates a private key such as `id_ed25519` and a public key ending in `.pub`. Display the **public key**:
-
-| Terminal on your computer | Command (default filename) |
+| Mode | Required capabilities |
 | --- | --- |
-| Windows PowerShell | `Get-Content "$HOME/.ssh/id_ed25519.pub"` |
-| Linux/macOS | `cat ~/.ssh/id_ed25519.pub` |
+| Image | Concept capability (Ollama Node or compatible API) and Image Forge |
+| Audio | Concept capability and Audio Forge; no Image Forge required |
+| Image + audio | Concept capability, Image Forge and Audio Forge |
 
-Add the public key's **entire line** to your cloud environment's SSH public key settings. If it has no such setting, add it to the target account's `~/.ssh/authorized_keys` using that machine's administration method. **Keep the private key on your computer; never upload it to the cloud, paste it into a public key field, or commit it to the repository.**
+1. Open **Creation** and select the model service and necessary Forge Nodes. Configure and test hosted language services first using [Configuration](Configuration.md).
+2. For images, check Workflow and Checkpoint resources. Audio mode hides image settings. If resources are missing, install compatible models under **Resources**, then refresh.
+3. Select a mode and submit a natural-language request. For example: `Draw a silver-haired girl wearing a blue ceremonial dress.` For speech: `Say “你好” in Chinese with a young female voice.` For combined mode, describe both the scene and spoken words.
+4. Watch the Forge, execution Node and state for each task. Cross-machine deployment does not imply automatic parallel execution; the current runner follows the planned dependency order.
+5. View results in Creation or **Asset library → Images / Audio**. Try individual-file and ZIP downloads. Desktop downloads open Save As for directory and filename selection; cancellation saves nothing. Browser downloads follow browser settings.
 
-Test login from your own computer, substituting the actual username, public address, and mapped SSH port:
+For reusable character identity, discuss a character first, then select it for generation. See [Usage](Usage.md) and [Runtime and data](Runtime-and-Data.md).
 
-```bash
-ssh -p 22 root@example.com
-```
+## 5. End the session
 
-For a non-default key path, add `-i PATH_TO_PRIVATE_KEY` to the `ssh` command. If login fails, check the cloud environment's public address, mapped port, username, and registered public key. After successful login, type `exit` to return to your local terminal.
+Closing the desktop client stops its own local host processes. It **does not destroy Pods or end cloud billing**. Stop or destroy unused instances yourself in Compute, after saving their outputs. See [Updating](Updating.md) for upgrades.
 
-### Get and run the forwarding command
+## Linux single-machine mode (separate path)
 
-`./everspark start` prints access instructions. Print them again at any time:
-
-```bash
-./everspark access
-```
-
-If the cloud environment supplies connection information the launcher recognizes, the output includes the complete SSH forwarding command. **Run that command on your own computer**; add `-i PATH_TO_PRIVATE_KEY` to it if you use a non-default key file. Keep the SSH session open and visit the local browser address shown (normally `http://127.0.0.1:8080`). The cloud machine's `127.0.0.1:8780` is not an address on your computer.
-
-See [WebUI access commands](Commands.md#3-webui-access-and-temporary-sharing) for all `access` and `share` options and stop behavior.
-
-If the platform does not supply that information, set `EVERSPARK_SSH_HOST` and `EVERSPARK_SSH_PORT` in your private `.env` (and `EVERSPARK_SSH_USER` if needed), then rerun `./everspark access`. Forwarding requires SSH access to the machine.
-
-## 4. Generate your first image
-
-1. In WebUI, check **Runtime** for ready services. If anything is unavailable, run `./everspark status`.
-2. In **Forge**, describe a character in **Discuss** to create the current character subject, or select an existing subject and click **Use in Forge**.
-3. Check the available **Workflow**, **Checkpoint**, and **Concept LLM** resources. The starter installation supplies models and an API Format workflow.
-4. Switch to **Generate**, enter a scene, submit, and wait for the result in the page.
-5. Inspect recent results in **Gallery**. **Download outputs ZIP** packages the entire `Data/Outputs` directory.
-
-A reusable character's stable traits are separate from the scene, pose, and camera direction for a particular request.
-
-To take your characters and memory with you, use **Storage → Character and Memory ZIP → Download data ZIP** to save the four JSON files for each character and a Memory SQLite snapshot on your own computer; rclone is not required. On a new machine, choose that ZIP and click the adjacent **Validate and restore** button, then restart EverSpark. Export generated images separately from Gallery. See [Runtime and data](Runtime-and-Data.md).
-
-## 5. Import existing private configuration first (optional)
-
-Upload any files you need into `Archon/Vault/Import/`:
-
-| File | Use |
-| --- | --- |
-| `env.txt` or `.env` | Custom endpoints, remote storage, or Cloudflare Tunnel settings; identical content format |
-| `rclone.conf` | Existing rclone/R2 connection |
-| `<CF_TUNNEL_UUID>.json` | Cloudflare Named Tunnel credentials |
-
-If you started with this section, run the following from the parent directory of your clone. Skip this step if you already entered the repository in section 2:
-
-```bash
-cd EverSpark-Forge
-```
-
-Then run from the repository root:
-
-```bash
-./everspark configure
-./everspark setup --plan
-./everspark setup
-./everspark doctor
-./everspark start
-```
-
-`env.txt` is a convenient name for viewing, saving, and uploading `.env` contents on your own machine: both use the same `KEY=VALUE` format. `configure` validates and copies it to the Git-ignored root `.env`, leaving the uploaded original in place. Importing `rclone.conf` **does not activate** remote storage: set `EVERSPARK_STORAGE_BACKEND=rclone` and the required remote paths explicitly. Cloudflare likewise needs complete configuration. See [the configuration guide](Configuration.md), [`Archon/Vault/README.md`](../Archon/Vault/README.md), and [`.env.example`](../.env.example).
-
-If `doctor` reports remote paths or credentials, fix the enabled backend before starting. The repository ignores private configuration and `Data/`; do not force-add credentials or personal data to Git.
-
-## 6. Daily commands and diagnosis
-
-```bash
-./everspark status
-./everspark access
-./everspark share status
-./everspark share stop
-./everspark restart image
-./everspark stop
-```
-
-Managed service logs are in `Data/Logs/`. If WebUI opens but generation fails, check Runtime, `./everspark status`, available models, and the relevant service log. Rerun `./everspark doctor` for environment and configuration checks. Other cloud images and local Windows deployments have not been verified.
-
-See the [starter model commands](Commands.md#4-manifest-starter-models) and [log commands](Commands.md#5-log-status-and-maintenance) for their separate scopes.
-
-### Choose a generation mode
-
-The creation page offers Image generation, Audio generation, and Image + audio generation. All three use Concept Forge to understand natural-language requests. Audio mode needs Concept and Audio only; it does not require an Image Forge connection or generate an image. Image settings are hidden in audio mode.
-
-For example, enter `Write a short welcome message in Chinese, spoken in a warm female voice.` Concept prepares the Chinese spoken text and voice requirements. Explicit dialogue is preserved unless translation or rewriting is requested. In combined mode, describe the image and speech; if dialogue is absent, Concept writes a short line fitting the scene.
+An existing Linux NVIDIA GPU environment can still use `./everspark setup --plan`, `./everspark setup` and `./everspark start` for local managed services. Open local port 8780, or explicitly run `./everspark share` for a temporary link. This differs from Windows `archon start`; do not run Linux GPU installation commands on the Windows control host. See [Commands](Commands.md).

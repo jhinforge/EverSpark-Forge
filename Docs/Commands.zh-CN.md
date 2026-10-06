@@ -1,8 +1,19 @@
-# EverSpark Forge 命令手册（v0.1）
+# 命令手册
 
-本文按当前源码中的 `./everspark` 入口整理命令、参数和实际影响。以下命令从**云端 Linux 仓库根目录**执行；正式 `./everspark setup` 成功后会自动安装全局命令，之后也可以直接输入 `everspark`；`setup --plan` 不安装。本地 Windows 运行环境尚未验证。
+## Windows 分布式主机
 
-需要完整部署步骤请先看[首次运行指南](Getting-Started.zh-CN.md)；私人文件怎么准备见[配置指南](Configuration.zh-CN.md)，运行数据位置见[运行与数据](Runtime-and-Data.zh-CN.md)。可以随时运行 `./everspark help` 查看顶层清单。方括号表示可选参数，尖括号表示要换成自己的值；不要照抄括号。
+ZIP 客户端双击 `EverSpark.exe`，无需执行下列 Linux 安装命令。源码主机从仓库根目录运行：
+
+```powershell
+.\everspark.cmd archon start
+.\everspark.cmd configure --from D:\private-config
+```
+
+`archon start` 启动本机控制后端与 Portal，不在 Windows 安装 GPU Forge。默认端口为 8765／8780；Ctrl+C 停止。`configure` 导入私人配置，完整环境文件会替换 `.env`。Windows 入口不支持把 Linux 命令清单全部照搬。
+
+## Linux 托管单机与开发命令
+
+以下从 Linux 仓库根目录执行。它们保留用于单机运行和开发，不是分布式 Pod 部署的必经步骤；Forge 节点通过计算页的部署流程管理。所有参数以 `./everspark help` 和对应子命令帮助为准。`./everspark archon start` 可启动控制入口，但内置 Vast 账户流程当前依赖 Windows 凭据管理器。
 
 ## 1. 初始化、配置和安装
 

@@ -1,7 +1,7 @@
 # EverSpark Forge logging
 
 Status: foundation and caller migration complete  
-Scope owner: `Runtime/Logging`
+Scope owner: `Aegis/Logging`
 
 ## Contract
 
@@ -40,7 +40,7 @@ All product-owned configuration uses the `EVERSPARK_*` namespace.
 
 ## Shell API
 
-Source `Runtime/Logging/log.sh`, then initialize a component:
+Source `Aegis/Logging/log.sh`, then initialize a component:
 
 ```bash
 core_log_init comfyui.recovery "${EVERSPARK_LOG_DIR}/runtime/recovery.log"
@@ -62,7 +62,7 @@ Existing one-argument calls such as `core_info "Config loaded"` remain supported
 
 ## Python API
 
-`Runtime/Logging/everspark_logging.py` uses the standard `logging` package with the shared contract:
+`Aegis/Logging/everspark_logging.py` uses the standard `logging` package with the shared contract:
 
 ```python
 from everspark_logging import get_logger
@@ -99,7 +99,7 @@ Data/Logs/
 ```
 
 The canonical file list and per-log policy live in
-`Runtime/Logging/log_manifest.json`. WebUI Runtime consumes this manifest instead
+`Aegis/Logging/log_manifest.json`. WebUI Runtime consumes this manifest instead
 of hard-coding paths.
 
 Existing flat files remain as historical logs; new events use the module paths.
@@ -150,19 +150,9 @@ policy state. It does not return log contents or accept filesystem paths.
 Run both adapters' tests with:
 
 ```bash
-bash Tests/Runtime/Logging/run_tests.sh
+python -m unittest discover -s Tests/Runtime/Logging -p 'test_*.py'
 ```
 
 The tests cover text and JSON output, level filtering, compatibility calls,
 redaction, step results, invalid configuration, file permissions, manifest
 validation, copy-truncate rotation, retention, dry runs, and Runtime status.
-
-## Migration phases
-
-- [x] Canonical naming and `EVERSPARK_*` configuration
-- [x] Shell/Python logging foundation and tests
-- [x] Critical recovery path: recovery, service, bootstrap, core restore, dependencies, R2, and tunnel
-- [x] Long-running services: ComfyUI, Ollama Forge, Orchestrator, WebUI
-- [x] Rotation, retention, log manifest, and status API
-
-Each phase must remain independently runnable. Logging migration must not be combined with unrelated dependency or service changes.

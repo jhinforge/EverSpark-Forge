@@ -1,8 +1,7 @@
-# Infrastructure
+# Aegis
 
-Optional environment-facing backends. Local storage and localhost networking
-are the defaults. Nothing in this directory is required for a local-only
-EverSpark session.
+Shared storage, networking and logging primitives. External cloud storage and
+Cloudflare are optional; file access, archives and logging are used by the system.
 
 ## Storage
 
@@ -10,14 +9,15 @@ EverSpark session.
 branch. Image Forge and Concept Forge own their remote paths and transfer
 policies; Infrastructure only provides connection and transfer primitives.
 
-`Storage/r2_manager.py` adds the managed resource layer used by Orchestrator
+`Storage/r2_manager.py` adds the managed resource layer used by Storage service
 and WebUI. It scans flat Image Forge model directories, parses Ollama manifests,
 and downloads only the selected model. Transfers use an isolated partial file,
 publish live byte progress, and atomically replace the final target only after
 size validation. It never restores a complete legacy ComfyUI directory or
 copies Ollama identity keys.
 
-`Storage/download_manager.py` provides the local-first direct model downloader.
+`Storage/download_manager.py` provides direct model downloads, with distributed jobs routed to their selected
+Forge Nodes by `distributed_models.py`.
 It accepts public HTTP(S) model links independently of rclone, routes each model
 type into its fixed managed directory, preserves resumable hidden partial files,
 and atomically publishes completed downloads. Local and private network targets
@@ -44,7 +44,7 @@ remotes can be scanned; uploads resolve to their physical upstreams and never
 write to a union. If several upload roots exist, select one for each file.
 
 `EVERSPARK_BACKUP_REMOTE` specifies an optional writable data backup directory;
-without it, the first image source bucket gets an `everspark-backups` prefix.
+without it, a configured image or Concept source supplies the backup prefix.
 No empty R2 folder needs to be created in advance. The Storage page can override
 the directory. Image models upload to their mapped category folder. GGUF files
 upload to a separate discoverable `everspark-gguf` folder by default. Output

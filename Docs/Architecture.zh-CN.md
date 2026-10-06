@@ -1,58 +1,62 @@
-# EverSpark Forge 架构
+# 架构与模块边界
 
-Orchestrator 只编排 Forge 之间的任务。Concept Forge 拥有语言模型执行、Memory 和 Subject 业务；Image Forge 拥有 ComfyUI、Diffusers 及内部执行资源。本篇描述 `refactor/distributed-architecture` 当前实现。
+EverSpark Forge 是分布式 AI OS。主机负责控制、持久化与跨 Forge 编排，节点执行模型任务；组件可位于同机或不同地区。Tailscale 提供连接网络，Node Agent 主动注册、心跳并拉取允许执行的任务。
 
-## 模块边界
+## 所有权
 
-| 模块 | 当前职责 | 主要代码 |
+| 模块 | 责任 | 目录 |
 | --- | --- | --- |
-| Portal / Gate | WebUI、HTTP 路由、模块装配、Forge Node 绑定 | `Archon/Portal/`、`Archon/Gate/` |
-| Orchestrator | 任务接收、准入、状态、Concept → Image 步骤协调、结果引用汇总 | `Archon/Orchestrator/` |
-| Concept Forge | Provider/Model、连接测试、讨论、Subject 生成/修订/编译、Memory 业务、提示词计划 | `Legate/Forge/ConceptForge/` |
-| Ledger | SQLite/文档持久化、事务、修订一致性与读取 | `Archon/Ledger/` |
-| Image Forge | 后端选择、workflow/checkpoint/VAE/LoRA、插件、健康、任务生成历史 | `Legate/Forge/ImageForge/` |
-| Storage | 下载、存储、输出文件、远端传输缓存、上传、同步、备份与恢复 | `Aegis/Storage/` |
-| Vault | 凭据、Provider 私有配置、运行配置读取 | `Archon/Vault/` |
-| Steward | Node 注册/心跳/在线状态/资源上报、节点与部署管理 | `Archon/Steward/` |
-| Warden / Envoy | 节点运行时、进程和后端生命周期；既有 Agent 任务通道 | `Legate/Warden/`、`Legate/Envoy/` |
+| Archon / Gate | HTTP 路由、模块装配、Forge 绑定与调用目标 | `Archon/Gate/` |
+| Portal | WebUI、请求代理、状态与结果展示 | `Archon/Portal/` |
+| Windows Client | Tauri/WebView2 窗口、便携 Python 主机生命周期、原生下载 | `Archon/Client/Windows/` |
+| Orchestrator | 任务准入、请求去重、依赖顺序、任务状态和结果引用 | `Archon/Orchestrator/` |
+| Ledger | SQLite／角色文档持久化、事务与修订一致性 | `Archon/Ledger/` |
+| Vault | 私人配置、凭据、运行配置加载 | `Archon/Vault/` |
+| Steward | 实例管理、Node 租约、资源状态和 Forge 部署 | `Archon/Steward/` |
+| Concept Forge | 语言模型、讨论、角色／Memory 业务、创作拆解及指令准备 | `Legate/Forge/ConceptForge/` |
+| Image Forge | ComfyUI／Diffusers 适配器、资源、工作流、生成与历史 | `Legate/Forge/ImageForge/` |
+| Audio Forge | VoxCPM2 语音指令、合成、音频结果与健康 | `Legate/Forge/AudioForge/` |
+| Envoy | Agent 任务通道、认证、心跳与监督重启 | `Legate/Envoy/` |
+| Warden / Crucible | 执行端运行时、进程、硬件、环境和模型准备 | `Legate/Warden/`、`Legate/Crucible/` |
+| Aegis | Storage 文件传输／归档／备份、网络与日志基础能力 | `Aegis/` |
 
-Audio Forge 和 Video Forge 是后续独立 Forge 的边界，本次没有新增它们的调用流程。
+目录归属与运行位置不是一回事。Forge 管理／业务对象仍可在主机，通过远端适配器调用节点执行器；角色与 Memory 默认由主机 Ledger 保存。外部 Concept API 由主机直接调用。
 
-## 生成数据流
+## 创作流程
 
 ```mermaid
-sequenceDiagram
-    participant G as Gate
-    participant O as Orchestrator
-    participant C as Concept Forge
-    participant L as Ledger
-    participant I as Image Forge
-    G->>O: 创建生成任务
-    O->>C: 准备生成指令
-    C->>L: 读取历史和 Subject
-    C-->>O: 生成指令与完成回调
-    O->>I: 交付生成指令
-    I-->>O: 图像任务引用
-    O->>C: 完成回调与结果
-    C->>L: 保存 Subject、提示词及历史
-    O-->>G: 汇总任务响应
-    G->>I: 轮询渲染状态与结果
+flowchart TD
+    P[Portal / Gate] --> O[Orchestrator]
+    O --> C[Concept Forge]
+    C --> L[Ledger]
+    C --> T[创作计划与指令]
+    T --> I[Image Forge]
+    T --> A[Audio Forge]
+    I --> R[结果引用与状态]
+    A --> R
+    R --> P
 ```
 
-Orchestrator 不读取或编译 Subject，不解析 Provider、engine、workflow 或模型资源。旧 WebUI 的 `selection` 仍可提交，但由编排层完整转交给 Forge，具体资源解析在 Forge 内完成。
+图片模式保留 Concept 准备指令 → Image 提交的路径；音频与组合模式由 Concept 提供步骤列表，TaskRunner 校验 Forge 目标、依赖和循环，按依赖顺序执行。图中分支表示可选执行目标，**不是并行执行承诺**。单个任务失败后，尚未执行的步骤标记 skipped。
 
-Concept Forge 复用现有 `concept_forge/subjects` 与 `Memory/everspark_memory`。Memory 中的身份生成、旧 prompt contract 转换、对话语义和角色展示仍由 Concept 负责；Ledger 保存已有数据格式和修订，不决定角色内容。
+Orchestrator 转交 Forge 内部指令，不解析模型／工作流业务或编译角色；Concept 完成回调记录业务数据。图片编排任务完成可能只表示图像已提交，渲染与历史继续由 Image 提供。任务图和执行结果没有完整的持久化工作流自动重放。
 
-Image Forge 生成图像任务、选择后端并管理历史，实际输出文件的安全读取和分块传输复用 Storage。既有远端 `chat/resources/default_negative/submit/poll/history/fetch` action 和 Node 注册协议保持一致。
+## 控制与恢复
 
-## 运行与兼容
+NodeManager 使用主机单调时钟管理租约；Agent 有独立心跳，执行期间可继续报告。Node 在线、Forge 健康、部署任务状态分别展示。健康探测有独立通道，避免长安装／生成独占执行通道导致误报。
 
-当前分布式模式仍是本地主机上的 Gate、Orchestrator 和 Forge 管理代码，通过既有 Envoy 通道调用两台远端 Node 的模型/图像执行器。业务代码的模块归属迁移不等于把整个管理服务搬到 Node；本次没有新增远端业务协议。Concept 的持久化仍位于本地主机，由 Ledger 提供。
+Agent 记录任务意图与结果，重连查询已有任务；已完成结果可返回，执行中断可能结果未知，不自动重新执行副作用。部署恢复需要验证源码和服务健康，不能把“收到心跳”当作部署成功。
 
-HTTP 服务移至 Gate，原 `orchestrator.core.server` 保留启动兼容入口。原资源、角色、记忆和存储 URL 保留，分别转给所属模块。Forge Node 绑定和远端 target 仍能定位并调用 Forge。
+## 模型与媒体
 
-默认运行配置位于 `Archon/Vault/default_config.json`，配置读取位于 Vault。旧 `EVERSPARK_ORCHESTRATOR_CONFIG` 环境变量和 Python loader import 继续支持；用户自定义配置文件不需转换。连接私有数据仍保存在 `Data/Configuration/ConceptForge/`，由 Vault 负责文件读写，不随角色 ZIP 导出。
+云端配置与目录映射由主机保存；模型直链和云端拉取在对应 Image／Concept 节点执行，启动任务时固定目标。配置快照由私有任务通道传入节点；角色备份与恢复在主机执行。
 
-生成任务仍串行准入；`completed` 继续表示规划和图像提交完成，实际渲染状态由 Image Forge 返回。Orchestrator 现有 job map 保存任务响应与引用，不持有 Forge 图库。没有新增并行调度、持久化工作流恢复或自动重新生成。
+媒体结果返回引用和临时访问 URL，原件留在节点。浏览器／客户端优先直连节点；单文件有转发备用路径。图片／音频 ZIP 在对应节点打包后直链下载，旧远端 ZIP 转发链路已移除；本机数据 ZIP 是独立功能。节点文件服务使用签名和路径限制，不开放任意目录。
 
-完整迁移方法清单、文件清单与验证结果见[职责迁移记录](Orchestrator-Boundaries.zh-CN.md)。
+## Windows 入口与当前限制
+
+两个客户端包共用 Tauri EXE、Portal 和便携 Python 3.11.9；standard 依赖系统 WebView2，full 携带固定 Runtime。主机端口动态分配，单实例与 Windows Job 管理自身子进程。关闭主机不销毁节点。
+
+不承诺跨机器自动并行、节点损毁后媒体可恢复、任意模型／工作流兼容或无人值守工作流重放。Video、3D 等未实现能力不能列为已支持功能。
+
+协议与接口的实现入口见对应模块 README；使用说明见[首次使用](Getting-Started.zh-CN.md)。

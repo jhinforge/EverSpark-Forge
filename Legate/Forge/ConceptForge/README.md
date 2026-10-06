@@ -2,8 +2,10 @@
 
 Discussion, structured intent, schema validation, and prompt compilation.
 
-The managed default is Qwen3 4B GGUF Q4_K_M imported into Ollama as
-`everspark-concept`. On single-GPU systems the managed Ollama service unloads
+The legacy single-machine starter catalog is defined in
+`Legate/Crucible/Models/default_models.json`. Distributed deployment selects
+its own installer/model settings; inspect the deployment configuration rather
+than assuming the same starter model on every Pod. On single-GPU systems the managed Ollama service unloads
 the model after each request to hand memory back to Image Forge.
 
 The current implementation contains:
@@ -20,8 +22,8 @@ normalized chat requests to a registered adapter; Ollama's `/api/chat` payload,
 `/api/tags` model list, `/no_think` setting, and HTTP errors stay in its adapter.
 Other providers can add their own input and output adapters without changing
 the subject, discussion, or prompt compilation logic. Ollama remains the built-in
-default. OpenAI Compatible connections can be added under **Model services** in
-the WebUI sidebar. Enter a connection name, an API base URL ending in `/v1`,
+default. OpenAI Compatible connections can be added under **Settings → Model services** in
+the WebUI. Enter a connection name, an API base URL ending in `/v1`,
 the provider's exact model ID, and its API Key. Test before using it, then choose
 the service and model in Forge, or set it as the default for subject revisions.
 Connection tests run as background jobs so a slow model response does not hold
@@ -72,3 +74,7 @@ document locally:
 
 `Examples/character_subject.example.json` is a complete public example.
 `Examples/character_prompts.example.json` shows the independent prompt JSON.
+
+Creative decomposition and audio/combined instruction preparation live in
+`planning.py` and the workspace. Structured plans must match the selected mode;
+Orchestrator passes instructions to the corresponding execution Forge.

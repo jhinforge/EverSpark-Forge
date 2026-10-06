@@ -1,81 +1,49 @@
-# 运行时与数据生命周期（v0.1）
+# 运行与数据
 
-这篇文档说明 EverSpark Forge 在云端 Linux 上安装、运行和迁移时，哪些内容来自源码，哪些保存在当前机器，哪些需要你自己带到下一台机器。安装步骤见[首次运行](Getting-Started.zh-CN.md)，私人配置的写法见[配置指南](Configuration.zh-CN.md)。
+分布式模式不能把整个系统的数据都理解为主机的 `Data/`。下表以默认路径为例，环境变量可覆盖路径。
 
-## 1. 从源码到运行中的服务
+## 文件归属
 
-```text
-获取源码 → setup 安装运行时与起步模型 → start 启动服务
-       → WebUI 中讨论与生成 → 数据写入当前机器
-       → 按需导出或上传 → 在新机器重新安装并恢复
-```
-
-`./everspark setup --plan` 先列出下载来源与目标，不改动机器。`./everspark setup` 创建运行目录，安装托管的 ComfyUI 与 Ollama，配置 Python 环境、模型路径并准备起步模型。`./everspark start` 依次启动 Concept Forge、Image Forge、Orchestrator、WebUI；`./everspark status` 返回服务的健康状态。默认只监听本机地址；云端访问可用 `./everspark access` 给出的 SSH 转发命令，或在 WebUI 启动后主动运行 `./everspark share` 获得临时公网链接。后者需要在结束演示时运行 `./everspark share stop`，链接本身不替代数据备份。
-
-服务状态与进程身份记录在 `Data/Runtime/Services/`。`./everspark stop` 停止启动器管理的服务；对原本就在运行、由其他人或程序启动的健康服务，启动器会标为外部服务，不把它当作自己的进程停止。
-
-## 2. 文件分别在哪里
-
-以下路径均相对于仓库根目录；个人数据与安装产物不会随公开源码一起发布。
-
-| 内容 | 默认位置 | 迁移时怎么处理 |
+| 内容 | 所在位置 | 保存方式 |
 | --- | --- | --- |
-| 程序代码、公开工作流 | Git 仓库，工作流在 `Legate/Forge/ImageForge/Workflows/` | 从仓库重新获取；自行新增但未提交的工作流要另行保存 |
-| 私人环境配置 | 根目录 `.env` | 单独保存，或在新机器重新准备 `env.txt` 并导入 |
-| 远程存储、Tunnel、模型服务凭据及路径映射 | `Data/Configuration/` | 单独保存原始凭据和映射，或在新机器重新配置 |
-| 托管的 ComfyUI、Ollama、可选 Diffusers 进程及虚拟环境 | `Data/Runtime/` | 通常由新机器上的 `setup` 重建；可选插件需在 Forge 重新安装 |
-| 图片模型 | `Data/Models/ImageForge/` | 在新机器重新下载，或从自己配置的远程模型库选择性拉取 |
-| Concept Forge 模型 | `Data/Models/ConceptForge/` | 重新下载，或从远程库恢复并按需导入 Ollama |
-| 对话、任务记录、角色关联 | `Data/Memory/everspark.db` | 备份并恢复；只恢复角色 JSON 不足以保留这些关联 |
-| 角色文档 | `Data/Subjects/` | 与 Memory 数据库一起备份和恢复 |
-| 本地数据 ZIP 的暂存目录 | `Data/Runtime/Archives/`、`Data/Imports/` | 前者用于生成下载文件，后者暂存上传文件；成功传输或处理后由程序清理，不作为备份保存 |
-| 生成图片 | `Data/Outputs/` | 下载整个输出目录的 ZIP，或启用远程存储后上传整个目录 |
-| 服务日志 | `Data/Logs/` | 排障时留存；新环境会重新生成 |
-| 数据恢复前的本地旧版本 | `Data/Recovery/` | 恢复角色数据时生成；其安全性取决于当前机器是否仍在 |
+| 源码、公开工作流 | Git 仓库 | Git／发布源码 |
+| 主机角色与 Memory | 主机 `Data/Subjects/`、`Data/Memory/everspark.db` | 资产库的角色与 Memory 数据 ZIP |
+| 模型 API 连接、rclone 配置 | 主机 `Data/Configuration/` | 单独保存私人配置 |
+| 根环境配置 | 主机 `.env` | 单独备份；不进入 Git |
+| Vast API Key | 当前 Windows 用户凭据管理器 | 新电脑重新填写 |
+| Node 和绑定索引 | 默认 `%LOCALAPPDATA%/EverSpark/`，可由 `EVERSPARK_NODE_STATE` 覆盖 | 属于主机运行状态；移机后重新验证节点身份和连接 |
+| Tailscale 租赁用 auth key | 当前主机会话 | 重启后租新 Pod 前重新配置 |
+| Windows Python／WebView2 | 客户端 `Runtime/`；standard 不含固定 WebView2 | 从发布包重建 |
+| Windows 浏览器配置与日志 | 客户端 `Data/Runtime/WebView2/`、`Data/Logs/client/` | 按需要保存 |
+| Image 模型与结果 | 执行节点 `Data/Models/ImageForge/`、`Data/Outputs/` | 模型重新拉取，输出主动下载 |
+| Concept 模型 | 执行节点 `Data/Models/ConceptForge/` | 下载或云端拉取并按需导入 |
+| Audio 环境、模型和输出 | Audio 执行节点，由适配器配置决定 | 权重重新部署，输出主动下载 |
+| Agent 状态、日志、测速 | 节点通常为 `/workspace/everspark-node/` | 排障时保存所需记录 |
 
-Git 默认忽略 `.env`、`Archon/Vault/Import/` 下的私人上传文件及 `Data/`。**“被 Git 忽略”只表示不会随普通提交进入仓库，不表示已经有备份。** 如果云端机器的磁盘是临时的，删除实例前应确认所需数据已传到别处。
+Git 忽略不代表已备份。复制客户端文件夹也不会自动迁移 Windows 凭据管理器、Tailscale 身份或外部 Node 状态目录。
 
-## 3. 生成时发生了什么
+## 三类 ZIP
 
-WebUI 的讨论模式通过 Concept Forge 更新当前对话的角色主体；角色文档和修订记录由 Memory 保留。生成模式将角色的稳定特征与本次场景描述组合，由 Orchestrator 提交给 Image Forge，再在 WebUI 显示结果。模型、工作流、Checkpoint、VAE 与 LoRA 的选择来自当前机器可用的资源。
+| ZIP | 包含 | 不包含 |
+| --- | --- | --- |
+| 图片输出 ZIP | 对应 Image 节点的图片输出 | 其他节点、音频、角色、模型、凭据 |
+| 音频输出 ZIP | 对应 Audio 节点的音频输出 | 图片、角色、模型、凭据 |
+| 角色与 Memory 数据 ZIP | 四份角色 JSON 与一致的 SQLite 快照 | 输出媒体、模型、模型 API 密钥和私人配置 |
 
-默认语言模型由 Ollama 提供，也可以在 Forge 选用**模型服务**中已测试的 OpenAI Compatible 连接。默认绘图工具是 ComfyUI，Diffusers 可在 Forge 安装和选择。Gallery 显示近期结果，**Download outputs ZIP** 将当前 `Data/Outputs` 整棵目录打包下载。这是手动导出：打开过 Gallery 或看见生成图片，不等于文件已经离开云端机器。
+角色 JSON 为 `subject.json`、`metadata.json`、`positive_prompt.json`、`negative_prompt.json`。数据 ZIP 通过清单、校验值、SQLite 完整性与数据一致性验证；不是任意 ZIP 都能恢复。上传上限为 128 MiB，恢复前的数据保存在主机 `Data/Recovery/`，恢复后重启主机。
 
-## 4. 备份：先确定需要保存什么
+数据 ZIP 使用主机归档流程；远端媒体 ZIP 由 Pod 打包并提供临时下载 URL。两者不要混淆。下载取消不等于生成结果已删除。
 
-不开启 rclone 时，也可以在 **Storage → 角色与 Memory 压缩包 → 下载数据 ZIP** 下载一致的 SQLite 快照和每个角色的四份 JSON：`subject.json`、`metadata.json`、`positive_prompt.json`、`negative_prompt.json`。把下载文件保存到自己的电脑或其他持久位置；私人配置（包括已设置模型服务时的 `Data/Configuration/ConceptForge/connections.json`）、模型及 Gallery 的输出 ZIP 仍需分别保存。数据 ZIP 不包含凭据、模型或生成图片。
+## 媒体访问与生命周期
 
-启用并验证 rclone 后，在 WebUI 的 **Storage → Upload local data** 中按需发起上传：
+结果接口返回引用和访问 URL，原件仍在生成节点。节点文件服务监听可用的本机 Tailscale 地址，访问使用带有效期的签名；绑定地址与公布地址分别处理。单文件读取有转发备用通道，远端 ZIP 下载使用节点临时 URL，不再使用旧主机转发 ZIP 的链路。
 
-1. 模型可按类别选择，上传目标需要是可写的实际 remote；多个目标时要选定位置。
-2. 选择 **Outputs folder** 会上传整个 `Data/Outputs` 中当前找到的文件；不需要逐张勾选。新文件不会因为以前上传过就自动同步，需要再次发起上传。
-3. 保存角色时选择 **Save a new Memory database snapshot**。角色 JSON 与 SQLite 会作为同一批数据快照上传；恢复点包含校验信息。页面选择角色文件时，后端也会按完整数据集处理，而不是上传孤立的角色 JSON。
-4. 等待上传任务显示完成，再检查远程位置或恢复点。仅配置远程地址、扫描资源或启动服务，都不会替你自动完成这些上传。
+URL 过期后刷新资产库以获取新链接。临时归档按服务清理策略回收，不是长期备份。Pod 离线时无法读取原件，销毁 Pod 前必须确认已保存需要的内容。停止主机不会自动销毁 Pod。
 
-如未指定 `EVERSPARK_BACKUP_REMOTE`，程序使用第一个图片模型来源桶下的 `everspark-backups` 前缀。这个目录用于输出与角色数据备份；模型按各自分类的远程目录处理。上传不会清理远程旧文件。
+## 云端备份与搬迁
 
-## 5. 换一台云端机器时
+云端扫描或模型拉取不会自动备份。上传和恢复需主动提交任务，选择实际可写的备份位置并等任务完成。角色与 Memory 按完整快照处理，输出和模型另行保存。
 
-以下是一条基于 v0.1 现有功能的恢复顺序：
+换电脑时先导出角色与 Memory、下载媒体、备份私人配置；在新主机配置账户与 Tailscale、恢复数据、重新验证节点连接。重建 Pod 时重新部署 Forge 和模型。图片／音频结果不会因恢复角色 ZIP 而自动回来。
 
-1. 从 Git 获取源码，在新机器准备 Linux、NVIDIA GPU 和网络环境。
-2. 如需原有远程资源或 Tunnel，将 `env.txt`、`rclone.conf`、Tunnel 凭据等原始文件上传到 `Archon/Vault/Import/`，执行 `./everspark configure`。在旧机器 Storage 页面保存过的**手工远程路径映射**存放在 `Data/Configuration/rclone/model_paths.json`；若没有单独带走它，需在新机器重新设置。模型服务也需在 WebUI 重新填写，或安全转移 `Data/Configuration/ConceptForge/connections.json`；角色 ZIP 不含这份文件。
-3. 执行 `./everspark setup --plan`、`./everspark setup`、`./everspark doctor`、`./everspark start`，确认服务就绪。
-4. 在 Storage 页面按需要从远程库拉取模型；如果没有远程库，可用直链重新下载。检查所选工作流所需的模型是否已在新机器上。
-5. 对下载到本地的 EverSpark 数据 ZIP，在 **Storage → 角色与 Memory 压缩包** 中选择文件并点击旁边的 **验证并恢复**（上传 ZIP 上限为 128 MiB）。文件暂存于 `Data/Imports/`；系统验证清单与文件校验值、SQLite 完整性以及角色文档与数据库的一致性，成功后用 ZIP 内数据替换当前角色文档和 Memory 数据库，并将原数据保存至 `Data/Recovery/`。上传的暂存 ZIP 随后会被删除。也可以在 **Storage → Restore character data** 选择远程恢复点。恢复完成后重启 EverSpark。
-6. 输出图片如果仍在原机器，可用 Gallery 下载 ZIP 并自行转移；如果已上传远程存储，也需通过自己的存储工具取回。WebUI 的这两种恢复操作只负责**角色数据快照**，不会一并取回输出图片。
-
-不能从源码或默认 `setup` 推出你的个人角色、历史、输出或私人模型。迁移是否完整，取决于这些内容在旧机器删除前是否实际完成了备份或导出。
-
-## 6. 运行状态与日志
-
-```bash
-./everspark status
-./everspark doctor
-./everspark restart image
-./everspark stop
-```
-
-`status` 检查服务的进程与健康接口；`doctor` 检查基础命令、已启用后端的配置和 GPU 可见性。WebUI 的 **Runtime** 页面可查看就绪状态。托管服务的原始输出写在 `Data/Logs/`；如果生成、模型拉取或上传失败，先看对应服务的状态和任务报错，再查日志。日志有助于排障，但并不代替模型、角色或输出的备份。
-
-服务的 `start|stop|restart|status` 行为见[命令手册：管理服务](Commands.zh-CN.md#2-管理服务)；日志保留与清理命令见[查看与整理日志](Commands.zh-CN.md#5-查看与整理日志)。
+见[更新指南](Updating.zh-CN.md)与[配置指南](Configuration.zh-CN.md)。

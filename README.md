@@ -1,206 +1,51 @@
-# EverSpark Forge · v0.1
+# EverSpark Forge
 
-⚠️ # This document describes an earlier architecture and is not authoritative for the current distributed architecture.
+**Distributed AI OS**, a free, open-source system by Jhin. The host handles control and orchestration; Concept, Image and Audio Forges execute on selected machines, sharing a host or running across regions.
 
-**English** · [中文](README.zh-CN.md)
+[简体中文](README.zh-CN.md) · [Getting started](Docs/Getting-Started.md) · [Usage](Docs/Usage.md)
 
-EverSpark Forge treats compute environments as disposable, while preserving workflows, configuration, and user-owned data as persistent state.
+## Available capabilities
 
-EverSpark Forge is a personal AI infrastructure and orchestration system.
-It is designed to turn user intent into reusable, structured AI workflows
-without binding those workflows to one machine, one model provider, or one
-execution backend.
+- Natural-language discussion, reusable characters and revisions; image, speech and combined creation.
+- Ollama and OpenAI Compatible APIs for Concept, ComfyUI and optional Diffusers for Image, VoxCPM2 for Audio.
+- Windows host management of Vast Pods, active Tailscale Node registration, deployment progress and independent service health checks.
+- Direct/cloud model downloads on the corresponding Nodes; independent Image and Concept cloud directories.
+- Direct media access and separate image/audio ZIP export; validated character/Memory backup and restoration.
+- Standard/full portable Windows clients sharing WebUI and launching by double-click. Both include Python; full also includes fixed WebView2.
 
-**v0.1 is the first public source release.** EverSpark Forge can be installed
-from this repository on a supported Linux GPU machine. Models, configuration,
-generated outputs, and other personal data are managed separately from the
-source code.
+Cross-machine deployment does not imply automatic parallelism; tasks follow dependency order. Unimplemented Video/3D features are not available. Demos illustrate behavior; the corresponding source version is authoritative.
 
-## Product goal
+## Start
 
-The basic workflow is:
+Fully extract a Windows ZIP and run `EverSpark.exe`. Standard uses installed WebView2; full includes a fixed Runtime. Models, Tailscale and rclone are not included. Check the [official release page](https://github.com/jhinforge/EverSpark-Forge/releases) for published versions. Development test packages appear in successful [Windows builds](https://github.com/jhinforge/EverSpark-Forge/actions/workflows/windows-client.yml). Actions artifacts expire and are not permanent release downloads.
 
-1. Clone the repository.
-2. Run one launcher command.
-3. Let EverSpark create its local directories and default configuration.
-4. Open the WebUI and start using the system.
+Source entry (Windows PowerShell, Python 3.11.9):
 
-The default installation requires no R2 or Cloudflare configuration. External
-storage and public networking are optional integrations.
-
-## Default behavior
-
-- Local storage is enabled by default.
-- The WebUI binds to localhost by default.
-- R2 integration is disabled by default.
-- Cloudflare Tunnel integration is disabled by default.
-- User secrets and runtime data are never committed to the repository.
-- If an optional integration is explicitly enabled but misconfigured,
-  EverSpark must stop with an actionable error instead of silently falling
-  back to another backend.
-
-## Architecture
-
-| Module | Responsibility |
-| --- | --- |
-| **Orchestrator** | Central routing, session coordination, and task execution |
-| **Concept Forge** | Discussion, structured intent, schema validation, and prompt compilation |
-| **Memory** | Working and structured character memory; episodic memory is planned |
-| **Image Forge** | Image execution through selectable ComfyUI and optional Diffusers plugins |
-| **EverSpark WebUI** | The user-facing conversation, generation, and runtime interface |
-| **Runtime** | Health checks, processes, hardware discovery, and logging |
-| **Infrastructure** | Optional storage and network integrations |
-| **Launcher** | Installation, initialization, configuration validation, and startup |
-
-Top-level module names describe EverSpark capabilities. External tools such as
-ComfyUI, Ollama, R2, and Cloudflare belong inside adapters, providers, or
-backends rather than defining the architecture themselves.
-
-See [Docs/Architecture.md](Docs/Architecture.md) for the module
-boundaries and data flow.
-
-## Configuration model
-
-The default configuration is defined in
-[Archon/Vault/default.yaml](Archon/Vault/default.yaml).
-
-Optional integrations use private environment settings; see
-[Archon/Vault/README.md](Archon/Vault/README.md). Use `.env.example` as a
-field reference; create a private `.env` containing only the settings you need.
-
-## Quick start
-
-| Guide | English | 中文 |
-| --- | --- | --- |
-| First run | [Getting started](Docs/Getting-Started.md) | [首次运行](Docs/Getting-Started.zh-CN.md) |
-| Commands | [Command reference](Docs/Commands.md) | [命令手册](Docs/Commands.zh-CN.md) |
-| Configuration | [Configuration](Docs/Configuration.md) | [配置指南](Docs/Configuration.zh-CN.md) |
-| Runtime and data | [Runtime and data](Docs/Runtime-and-Data.md) | [运行与数据](Docs/Runtime-and-Data.zh-CN.md) |
-| Troubleshooting | [Troubleshooting](Docs/Troubleshooting.md) | [排障指南](Docs/Troubleshooting.zh-CN.md) |
-| Architecture | [Architecture](Docs/Architecture.md) | [架构指南](Docs/Architecture.zh-CN.md) |
-
-The managed runtime targets Linux x86_64 with an NVIDIA GPU. Setup needs an
-internet connection for runtimes and models; run the plan first to review the
-downloads without changing the machine.
-
-```bash
-git clone https://github.com/jhinforge/EverSpark-Forge.git
+```powershell
+git clone --branch refactor/distributed-architecture https://github.com/jhinforge/EverSpark-Forge.git
 cd EverSpark-Forge
-./everspark setup --plan
-./everspark setup
-./everspark start
+.\everspark.cmd archon start
 ```
 
-No `.env` file is needed for the default local mode. `setup` installs pinned
-ComfyUI and Ollama runtimes, downloads the default models, imports Concept
-Forge, and connects the managed Image Forge model directory. `start` launches
-Concept Forge, Image Forge, Orchestrator, and WebUI in dependency order.
+Open the printed Portal URL. Configure Vast/Tailscale, rent a Pod and deploy the required Forges using [Getting started](Docs/Getting-Started.md). Linux single-machine commands remain available; see [Commands](Docs/Commands.md).
 
-Users with existing private configuration can upload `.env` or `env.txt`, a
-Cloudflare `<UUID>.json` credential, and an optional `rclone.conf` into the
-tracked but ignored `Archon/Vault/Import/` inbox, then normalize and validate
-them before setup:
+## Documentation
 
-```bash
-./everspark configure
-./everspark setup
-./everspark doctor
-./everspark start
-```
+| Task | Guide |
+| --- | --- |
+| Startup and first generation | [Getting started](Docs/Getting-Started.md) |
+| Creation, assets, machines and downloads | [Usage](Docs/Usage.md) |
+| Model APIs, cloud paths and private settings | [Configuration](Docs/Configuration.md) |
+| Client, source and Node upgrades | [Updating](Docs/Updating.md) |
+| Data ownership, backup and restore | [Runtime and data](Docs/Runtime-and-Data.md) |
+| Failures and logs | [Troubleshooting](Docs/Troubleshooting.md) |
+| Command options and execution modes | [Commands](Docs/Commands.md) |
+| Module responsibilities and distributed flow | [Architecture](Docs/Architecture.md) |
 
-`--from <directory>` remains available for advanced or external upload paths.
+Module READMEs target developers. Test entry points are in [Tests](Tests/README.md).
 
-The input files remain untouched. Cloudflare joins the managed lifecycle only
-when its backend is enabled. When the rclone storage backend is explicitly
-enabled, setup installs rclone automatically; merely importing `rclone.conf`
-does not activate remote storage or install anything.
+## Author, costs and license
 
-When rclone storage is enabled, the Storage page can scan and selectively
-download remote checkpoints, diffusion models, LoRAs, VAEs, and Ollama models. Image
-resources are written only into `Data/Models/ImageForge`; Concept resources are
-restored from Ollama manifests and content-addressed blobs into
-`Data/Models/ConceptForge/Ollama`. Legacy ComfyUI program files and Ollama
-identity keys are never restored. Active transfers show bytes, percentage,
-speed, ETA, and file counts, and the page can resume monitoring after refresh.
+Author: **Jhin**. Official repository: [jhinforge/EverSpark-Forge](https://github.com/jhinforge/EverSpark-Forge). The author charges no software purchase, activation or subscription fees. Cloud GPUs, bandwidth, storage and third-party APIs may be billed by their providers.
 
-Open `http://127.0.0.1:8780` on the cloud machine. To access WebUI on your own
-computer, run `./everspark share` on the cloud machine for an optional temporary
-link and stop it with `./everspark share stop` when finished. Alternatively,
-when the cloud environment provides recognized connection information, `start`
-prints an SSH forwarding command to run on your computer. Use
-`./everspark access` to print it again. Otherwise set `EVERSPARK_SSH_HOST` and
-`EVERSPARK_SSH_PORT` privately; WebUI stays bound to localhost by default.
-
-The temporary link needs no SSH key, Cloudflare account, or configuration file,
-but it requires `cloudflared` and outbound connectivity. Its automatic install
-requires root. WebUI has no login protection, so use this link for short tests
-or demos. See [Getting started](Docs/Getting-Started.md).
-
-The default setup installs a usable Concept Forge model and an Image Forge
-checkpoint; both can be replaced with compatible models. A public, LoRA-free
-Illustrious API Format workflow is included for the initial generation path.
-The setup process also selects a pinned PyTorch 2.9.1 CUDA profile from the
-detected GPU architecture and NVIDIA driver capability; users do not choose a
-CUDA wheel family manually. A runtime-profile change rebuilds only the managed
-ComfyUI virtual environment and retains models, workflows, configuration,
-outputs, and memory.
-The WebUI can select installed Ollama models or a configured OpenAI Compatible
-model service. Add a service in **Model services** using its `/v1` base URL,
-API Key, and exact model ID, test it, then select it in Forge. This uses the
-Chat Completions endpoint with optional streaming; support for an individual provider
-depends on its implementation. Ollama remains the built-in default.
-
-Forge selects ComfyUI by default and can install and enable the optional
-Diffusers drawing plugin from its drawing tool selector. Diffusers currently
-supports SDXL single-file checkpoints with compatible LoRA and VAE files;
-ComfyUI uses registered API Format workflows. Select a drawing tool or save a
-default in Forge without editing `.env`. Standard SDXL/Illustrious ComfyUI
-workflows can add multiple LoRAs per request without modifying the bundled file.
-The Gallery can package the complete `Data/Outputs` tree into a timestamped ZIP
-and download it through the same WebUI connection.
-
-The Storage page also includes a direct model downloader that works without R2.
-Users can paste a public model URL into separate Checkpoint/diffusion, LoRA,
-VAE, or Concept Forge GGUF download cards. GGUF downloads register with Ollama
-automatically. Downloads show byte progress, speed, ETA, cancellation, and retry
-state; incomplete files
-are never exposed to the model scanners.
-
-The Storage page discovers nested remote model directories from configured
-rclone roots. Users can save manual paths when directory names differ and select
-physical upload destinations when multiple paths match. Directly downloaded
-image models go back to the chosen image model directory; GGUF source files go
-to a separately discoverable GGUF directory. `EVERSPARK_BACKUP_REMOTE` optionally
-sets a writable data backup location; by default the first image source bucket
-uses an `everspark-backups` prefix. Local output files can be uploaded there.
-Character JSON and SQLite are uploaded and restored as verified batches. Restore
-saves the previous local data in `Data/Recovery` before replacing it.
-
-Without rclone, **Storage → Character and Memory ZIP** can download the four
-JSON documents per character together with a consistent Memory SQLite snapshot.
-Choose a saved EverSpark data ZIP and click **Validate and restore** to verify
-and replace local character and Memory data; the previous data goes to
-`Data/Recovery/`. Restart EverSpark afterward. This ZIP excludes models,
-generated images, and private configuration; export those separately. See
-[Runtime and data](Docs/Runtime-and-Data.md) for migration steps.
-
-## In v0.1
-
-- Discuss a character in the WebUI, reuse an existing subject, and generate
-  images through Concept Forge, Orchestrator, and Image Forge.
-- Select a drawing plugin, installed workflows and image models, or a configured
-  language model service and model.
-- Download models by direct URL or from optional rclone storage; upload models
-  to mapped remote directories and back up outputs, character data, and memory.
-- Inspect runtime health, manage services through `./everspark`, and export the
-  output folder from the Gallery.
-
-Working and structured character memory are available in v0.1. Episodic memory
-is planned for a later release.
-
-## License
-
-EverSpark Forge is licensed under the GNU Affero General Public License,
-version 3 only (AGPL-3.0-only). See [LICENSE](LICENSE) for the full terms.
-
-Models, workflows, and other third-party resources retain their own licenses.
+See [LICENSE](LICENSE). Models, dependencies and third-party tools have independent licenses and terms. Closing the client does not destroy Pods; preserve required data before deleting an instance.

@@ -1,6 +1,6 @@
 # Managed Runtime
 
-This layer owns the disposable local service installations and process state
+The legacy Linux single-machine layer owns local service installations and process state
 under `Data/Runtime/`. It never stores personal configuration in the repository.
 
 - ComfyUI is installed at a pinned tag and verified commit in `Data/Runtime/ComfyUI/`.
@@ -42,3 +42,6 @@ is rebuilt; models, workflows, outputs, configuration, and memory are retained.
 forwarding command. It recognizes Vast.ai's `PUBLIC_IPADDR` and
 `VAST_TCP_PORT_22`, supports explicit cross-platform overrides, and never
 guesses missing public connection details.
+
+Distributed Node deployments use Warden backend installers and Steward deployment
+managers. This README does not instruct Windows control hosts to install ComfyUI.

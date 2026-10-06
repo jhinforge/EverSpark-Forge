@@ -1,44 +1,62 @@
-# EverSpark Forge architecture
+# Architecture and module boundaries
 
-Orchestrator coordinates tasks between Forges. Concept Forge owns provider/model
-execution, Memory and Subject business logic. Image Forge owns its ComfyUI and
-Diffusers backends and their execution resources.
+EverSpark Forge is a distributed AI OS. The host owns control, persistence and inter-Forge orchestration; Nodes execute model tasks on shared machines or in different regions. Tailscale provides connectivity. Agents register, send heartbeats and pull allowlisted tasks.
 
-| Module | Responsibility | Code |
+## Ownership
+
+| Module | Responsibility | Directory |
 | --- | --- | --- |
-| Portal / Gate | WebUI, HTTP routing, composition, explicit Forge Node bindings | `Archon/Portal/`, `Archon/Gate/` |
-| Orchestrator | Task admission and state, Concept → Image coordination, result references | `Archon/Orchestrator/` |
-| Concept Forge | Providers, connection tests, conversation, Memory, Subjects, prompt planning | `Legate/Forge/ConceptForge/` |
-| Ledger | Long-term persistence, transactions, revision integrity and reads | `Archon/Ledger/` |
-| Image Forge | Engines, workflows, checkpoint/VAE/LoRA, plugins, health and generation history | `Legate/Forge/ImageForge/` |
-| Storage | Downloads, files, output transfers/cache, upload, sync, backup and restore | `Aegis/Storage/` |
-| Vault | Credentials, private provider configuration and runtime configuration | `Archon/Vault/` |
-| Steward | Node registration, leases, reported resources, lifecycle and deployment | `Archon/Steward/` |
-| Warden / Envoy | Node runtime/process/backend lifecycle and the existing Agent task channel | `Legate/Warden/`, `Legate/Envoy/` |
+| Archon / Gate | HTTP routing, composition, Forge bindings and targets | `Archon/Gate/` |
+| Portal | WebUI, proxies, status and result presentation | `Archon/Portal/` |
+| Windows Client | Tauri/WebView2 window, portable Python host lifecycle, native downloads | `Archon/Client/Windows/` |
+| Orchestrator | Admission, request deduplication, dependency order, task states and references | `Archon/Orchestrator/` |
+| Ledger | SQLite/character persistence, transactions and revision consistency | `Archon/Ledger/` |
+| Vault | Credentials, private settings and runtime configuration | `Archon/Vault/` |
+| Steward | Instances, Node leases/resources and Forge deployment | `Archon/Steward/` |
+| Concept Forge | Language models, discussion, character/Memory business, plans and instructions | `Legate/Forge/ConceptForge/` |
+| Image Forge | ComfyUI/Diffusers adapters, resources, workflows, generation and history | `Legate/Forge/ImageForge/` |
+| Audio Forge | VoxCPM2 speech instructions, synthesis, results and health | `Legate/Forge/AudioForge/` |
+| Envoy | Agent task channel, authentication, heartbeats and supervision | `Legate/Envoy/` |
+| Warden / Crucible | Execution runtimes, processes, hardware, environment and models | `Legate/Warden/`, `Legate/Crucible/` |
+| Aegis | Storage transfers/archives/backups, networking and logging primitives | `Aegis/` |
 
-Gate composes the modules and preserves the existing HTTP API. Orchestrator asks
-Concept Forge for an opaque generation instruction, transfers it to Image Forge,
-and invokes Concept's completion callback with the result. Concept alone reads,
-compiles and updates Subject/Memory through Ledger. Image alone resolves the UI's
-legacy resource options. Output file lookup and chunk transfers are provided by
-Storage. Orchestrator retains the resulting task references and response.
+Code ownership differs from physical execution. Forge management/business objects can remain on the host while remote adapters invoke Node executors. Host Ledger retains characters and Memory. Hosted Concept APIs are called directly by the host.
 
-Forge management code still runs on the local host in distributed mode. Its
-existing remote adapters use the unchanged NodeManager / Envoy channel to call
-the two remote execution nodes. This migration changes code ownership, not the
-registration or task protocol. Concept persistence remains on the host.
+## Creation flow
 
-Runtime configuration defaults and loading moved to `Archon/Vault/`; the legacy
-`EVERSPARK_ORCHESTRATOR_CONFIG` environment variable and Python loader import
-remain supported. Existing private provider data stays under
-`Data/Configuration/ConceptForge/`, with persistence owned by Vault. The old
-`orchestrator.core.server` module is a launcher shim for Gate's HTTP server.
+```mermaid
+flowchart TD
+    P[Portal / Gate] --> O[Orchestrator]
+    O --> C[Concept Forge]
+    C --> L[Ledger]
+    C --> T[Plan and instructions]
+    T --> I[Image Forge]
+    T --> A[Audio Forge]
+    I --> R[References and states]
+    A --> R
+    R --> P
+```
 
-One generation request remains active at a time. A task job's `completed` means
-planning and image submission completed; rendering status and history belong to
-Image Forge. The existing Orchestrator job map remains in memory. No parallel
-scheduler, durable workflow recovery, or automatic generation replay was added.
-Audio and Video remain future independent Forge boundaries.
+Image mode retains Concept preparation followed by Image submission. Audio and combined modes use Concept's step list. TaskRunner validates Forge targets, dependencies and cycles, then executes in dependency order. Diagram branches represent targets, **not a promise of parallel execution**. Failed steps cause pending steps to be skipped.
 
-See the [migration inventory](Orchestrator-Boundaries.zh-CN.md) for public method
-ownership, changed files, tests, and the verified two-node generation path.
+Orchestrator passes opaque instructions without resolving model/workflow business or compiling characters. Concept completion callbacks record business data. Completed image orchestration can mean submission only; rendering/history remain Image responsibilities. Task graphs/results do not constitute fully durable workflows with automatic replay.
+
+## Control and recovery
+
+NodeManager uses host monotonic time for leases. Independent Agent heartbeats continue during execution. Node connectivity, Forge health and deployment state are separate. Probes use an independent channel to avoid long installation/generation occupying the execution lane and causing false offline reports.
+
+Agents record intent and outcomes and answer reconnection queries. Completed outcomes can be returned; interruption may leave an unknown outcome, without automatically repeating side effects. Recovery verifies source and health rather than treating a heartbeat as deployment success.
+
+## Models and media
+
+The host stores cloud configuration and mappings. Image/Concept model downloads and pulls execute on their corresponding Nodes, with targets fixed at job creation. Private task channels carry configuration snapshots. Character backup/restore runs on the host.
+
+Media endpoints return references and temporary URLs; originals remain on Nodes. Browsers/clients prefer direct access, with a single-file forwarding fallback. Image/audio ZIPs are packaged on the corresponding Node and downloaded directly; the former remote ZIP forwarding path was removed. Host data ZIPs are separate. Signed file services constrain paths and do not expose arbitrary directories.
+
+## Windows entry and limitations
+
+Both packages share a Tauri EXE, Portal and portable Python 3.11.9. Standard uses installed WebView2; full includes a fixed Runtime. Dynamic ports, single-instance handling and Windows Job ownership manage local children. Closing the host does not destroy Nodes.
+
+The current system does not promise automatic cross-machine parallelism, recovery of media after Node destruction, arbitrary model/workflow compatibility or unattended workflow replay. Unimplemented Video/3D features must not be described as available.
+
+See module READMEs for implementation entry points and [Getting started](Getting-Started.md) for operation.

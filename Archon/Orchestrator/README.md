@@ -37,10 +37,9 @@ a Forge Node locates an execution target; selecting its internal resources is
 owned by that Forge. Orchestrator owns neither Node registration nor runtime
 lifecycle state.
 
-One generation request remains active at a time. Audio mode does not require Image; combined mode runs its planned tasks in dependency order. A generation job's `completed`
+One generation request remains active at a time. Audio mode does not require Image; combined mode runs its planned tasks in dependency order. For the image submission path, a generation job's `completed`
 status means Concept planning and Image submission completed; image rendering
 status and gallery history are queried from Image Forge. Task result references
-remain in Orchestrator's existing in-memory job map. This responsibility migration
+remain in Orchestrator's existing in-memory job map. The current implementation
 does not add durable workflow scheduling, automatic generation replay, or parallel
-execution. See [the migration inventory](../../Docs/Orchestrator-Boundaries.zh-CN.md)
-for module responsibilities, public APIs, changed files and validation.
+execution. See [Architecture](../../Docs/Architecture.md) for current boundaries and execution flow.

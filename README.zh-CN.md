@@ -1,86 +1,51 @@
-# EverSpark Forge · v0.1
+# EverSpark Forge
 
-[English](README.md) · **中文**
+**分布式 AI OS**，由 Jhin 开发的免费开源系统。主机负责控制与编排，Concept、Image 和 Audio Forge 在选定机器执行模型任务，可部署在同机或跨地区节点。
 
-EverSpark Forge 将计算环境视为可以替换的部分，同时把工作流、配置和用户自己的数据作为需要保留的状态。
+[English](README.md) · [首次使用](Docs/Getting-Started.zh-CN.md) · [日常使用](Docs/Usage.zh-CN.md)
 
-EverSpark Forge 是一个自托管 AI 创作平台：它把模型、工作流、生成环境和管理工具放在同一套系统里，让用户在更换机器或环境时仍能继续使用自己的工作流和数据。系统通过讨论形成可复用的角色主体，再根据每次请求的场景生成图像。
+## 当前能力
 
-**v0.1 是首次公开的源码版本。** 可以在受支持的 Linux GPU 机器上从仓库安装。模型、私人配置、生成结果与其他个人数据独立于源码保存，需要用户自己备份。
+- 自然语言讨论、可复用角色与修订、图片／音频／图片＋音频生成。
+- Concept 支持 Ollama 和 OpenAI Compatible API，Image 支持 ComfyUI 与可选 Diffusers，Audio 使用 VoxCPM2。
+- Windows 主机管理 Vast Pod，Tailscale Node 主动注册、部署进度与独立服务健康检查。
+- 模型直链与云端拉取在对应节点执行；图片与 Concept 云端目录可独立配置。
+- 图片／音频直接访问、分别打包 ZIP 下载；角色与 Memory 可导出并验证恢复。
+- Windows standard/full 便携客户端，共用 WebUI，双击启动；两者均包含 Python，full 另含固定 WebView2。
 
-## 能做什么
+跨机器不意味着自动并行；当前任务按依赖顺序执行。未实现的 Video、3D 等不属于当前功能。Demo 是演示，实际能力以对应版本源码为准。
 
-1. 从源码安装托管的 ComfyUI、Ollama 和起步模型。
-2. 在 WebUI 中讨论角色，保存并复用角色主体，再提交图像生成请求。
-3. 选择 Ollama 或自行接入的 OpenAI Compatible 模型服务，并选择 ComfyUI 或可选的 Diffusers 绘图工具、Checkpoint、VAE、LoRA 和适用的工作流。
-4. 下载模型、查看运行状态与生成结果，按需导出输出目录。
-5. 可选地接入 rclone 远程模型库与数据备份，或通过 Cloudflare Tunnel 提供访问入口。
+## 开始使用
 
-默认模式使用当前机器上的本地存储，WebUI 仅监听本机地址；**不需要 R2、Cloudflare 或私人配置文件**。启用了可选后端却没有正确配置时，启动会给出错误，不会悄悄切换成其他后端。
+Windows ZIP 需要完整解压后运行 `EverSpark.exe`。standard 使用系统 WebView2，full 附带固定版本；两者不包含模型、Tailscale 或 rclone。从[官方发布页](https://github.com/jhinforge/EverSpark-Forge/releases)查看已发布版本；当前分支的测试包见 [Windows 构建](https://github.com/jhinforge/EverSpark-Forge/actions/workflows/windows-client.yml)。Actions 附件会过期，不作为永久下载地址。
 
-临时演示时也可在 WebUI 启动后运行 `./everspark share`，无需 SSH 转发、Cloudflare 账号或隧道配置即可获得临时公网链接；结束时运行 `./everspark share stop`。WebUI 目前没有登录验证，持有链接的人可以操作页面。详见[首次运行指南](Docs/Getting-Started.zh-CN.md)。
+源码启动（Windows PowerShell，Python 3.11.9）：
 
-## 快速开始
-
-首发运行环境为**云端 Linux x86_64 + NVIDIA GPU**，需要联网安装运行时和下载模型。作者完成全量测试时使用的基础镜像是 `nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04`；本地 Windows 运行尚未验证。先运行计划命令查看下载来源与目标：
-
-```bash
-git clone https://github.com/jhinforge/EverSpark-Forge.git
+```powershell
+git clone --branch refactor/distributed-architecture https://github.com/jhinforge/EverSpark-Forge.git
 cd EverSpark-Forge
-./everspark setup --plan
-./everspark setup
-./everspark doctor
-./everspark start
-./everspark status
+.\everspark.cmd archon start
 ```
 
-`setup` 创建被 Git 忽略的 `Data/` 目录，安装托管运行时，下载起步模型并准备生成路径；`start` 按依赖顺序启动 Concept Forge、Image Forge、Orchestrator 和 WebUI。没有 `.env` 时，模型、输出和记忆保存在运行 EverSpark 的机器上。
-
-在云端机器上可以访问 `http://127.0.0.1:8780`。如需在自己的电脑上打开 WebUI，可在云端运行 `./everspark share` 获得临时链接，结束时运行 `./everspark share stop`；或运行 `./everspark access`，然后**在自己的电脑上**执行它打印的 SSH 转发命令。云端环境如果未提供可识别的 SSH 连接信息，可在私人配置中设置 `EVERSPARK_SSH_HOST` 与 `EVERSPARK_SSH_PORT`。详细步骤见[首次运行指南](Docs/Getting-Started.zh-CN.md)。
+打开终端打印的 Portal 地址。然后配置 Vast／Tailscale、租用 Pod 并部署所需 Forge；完整步骤见[首次使用](Docs/Getting-Started.zh-CN.md)。Linux 单机托管入口仍保留，见[命令手册](Docs/Commands.zh-CN.md)。
 
 ## 文档
 
-| 内容 | 中文 | English |
-| --- | --- | --- |
-| 首次运行 | [首次运行指南](Docs/Getting-Started.zh-CN.md) | [Getting started](Docs/Getting-Started.md) |
-| 命令说明 | [命令手册](Docs/Commands.zh-CN.md) | [Command reference](Docs/Commands.md) |
-| 私人配置 | [配置指南](Docs/Configuration.zh-CN.md) | [Configuration](Docs/Configuration.md) |
-| 数据与迁移 | [运行与数据](Docs/Runtime-and-Data.zh-CN.md) | [Runtime and data](Docs/Runtime-and-Data.md) |
-| 故障定位 | [排障指南](Docs/Troubleshooting.zh-CN.md) | [Troubleshooting](Docs/Troubleshooting.md) |
-| 模块与请求流 | [架构指南](Docs/Architecture.zh-CN.md) | [Architecture](Docs/Architecture.md) |
-
-## 私人配置与数据
-
-如果已有私人配置，可以把 `env.txt` **或** `.env` 以及需要的 `rclone.conf`、Cloudflare `<UUID>.json` 凭据放入 `Archon/Vault/Import/`，在 `setup` 前运行：
-
-```bash
-./everspark configure
-./everspark setup --plan
-./everspark setup
-./everspark doctor
-./everspark start
-```
-
-`env.txt` 和 `.env` 的内容**完全是同一种 `KEY=VALUE` 格式**；使用 `env.txt` 是为了方便在自己的电脑上查看、保存和上传。`configure` 验证后将其导入为仓库根目录的 `.env`，原始上传文件不会被删除。`.env.example` 只供参考字段，请仅填写实际需要的设置。
-
-仅上传 `rclone.conf` 不会开启远程存储；必须显式启用 rclone 后端并配置模型扫描路径。Cloudflare Tunnel 也只会在配置完整并启用后加入托管生命周期。不启用远程存储时，Storage 页面仍能通过公开直链分别下载 Checkpoint/扩散模型、LoRA、VAE 和 Concept Forge GGUF。详见[配置指南](Docs/Configuration.zh-CN.md)。
-
-运行数据位于被 Git 忽略的 `Data/` 下：图片模型在 `Data/Models/ImageForge/`，Concept Forge 模型在 `Data/Models/ConceptForge/`，生成结果在 `Data/Outputs/`，角色文档与记忆分别在 `Data/Subjects/` 和 `Data/Memory/`。Gallery 的 **Download outputs ZIP** 会打包整个输出目录。无需 rclone，也可在 Storage 的 **角色与 Memory 压缩包** 区域下载角色四份 JSON 与 Memory SQLite 的 ZIP；选择备份 ZIP 并点击 **验证并恢复**，系统会校验内容、保存当前数据至 `Data/Recovery/` 并恢复，之后需重启 EverSpark。启用 rclone 后还可手动上传模型、整个输出目录及成批的角色数据；这些备份**不会自动进行**。角色与 Memory ZIP 不包含图片、模型或私人配置；迁移前请查看[运行与数据指南](Docs/Runtime-and-Data.zh-CN.md)。
-
-## 架构与当前范围
-
-| 模块 | 职责 |
+| 需要做什么 | 指南 |
 | --- | --- |
-| **Orchestrator** | 会话协调、请求调度和任务管理 |
-| **Concept Forge** | 讨论、角色主体、结构化意图和提示词编译；内置 Ollama，支持在 WebUI 接入 OpenAI Compatible 模型服务 |
-| **Memory** | 对话历史、角色及修订、提示词和任务记录 |
-| **Image Forge** | 图像任务与结果的统一接口；默认 ComfyUI，可安装并选用 Diffusers 插件 |
-| **WebUI** | 讨论、生成、Storage、Gallery 和 Runtime 界面 |
-| **Runtime / Launcher** | 安装、启动、健康检查、硬件发现和日志 |
-| **Infrastructure** | 可选的远程存储及网络入口 |
+| 启动与首次生成 | [首次使用](Docs/Getting-Started.zh-CN.md) |
+| 创作、资产库、机器和下载 | [日常使用](Docs/Usage.zh-CN.md) |
+| 模型 API、云端目录和私人配置 | [配置](Docs/Configuration.zh-CN.md) |
+| 更新客户端、源码和节点 | [更新](Docs/Updating.zh-CN.md) |
+| 数据归属、备份与恢复 | [运行与数据](Docs/Runtime-and-Data.zh-CN.md) |
+| 失败与日志定位 | [排障](Docs/Troubleshooting.zh-CN.md) |
+| 命令参数与运行模式 | [命令手册](Docs/Commands.zh-CN.md) |
+| 模块职责与分布式链路 | [架构](Docs/Architecture.zh-CN.md) |
 
-在 **模型服务**中填写以 `/v1` 结尾的 API 基础地址、API Key 和平台要求的模型 ID，测试后即可在 Forge 选用；使用的是非流式 Chat Completions 接口，具体平台仍需兼容该接口。Forge 的绘图工具选择器可安装、启用 Diffusers，并保存默认工具，无需改动 `.env`。Diffusers 当前支持 SDXL 单文件 Checkpoint 及兼容的 LoRA、VAE；ComfyUI 仍使用注册的 API Format 工作流。情节式记忆的自动提取、检索和整合尚未实现。模块边界及实际请求流见[架构指南](Docs/Architecture.zh-CN.md)。
+模块 README 面向开发者；测试入口见 [Tests](Tests/README.md)。
 
-## 许可证
+## 作者、费用与许可证
 
-EverSpark Forge 采用 **GNU Affero General Public License version 3 only（AGPL-3.0-only）**；完整条款见 [LICENSE](LICENSE)。模型、工作流及其他第三方资源各自遵循其许可证。
+作者：**Jhin**。官方仓库：[jhinforge/EverSpark-Forge](https://github.com/jhinforge/EverSpark-Forge)。作者不收取软件购买、激活或订阅费用；云 GPU、网络、存储及第三方 API 的费用由对应供应商收取。
+
+许可证见 [LICENSE](LICENSE)。模型、依赖和第三方工具各有自己的许可与条款。关闭客户端不会自动销毁 Pod；删除实例前先保存所需数据。

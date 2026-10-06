@@ -1,88 +1,54 @@
-# Troubleshooting (v0.1)
+# Troubleshooting
 
-This guide covers the cloud Linux deployment in [Getting started](Getting-Started.md). Locate the failing layer first: installation, WebUI connection, service startup, models and workflows, generation, or remote storage.
+Record the About version/commit, time, complete UI error, Node and task ID first. Preserve surrounding logs. Do not publish API/auth keys, signed download URLs or complete private configuration.
 
-## Collect three results
+## Client does not open
 
-From the repository root:
+Fully extract the ZIP into a writable directory on Windows x64. Standard requires installed WebView2; use full when absent. Do not copy only the EXE. Check `Data/Logs/client/backend.log`. Close a concurrently running source host first. The CLI entry is `everspark.cmd archon start`; desktop ports are dynamic, not necessarily 8780.
 
-```bash
-./everspark status
-./everspark doctor
-./everspark logs status
-```
+## Node offline or Forge unavailable
 
-`status` reports service health and log locations. `doctor` checks basic commands, GPU visibility, and enabled backend settings. `logs status` lists managed log status. WebUI **Runtime** also shows readiness. Logs default to module folders under `Data/Logs/`; run `./everspark logs init` to create them. If `EVERSPARK_LOG_DIR` is configured, use the actual location shown by `status`. Existing flat files remain as historical logs.
+Check host Tailscale, Agent heartbeat and machine connectivity, then deployment, source verification and Forge health. An online Agent does not imply a working Forge. Before a new rental, check auth-key validity, single-use consumption and the Reusable setting.
 
-See [log commands](Commands.md#5-log-status-and-maintenance) for the checks above and for `logs rotate`, which can change or remove log files.
+If jobs continue while health is temporarily unconfirmed, preserve the stage and last successful check and wait for rechecking. Do not immediately duplicate deployment or generation. Long-running tasks use an independent probe channel; one timeout does not prove the Pod is offline.
 
-## 1. Setup did not finish
+## Deployment failed or outcome unknown
 
-**Check:** Find the first error from `./everspark setup`. Use `./everspark setup --plan` to inspect download sources and destinations. Confirm the GPU with `nvidia-smi`, and run `./everspark doctor` for platform and command checks. Runtime installation and model downloads require network access.
+Record the failed stage, exit code and diagnostic tail. Model downloads, Python dependencies, GPU/drivers and service startup are different stages. Agent reconnection and host restart can recover task queries; interrupted execution can have an unknown outcome without automatic reinstall. Verify actual services/resources before redeploying.
 
-**Fix:** Address that error and rerun `./everspark setup`. If runtimes installed but models are missing, run `./everspark models status`. A running WebUI does not mean generation models are ready. Check terminal output and relevant installation, model, and service logs in `Data/Logs/`.
+Audio installation checks its source pin and matching Torch/torchaudio; repair through Audio deployment. Update host and Node for source mismatches using [Updating](Updating.md).
 
-## 2. WebUI does not open
+## Generation failed
 
-1. On the cloud machine, run `./everspark status webui`. If stopped, run `./everspark start`; if startup fails, inspect `Data/Logs/webui/webui-service.log`.
-2. If `http://127.0.0.1:8780` opens **on the cloud machine** but not on your computer, run `./everspark access`. Execute its SSH forwarding command **on your computer**, keep the SSH session open, and visit the printed local address (normally `http://127.0.0.1:8080`).
-3. If no complete command is shown, verify the public SSH address and port. If necessary, configure `EVERSPARK_SSH_HOST` and `EVERSPARK_SSH_PORT` privately, then rerun `./everspark access`.
-4. For a temporary link, run `./everspark share status`. If none is running, run `./everspark share` on the cloud machine and open the printed URL. If an existing link fails, check WebUI readiness, whether sharing is still running, and connectivity from the cloud machine to Cloudflare. Restarting sharing may change the URL.
+Each mode needs its corresponding Forges; Audio does not require Image. Test hosted Concept APIs, including URL, model ID and authentication. Resource lists belong to the selected Node, not another machine.
 
-The default WebUI listens only on localhost. The cloud machine's `127.0.0.1:8780` is not your computer's remote address.
+`Concept Forge returned an invalid creative decomposition` indicates an invalid plan structure or mode. Record the model, mode and full error and verify updates on both host and Concept execution side. Do not require Image configuration for an audio-only request.
 
-## 3. Runtime reports an unready service
+Inspect failed/skipped steps and result polling separately. Image submission does not imply completed rendering. Check character selection and model/workflow/LoRA/VAE compatibility.
 
-| Service | Check first | Default process log |
-| --- | --- | --- |
-| Concept Forge | `./everspark status concept`; Ollama for the built-in provider; Orchestrator for external requests | `Data/Logs/concept/ollama-service.log` or `Data/Logs/orchestrator/orchestrator-service.log` |
-| Image Forge | `./everspark status image`; selected engine and GPU | `Data/Logs/image/comfyui.log` or `Data/Logs/image/diffusers.log` |
-| Orchestrator | `./everspark status orchestrator`; upstream services and settings | `Data/Logs/orchestrator/orchestrator-service.log` |
-| WebUI | `./everspark status webui`; listening port and process | `Data/Logs/webui/webui-service.log` |
+## Cloud scanning or model pull failed
 
-`external` means a healthy service started elsewhere was discovered; it does not mean stopped. `unhealthy` means a managed process is running but failed its health check. Inspect logs, then use `./everspark restart <service>` if appropriate; do not guess process IDs.
+Check enabled storage, rclone executable, imported connection and at least one model directory. Image and Concept are independent. Custom category names require a model type. Pulls target the corresponding Forge Node. Old Node model-storage processes need updates and restarts; restarting only the Agent may not reload them.
 
-## 4. Missing model or workflow choices
+Sources may be read-only; upload/backup destinations must be writable. Remote paths, task errors and Node model-storage `service.log` distinguish directory failures from service failures.
 
-In **Forge**, inspect the selected **Drawing tool**, **Workflow** (ComfyUI), **Checkpoint**, **VAE**, and **Concept LLM**. Run `./everspark models status`. For user downloads, check that the task completed under **Storage** and that you chose the correct Checkpoint/diffusion, LoRA, VAE, or GGUF card. Interrupted or failed direct downloads are not exposed as complete models. For a hosted language model, open **Model services**, verify the `/v1` base URL and exact model ID, then use **Test**; these IDs are entered explicitly rather than discovered from `/models`.
+## Media or ZIP downloads failed
 
-ComfyUI workflows must be registered **API Format JSON** with a matching manifest. A regular ComfyUI UI workflow cannot simply be placed in the registered workflow directory. Diffusers does not use those workflows and currently accepts SDXL single-file checkpoints. Installed models must match the chosen engine. See [Image Forge](../Legate/Forge/ImageForge/README.md) for node, LoRA, and VAE constraints. For remote libraries, check scanned model directories and set manual paths for unusual layouts. Public direct URL downloads work without rclone.
+For playback or individual files, check Node availability and Tailscale policy/firewall access. Refresh expired URLs in Asset library.
 
-## 5. Generation fails or no result appears
+Remote ZIPs are prepared on the Pod and downloaded using temporary URLs. Confirm archive completion, then inspect whether transfer started. Forge generation health does not prove media URL service health. For `Image URL service unavailable` or archive HTTP 503, inspect the Node service running `Aegis/Storage/node_media_access.py`. `Cannot assign requested address` means the bind address is not local and bindable; update and restart the Node media service.
 
-Read the on-page task error and recent **Gallery** results, then run `./everspark status`. Inspect `Data/Logs/image/comfyui.log` for ComfyUI or `Data/Logs/image/diffusers.log` for the managed Diffusers worker; plugin installation tasks may report `Data/Logs/image/image-plugin-diffusers.log`. Check `Data/Logs/orchestrator/orchestrator-service.log` for task submission and planning. Diffusers installations made before PEFT was added can show **Repair required**: use **Repair tool** in Forge before retrying LoRA or VAE. If failures began after changing a workflow, checkpoint, VAE, or LoRA, record the selection and error and compare it with the selected engine's requirements.
+Choose a destination in desktop Save As; cancellation saves nothing. If an active transfer is slow, compare individual files and ZIPs and check the host-to-Pod route. Public speed tests measure a different path. Completion messages show the actual saved path.
 
-If the browser reports HTTP 502 while generating, first check the background task in Forge and the result in Gallery: planning and generation run asynchronously, and an image may have completed. Capture WebUI and Orchestrator logs if the task status still cannot be polled. For an OpenAI Compatible error, test in **Model services**, then match the `trace_id` across `concept/conceptforge.log` (upstream HTTP result) and `orchestrator/orchestrator.log` (task result). For a Forge conversation failure, also inspect `webui/webui.log` for the proxy result; a missing proxy result points toward the Tunnel. These paths are below the configured log root (`EVERSPARK_LOG_DIR`), and the records exclude API Keys and full request bodies. Restart WebUI and Orchestrator after updating. The adapter tries non-streaming Chat Completions by default and retries selected upstream HTTP errors with streaming (`stream_options.include_usage`), collecting text deltas before continuing. A connection saved with streaming enabled keeps that preference. Existing JSON-mode connections retry without `response_format` when the provider rejects it. Authentication errors (401/403) are reported without a mode retry; repeated 502/503 responses can still indicate upstream failure.
+Character/Memory ZIP restoration instead checks its 128 MiB limit, manifest and SQLite consistency. It does not use the remote-media ZIP path.
 
-If no test event appears, run `./everspark status orchestrator`. An `external` service was started outside the managed runtime, so the managed `restart` does not restart it; use its original launch method. Also check whether `.env` overrides `ORCHESTRATOR_LOG` and inspect `Data/Logs/orchestrator/orchestrator-service.log` for console records.
-In a failed test, `key_origin=form` means a Key was entered for that test; `saved` means the server reused the Key saved for an existing connection. The edit form does not fill the old Key back in.
+## Logs
 
-Successful images go to `Data/Outputs/`; **Download outputs ZIP** exports the entire folder. A failed generation does not imply any backup occurred.
+| Location | Start with |
+| --- | --- |
+| Desktop directory | `Data/Logs/client/backend.log` |
+| Host log root | `archon/gate.log`, `webui/webui.log` and affected module logs |
+| Agent directory | Logs, task records and `bandwidth.log` under `/workspace/everspark-node/` |
+| Node checkout | Forge `Data/Logs/` and `Data/Runtime/model-storage/service.log` |
 
-## 6. An existing character is listed but not used
-
-Select it in **Forge** and click **Use in Forge**. Merely seeing it in **Subjects** does not select it for the current conversation. Confirm the current character card in Forge before generating. If selection fails, record browser feedback and errors at the same time in `Data/Logs/orchestrator/orchestrator-service.log` and `Data/Logs/webui/webui-service.log`.
-
-## 7. Local ZIP export/restore or remote transfer fails
-
-**Character and Memory ZIP:** If **Download data ZIP** fails under **Storage → Character and Memory ZIP**, check that Orchestrator is ready and `Data/Memory/everspark.db` is available. Inspect the page error and `Data/Logs/orchestrator/orchestrator-service.log` and `Data/Logs/webui/webui-service.log`. If **Validate and restore** fails, confirm the file came from EverSpark's **Download data ZIP**, is no larger than 128 MiB, and has not been damaged or changed. Validation checks the manifest, hashes, SQLite integrity, and agreement between all four character JSON documents and the database; arbitrary ZIP files are not accepted. Restart EverSpark after a successful restore. Previous data lives in `Data/Recovery/`; the upload is staged in `Data/Imports/` and cleaned up by WebUI after success or failure. This ZIP contains no images or models.
-
-**Remote models and data:** Run `./everspark doctor`. rclone needs valid `rclone.conf`, image and Concept model scanning roots, and an accessible remote. Manual paths or upload destinations pointing at a read-only or aggregate remote need a real writable target for uploads. Inspect the UI task error and `Data/Logs/storage/rclone.log`.
-
-For outputs, choose **Outputs folder** to upload the whole directory. Remote restore points also contain batched character JSON and Memory SQLite and require the prompted restart. Neither restore method brings back output images or models. See [Runtime and data](Runtime-and-Data.md).
-
-## 8. Temporary link or Named Tunnel inaccessible publicly
-
-**Temporary link from `./everspark share`:** On the cloud machine, run `./everspark status webui` and `./everspark share status`. For startup failures, read the command error and `Data/Logs/tunnel/quick-tunnel.log` (or your `EVERSPARK_LOG_DIR`). Check WebUI health and outbound Cloudflare connectivity. Installing a missing `cloudflared` needs root and download access. Quick Tunnel is rejected when `~/.cloudflared/config.yaml` or `config.yml` exists for this user; check whether another Tunnel relies on that configuration before temporarily moving it. The temporary link does not use Named Tunnel settings such as `CF_TUNNEL_UUID`.
-
-**Configured Named Tunnel:** First verify WebUI locally on the cloud machine at `http://127.0.0.1:8780` and with `./everspark status webui`. Check Tunnel with `./everspark status`, then the UUID, hostname, credential file, and `CF_LOCAL_PORT` in your private settings. The latter must match the WebUI port at import. Inspect Tunnel-related logs under `Data/Logs/`. SSH forwarding works for access from your own computer; a temporary link can serve a short demo without Named Tunnel configuration. Stop the public link with `./everspark share stop` when finished; the WebUI has no login protection.
-
-## Filing an issue
-
-Include your Linux environment, commands, failing step, and **first error**, plus relevant `./everspark status` and `./everspark doctor` output and a short tail of the appropriate service log. On the cloud machine, use `tail -n 80 Data/Logs/<log-file>`. Redact public IPs, private paths, tokens, signed model URLs, and credentials. Do not upload your `.env` or `rclone.conf`.
-
-## Windows console selection pauses the page
-
-If selecting text in PowerShell freezes the page and Esc restores it, classic console Quick Edit may be pausing output. `everspark.cmd archon start` attempts to disable Quick Edit for the current Windows console; redirected input and unsupported hosts are skipped. Default Windows console logging uses a bounded background queue so request threads do not wait for the terminal. A full queue drops console copies only; file logging retains every record. Stop the old service and start it again to apply this handling.
-
-Browser refreshes and cancelled requests no longer print connection-abort tracebacks. Upstream timeouts and failures remain recorded in file logs.
+Paths can be overridden; use the task's actual diagnostics. Host logs normally live under `Data/Logs/`. Include steps, mode, version, task ID and redacted logs in an Issue. Identify desktop, source-host or Linux single-machine execution.

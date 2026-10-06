@@ -1,77 +1,24 @@
-# Configuration
+# Vault
 
-EverSpark is local-first. With no user configuration, storage remains local
-and services bind to localhost.
+Vault owns credentials, private provider configuration, storage configuration and
+runtime configuration loading. `default_config.json` and `runtime_config.py`
+provide the Python runtime defaults/loader; the compatibility
+`EVERSPARK_ORCHESTRATOR_CONFIG` override remains supported.
 
-`default.yaml` is the public configuration contract. The migrated shell
-foundation continues to accept environment files through `load_config.sh`
-until the unified Python configuration loader is introduced.
+`import_config.py` accepts `.env` or the `env.txt` alias, validates input, preserves
+originals and writes normalized private settings. The standard inbox is
+`Archon/Vault/Import/`. Whole environment imports replace `.env` rather than merge.
+`storage_config.py` implements UI rclone import, directory selection, validation
+and transactional save/application. At least one Image or Concept source is
+required for cloud model storage; the roles can be cleared independently.
+`concept_configuration.py` persists model-service connections without exposing
+saved keys in API responses. `windows_credentials.py` uses this Windows user's
+Credential Manager for Vast and Node secrets.
 
-Configuration precedence is intended to be:
+Typical private destinations are root `.env`,
+`Data/Configuration/rclone/rclone.conf`, `Data/Configuration/cloudflare/` and
+`Data/Configuration/ConceptForge/connections.json`. File permissions are tightened
+where supported. A character/Memory ZIP excludes these secrets.
 
-1. Command-line arguments
-2. Environment variables
-3. User configuration
-4. Repository defaults
-
-Optional integrations must be explicitly enabled. Once enabled, incomplete
-R2/rclone or Cloudflare settings are treated as errors rather than silently
-falling back to local behavior.
-
-## Private configuration import
-
-EverSpark accepts both `.env` and `env.txt`. The latter is a portable alias for
-Windows file management and Pod upload workflows; both use the same `KEY=VALUE`
-format. The repository includes `Archon/Vault/Import/` as the standard private
-upload inbox. Put all configuration files there and run:
-
-```bash
-./everspark configure
-```
-
-The inbox contents are ignored by Git. `--from <directory>` remains available
-when an external source directory is preferred.
-
-When both names are present, their parsed settings must be identical. An
-explicit file can be selected with `--env`. The importer never executes the
-input as shell code and never moves or deletes the source files.
-
-For a configured Cloudflare backend, the source directory must also contain
-`<CF_TUNNEL_UUID>.json`. Its required fields and `TunnelID` are validated, and
-the tunnel port must match the EverSpark WebUI port (8780 by default). If
-`rclone.conf` is present, it is validated and staged but does not enable a
-remote storage policy automatically.
-
-Once `EVERSPARK_STORAGE_BACKEND=rclone` is explicitly selected, `setup`
-installs rclone automatically on the supported apt-based Linux runtime.
-
-To enable selective remote model downloads after import, add the following to
-the private environment file using paths from the user's own rclone remote:
-
-```text
-EVERSPARK_STORAGE_BACKEND=rclone
-IMAGE_FORGE_RCLONE_REMOTE=remote:path/models_cold
-CONCEPT_FORGE_RCLONE_REMOTE=remote:path/.ollama/models
-EVERSPARK_BACKUP_REMOTE=remote:path/everspark-backups
-```
-
-The Storage page discovers model directories within the configured scan roots.
-Manual source paths and physical upload targets can be saved there for unusual
-layouts; they live beside the imported `rclone.conf` in private data. A union
-remote is suitable for scanning but uploads require a writable source remote.
-`EVERSPARK_BACKUP_REMOTE` is optional: without it, data backups use
-`everspark-backups` in the first image source bucket. Model upload targets can
-be selected in Storage. Character JSON and SQLite are backed up and restored
-together as verified batches. Uploads never delete remote files.
-
-Private files are normalized to ignored runtime locations:
-
-| Input | Private destination |
-| --- | --- |
-| `.env` or `env.txt` | `<repository>/.env` |
-| `<UUID>.json` | `Data/Configuration/cloudflare/<UUID>.json` |
-| `rclone.conf` | `Data/Configuration/rclone/rclone.conf` |
-
-All imported files receive mode `0600`. Cloudflare is inferred only when the
-environment contains complete tunnel settings; local mode remains the default
-when no private configuration is supplied.
+See [Configuration](../../Docs/Configuration.md) and
+[Runtime and data](../../Docs/Runtime-and-Data.md). Tests: `Tests/Configuration/`.

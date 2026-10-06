@@ -1,15 +1,15 @@
 # Image Forge
 
 Image workflow preparation and execution through pluggable adapters. Image
-Forge owns the backend-neutral request, job IDs, status, and gallery. WebUI
-accesses image results through Orchestrator, never through a model runtime.
+Forge owns the backend-neutral request, job IDs, status, and gallery. WebUI queries results through Portal/Gate. Signed media URLs allow direct Node
+file access without exposing the model runtime.
 
 ## Select a drawing engine
 
 ComfyUI is the default drawing tool. Image Forge discovers plugins from
-`ImageForge/Plugins/*.json`. In the Forge drawing tool selector, choose
-Diffusers and click **Install tool** (once), then **Enable tool** after a
-restart if needed. Choose **Set as default** to save the default in the
+`ImageForge/Plugins/*.json`. In distributed mode, install and enable backends through Node deployment
+management; Creation selects available tools. The legacy single-machine tool
+selector also provides installation/repair actions. Choose **Set as default** to save the default in the
 memory database; no `.env` edit is needed. A generation request records its
 chosen tool, so jobs and the gallery continue working after changing the
 selector. The managed Diffusers worker runs as a separate optional service
@@ -29,8 +29,8 @@ loading a single-file checkpoint.
 
 For a character's first generation, ComfyUI reads default negative terms from
 the selected registered workflow's negative text node. Diffusers supplies its
-own SDXL default negative terms. Orchestrator combines these with the generated
-terms and saves the first prompt for later reuse until the user changes it.
+own SDXL default negative terms. Concept Forge combines these with generated terms and records reusable prompt
+data through Ledger.
 
 For Diffusers installations made before the PEFT dependency was added, Forge
 shows **Repair required**. Click **Repair tool** to stop the managed worker,

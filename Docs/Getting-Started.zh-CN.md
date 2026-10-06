@@ -1,164 +1,78 @@
-# 首次运行 EverSpark Forge（v0.1）
+# 首次使用 EverSpark Forge
 
-本文以**云端 Linux x86_64 + NVIDIA GPU** 为首发运行环境。作者完成全量测试时使用的基础镜像为 `nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04`。本地 Windows 运行尚未验证；Windows 可以作为浏览器及 SSH 客户端使用。
+EverSpark Forge 是分布式 AI OS：主机运行控制与编排，Forge 在选定节点执行模型任务。本指南以已实测的 Windows 主机与 Linux NVIDIA GPU Pod 为主。
 
-EverSpark Forge 发布的是源码。首次 `setup` 会联网安装托管运行时，并下载用于起步的模型；这些下载需要时间和存储空间。你也可以在配置模式下接入自己的模型与远程存储。**不需要 R2、Cloudflare 或私人配置文件，也能运行默认本地模式。**
+## 1. 选择启动方式
 
-## 1. 准备环境
+| 方式 | 需要准备 | 启动入口 |
+| --- | --- | --- |
+| Windows standard ZIP | Windows x64、系统已有 WebView2 | 解压后双击 `EverSpark.exe` |
+| Windows full ZIP | Windows x64；包内附带固定版本 WebView2 | 解压后双击 `EverSpark.exe` |
+| Windows 源码 | Git、Python 3.11.9 | PowerShell 执行 `.\everspark.cmd archon start` |
 
-- 一台可使用 NVIDIA GPU 的 Linux x86_64 机器，具有网络连接，以及 `bash`、`python3`、`git`。
-- 供安装程序和模型使用的可用磁盘空间；具体下载来源和目标位置可先用 `setup --plan` 查看。
-- 从自己的电脑访问云端 WebUI 可选用临时链接；如果选择 SSH 转发，则需要云端机器的公网地址、SSH 端口和登录权限。
+两个 ZIP 都包含便携 Python Runtime，不要求先安装 Python；不包含 GPU 模型、Tailscale、SSH 或 rclone。系统没有 WebView2 时选择 full。软件免费，GPU 租赁、网络和第三方模型服务可能另行收费。
 
-镜像中的 CUDA 版本与 EverSpark 安装的 PyTorch CUDA 档位是两回事。当前源码会根据 **NVIDIA 驱动能力和 GPU 架构**自动选择 PyTorch `cu126` 或 `cu128`；只有无法读取驱动能力时才以基础镜像的 CUDA runtime 作为回退判断。Blackwell GPU 需要支持 CUDA 12.8 的驱动及 `cu128` 档位。
+从[官方仓库](https://github.com/jhinforge/EverSpark-Forge)公布的发布入口获取客户端。当前开发分支为 `refactor/distributed-architecture`；GitHub Actions 的 Windows portable client 成功运行提供两个 ZIP 和 SHA-256 文件。Actions 构建附件是临时测试分发，不是永久发布地址。
 
-## 2. 无私人配置：从源码启动
+完整解压对应版本 ZIP 到可写目录，例如 `D:\EverSpark-Forge`，再双击 EXE；不要在压缩包内部运行。如果下载的是 Actions 附件，先解压外层附件，再选择 standard 或 full ZIP 解压。页面打开只代表主机启动成功，尚未部署 Forge 时不能生成。
 
-在云端机器的终端运行：
+### 从源码启动
 
-```bash
-git clone https://github.com/jhinforge/EverSpark-Forge.git
+在自己的 Windows PowerShell 中执行：
+
+```powershell
+git clone --branch refactor/distributed-architecture https://github.com/jhinforge/EverSpark-Forge.git
 cd EverSpark-Forge
-./everspark setup --plan
-./everspark setup
-./everspark doctor
-./everspark start
-./everspark status
+python --version
+.\everspark.cmd archon start
 ```
 
-如果想在自己的电脑上**直接通过临时链接**打开 WebUI，确认 `start` 成功后，再在云端机器运行：
+浏览器打开终端打印的 Portal 地址，默认 `http://127.0.0.1:8780/`。保持终端运行，Ctrl+C 停止。不要同时运行命令行主机和桌面客户端。客户端使用动态本机端口，直接使用窗口即可，不要假定始终是 8780。
 
-```bash
-./everspark share
-```
+### SSH 工具与已有机器（按需）
 
-在自己的电脑浏览器打开输出的 `https://*.trycloudflare.com` 地址；用完在云端运行 `./everspark share stop`。`share` 是可选的，`start` 不会自动创建公网链接。想通过 SSH 访问则无需运行 `share`，按[下方的 SSH 转发步骤](#查看并运行转发命令)操作。
+客户端不附带 OpenSSH。SSH 部署／连接回退需要主机能运行 `ssh` 和 `ssh-keygen`；可先在 PowerShell 执行 `ssh -V` 检查。新自动节点通常不用手动登录；已有机器或直接使用 SSH 时，按云服务提供的用户、地址、端口和公钥入口配置。
 
-`setup --plan` 只列出准备安装的运行时、模型来源与本地目标，不修改机器。`setup` 创建被 Git 忽略的 `Data/` 运行目录，安装托管的 ComfyUI、Ollama 及 Python 环境，下载起步模型，并将 Concept Forge 模型导入 Ollama。下载量以计划输出为准。
+需要自己创建密钥时，在本机运行 `ssh-keygen -t ed25519 -C "everspark-cloud"`，不要覆盖已有私钥。默认公钥可用 `Get-Content "$HOME/.ssh/id_ed25519.pub"` 查看，将完整公钥添加到机器授权入口；私钥留在本机。此手工密钥流程与 EverSpark 自动管理的部署身份不同，不要随意替换自动身份文件。
 
-`doctor` 检查基础命令、配置及 GPU 可见性；`start` 按依赖顺序启动 Concept Forge、Image Forge、Orchestrator 和 WebUI；`status` 用于复查服务状态。若 `setup` 中途失败，先根据报错处理依赖或网络问题，再重新运行；不要在模型尚未准备好时把“WebUI 能打开”当作生成链路已可用。
+## 2. 配置账户与节点连接
 
-这些命令的参数、作用及实际改动见[命令手册：初始化、配置和安装](Commands.zh-CN.md#1-初始化配置和安装)与[管理服务](Commands.zh-CN.md#2-管理服务)。
+1. 在 Windows 主机安装并登录 Tailscale，确认已连接自己的虚拟局域网。
+2. 在 **设置 → 账户与节点** 填写自己的 Vast API Key，点击 **验证并保存**。密钥保存在当前 Windows 用户的凭据管理器。
+3. 在同一页的 **自动连接节点** 填写 Tailscale auth key。选择单次或可重复使用模式，必须与密钥本身的 Reusable 设置一致；有效期长不等于可重复使用。
+4. 点击 **配置自动连接**，确认准备就绪。此密钥仅用于当前 Archon 会话；重新打开客户端后，租新 Pod 前应再次配置。已有节点有独立连接身份。
 
-没有 `.env` 时，存储默认为本地，服务默认监听本机地址。启动后可在云端机器打开 `http://127.0.0.1:8780`。SSH 转发与临时链接均无需 EverSpark 私人配置文件。
+Tailscale 网络策略和 Windows 防火墙需要允许节点连接主机显示的 Agent 端口（默认 TCP 8766），并允许主机访问节点媒体服务。只允许注册端口可能足以注册，却无法直接播放或下载媒体；节点媒体服务使用动态端口。
 
-## 3. 从自己的电脑访问云端 WebUI
+## 3. 租用 Pod 并部署 Forge
 
-| 方式 | 自己电脑如何打开 | 需要什么 | 适合什么情况 |
-| --- | --- | --- | --- |
-| SSH 转发 | 在云端运行 `./everspark access` 查看命令，在自己电脑执行该 SSH 命令，再打开本机地址（默认 `http://127.0.0.1:8080`） | 有权登录云端机器；知道公网 SSH 地址和映射端口，通常使用 SSH 密钥；保持 SSH 会话连接 | 自己长期使用，WebUI 继续只监听云端本机地址 |
-| 临时链接 | 在云端运行 `./everspark share`，自己电脑打开输出的公网 HTTPS 链接 | 云端机器能连接 Cloudflare；无需 SSH 密钥、Cloudflare 账号或 `.env` | 短时间测试或演示；WebUI 没有登录验证，持有链接的人都能操作，结束后运行 `./everspark share stop` |
+1. 打开 **计算 → 租用 GPU**，设置 GPU、地区和磁盘条件，搜索报价。搜索不会自动租赁；确认费用与机器条件后使用租用按钮。
+2. 在 **计算 → 我的机器** 等待 Pod 和 Node Agent 在线。新 Pod 的启动流程自动加入 Tailscale 并启动 Agent，通常无需先手动 SSH。
+3. 如网络测速要求确认 Ookla 条款，在页面查看条款后自行决定是否确认；测速不阻止 Forge 部署。
+4. 在机器卡片部署需要的 Concept、Image 或 Audio Forge。等任务完成、源码检查和健康检查通过后，再选择该机器作为对应 Forge 的执行节点。
 
-### 不用 SSH：临时链接
-
-在云端机器运行 `./everspark start` 并确认服务就绪后，执行：
-
-```bash
-./everspark share
-```
-
-在自己的电脑上打开输出的 `https://*.trycloudflare.com` 链接。此模式不需要 `.env`、Cloudflare 账号、域名、SSH 密钥或隧道凭据；但云端机器必须能连接 Cloudflare。如果尚未安装 `cloudflared`，命令会使用现有安装器（需要 root 权限及下载网络）。运行 `./everspark access` 或 `./everspark share status` 可再次查看链接；`./everspark share stop` 或 `./everspark stop` 可关闭。重新启动共享后链接可能变化。如果 `~/.cloudflared/config.yaml` 或 `config.yml` 已存在，临时链接会被拒绝；错误详情见 `Data/Logs/quick-tunnel.log`（自定义日志目录时以 `EVERSPARK_LOG_DIR` 为准）。WebUI 当前没有登录验证：获得链接的人都可以操作页面，请仅用于短时间测试或演示。
-
-### 第一次使用 SSH：准备密钥（可跳过）
-
-**已经能从自己的电脑用 SSH 登录这台云端机器？直接跳到下方的[查看并运行转发命令](#查看并运行转发命令)。** 如果还没有密钥，可在**自己的电脑**上打开 Windows PowerShell 或 Linux/macOS 终端，运行：
-
-```bash
-ssh-keygen -t ed25519 -C "everspark-cloud"
-```
-
-按提示选择保存位置并设置口令；首次使用可接受默认位置。如果提示默认文件已存在，**不要覆盖原有私钥**：改用现有密钥，或给新密钥另选文件名。命令会生成一对文件，例如私钥 `id_ed25519` 和公钥 `id_ed25519.pub`。查看**公钥**内容：
-
-| 自己电脑的终端 | 命令（采用默认文件名时） |
-| --- | --- |
-| Windows PowerShell | `Get-Content "$HOME/.ssh/id_ed25519.pub"` |
-| Linux/macOS | `cat ~/.ssh/id_ed25519.pub` |
-
-把公钥的**完整一行**添加到云端环境提供的 SSH 公钥设置中；如果平台没有该入口，需要按云端机器的管理方式将其加入目标账户的 `~/.ssh/authorized_keys`。**私钥留在自己的电脑上，不要上传到云端、粘贴到平台的公钥输入框，或提交到仓库。**
-
-先在自己的电脑测试登录（替换示例中的用户名、地址和 SSH 端口）：
-
-```bash
-ssh -p 22 root@example.com
-```
-
-如果密钥未保存在默认位置，可在 `ssh` 命令中添加 `-i 私钥文件路径`。登录不通时先确认云端环境给出的公网地址、映射端口、用户名及公钥配置；能登录后输入 `exit` 返回自己的终端。
-
-### 查看并运行转发命令
-
-`./everspark start` 会打印访问说明。之后随时可以重新查看：
-
-```bash
-./everspark access
-```
-
-如果云端环境提供了启动器能够识别的连接信息，输出会包含完整的 SSH 端口转发命令。**在自己的电脑上运行输出的命令**；使用非默认密钥文件时，也给这条命令加上 `-i 私钥文件路径`。保持该 SSH 会话连接，然后访问输出的本地浏览器地址（默认 `http://127.0.0.1:8080`）。不要把云端机器上的 `127.0.0.1:8780` 当作自己电脑上的地址。
-
-`access`、`share` 的完整参数与关闭行为见[命令手册：查看和开启 WebUI 访问](Commands.zh-CN.md#3-查看和开启-webui-访问)。
-
-如果平台没有提供这些连接信息，在私人 `.env` 中设置 `EVERSPARK_SSH_HOST` 和 `EVERSPARK_SSH_PORT`（需要时还可设置 `EVERSPARK_SSH_USER`），然后重新运行 `./everspark access`。端口转发依赖你已拥有该机器的 SSH 访问权限。
+Forge 可部署在同一台或不同机器；同机部署不保证显存足以同时装载所有模型。首次生成可先完成图片模式，再部署 Audio 测试。部署失败时保留页面的阶段、退出码和诊断信息，见[排障指南](Troubleshooting.zh-CN.md)。
 
 ## 4. 完成第一次生成
 
-1. 打开 WebUI，进入 **Runtime**，确认相关服务就绪；如有异常，先运行 `./everspark status`。
-2. 回到 **Forge**。可以先在 **Discuss** 模式描述角色，系统会从对话中整理当前角色主体；也可以按界面提示选择已有角色并点击 **Use in Forge**。
-3. 检查页面上的 **Workflow**、**Checkpoint**、**Concept LLM** 等可选资源。起步安装会提供模型及 API Format 工作流，资源列表应能加载出来。
-4. 切到 **Generate**，输入场景描述并提交；等待生成结果显示在页面中。
-5. 在 **Gallery** 查看近期结果。**Download outputs ZIP** 会将整个 `Data/Outputs` 目录打包下载。
-
-角色的稳定特征与这次生成的场景是不同的数据：讨论形成的角色可继续使用，而场景、姿势和镜头描述属于本次请求。
-
-如果想带走角色和记忆，到 **Storage → 角色与 Memory 压缩包** 点击 **下载数据 ZIP**，将每个角色的四份 JSON 和 Memory SQLite 快照保存到自己的电脑；此功能不需要 rclone。以后在新机器上选择该 ZIP，点击旁边的 **验证并恢复**，完成后重启 EverSpark。生成图片请另用 Gallery 导出；详见[运行与数据生命周期](Runtime-and-Data.zh-CN.md)。
-
-## 5. 已有私人配置：先导入，再安装
-
-如果你已有 Pod 上使用的配置，可先将以下文件上传到仓库里的 `Archon/Vault/Import/`：
-
-| 文件 | 什么时候需要 |
+| 模式 | 需要 |
 | --- | --- |
-| `env.txt` 或 `.env` | 自定义端点、启用远程存储或 Cloudflare Tunnel 等配置；两者内容格式相同 |
-| `rclone.conf` | 使用已有的 rclone/R2 连接时 |
-| `<CF_TUNNEL_UUID>.json` | 启用 Cloudflare Named Tunnel 时 |
+| 图片 | Concept 能力（Ollama 节点或兼容 API）与 Image Forge |
+| 音频 | Concept 能力与 Audio Forge；不要求 Image Forge |
+| 图片＋音频 | Concept 能力、Image Forge、Audio Forge |
 
-如果从这一节单独开始，请先在克隆目录的上一级运行以下命令；已经按第 2 节进入仓库目录的用户跳过此步：
+1. 打开 **创作**，选择模型服务与所需 Forge 节点。使用外部语言模型时，先按[配置指南](Configuration.zh-CN.md)保存并测试连接。
+2. 图片模式检查 Workflow、Checkpoint 等资源；音频模式不显示图片设置。节点未提供资源时，在 **资源** 安装兼容模型后刷新。
+3. 选择生成模式，输入自然语言需求并提交。例如：图片用“画一位银白色长发、穿蓝色礼服的少女”；音频用“用年轻少女的声音，以中文说：你好”；组合模式同时描述画面和台词。
+4. 观察任务列表中的 Forge、执行节点和状态。跨机器部署不代表任务自动并行；当前任务按计划依赖顺序执行。
+5. 在创作结果或 **资产库 → 图像／音频** 查看结果，尝试单文件和 ZIP 下载。桌面客户端下载会弹出另存为，可选目录和文件名；取消不保存。浏览器版遵循浏览器的下载设置。
 
-```bash
-cd EverSpark-Forge
-```
+需要角色一致性时，可先在讨论模式形成角色，再选择当前角色生成。日常操作见[使用指南](Usage.zh-CN.md)，数据位置与备份见[数据指南](Runtime-and-Data.zh-CN.md)。
 
-然后在仓库根目录执行：
+## 5. 完成本次使用
 
-```bash
-./everspark configure
-./everspark setup --plan
-./everspark setup
-./everspark doctor
-./everspark start
-```
+关闭客户端会关闭它启动的本地主机进程，**不会销毁 Pod 或停止云端计费**。在计算页自行停止或销毁不再使用的实例，并先保存所需输出。更新流程见[更新指南](Updating.zh-CN.md)。
 
-`env.txt` 就是方便在自己的电脑上查看、保存和上传的 `.env`：仅文件名不同，均使用相同的 `KEY=VALUE` 格式。`configure` 会验证它并复制为仓库根目录下被 Git 忽略的 `.env`，保留原始上传文件。`rclone.conf` 的存在**不会自动启用**远程存储；需要在私人环境配置中显式设置 `EVERSPARK_STORAGE_BACKEND=rclone` 及相应远程路径。Cloudflare 集成同样需要完整配置。配置的格式、路径和启用条件见 [`Archon/Vault/README.md`](../Archon/Vault/README.md) 和 [`.env.example`](../.env.example)。
+## Linux 单机模式（另一路径）
 
-导入后如果 `doctor` 报远程路径或凭据错误，请先修复启用的后端配置，再启动。仓库的 `.gitignore` 忽略私人配置和 `Data/` 运行数据；不要强制将凭据或个人数据加入 Git。
-
-## 6. 日常命令与问题定位
-
-```bash
-./everspark status
-./everspark access
-./everspark share status
-./everspark share stop
-./everspark restart image
-./everspark stop
-```
-
-托管服务的原始输出写在 `Data/Logs/`。当 WebUI 可以打开但不能生成时，依次检查 Runtime 页面、`./everspark status`、模型资源是否可见，以及对应服务的日志。基础环境与配置可再次用 `./everspark doctor` 检查。
-
-`models` 与 `logs` 子命令的区别见[起步模型命令](Commands.zh-CN.md#4-管理清单中的起步模型)及[日志命令](Commands.zh-CN.md#5-查看与整理日志)。
-
-本页的主流程针对**云端 Linux 首次部署**；其他云端镜像及本地 Windows 部署尚未验证。
-
-### 选择生成模式
-
-创作页面提供“图片生成”“音频生成”“图片＋音频生成”三个模式。三者都通过 Concept Forge 理解自然语言需求；音频模式只需要 Concept 和 Audio，无需连接 Image Forge，也不会生成图片。选择音频模式后，图片模型设置会隐藏。
-
-例如，英文用户可输入 `Write a short welcome message in Chinese, spoken in a warm female voice.`，让 Concept 准备中文台词和声音要求。明确提供的台词默认保留原文；要求翻译或改写时再转换。组合模式应同时描述画面和声音需求；没有提供台词时，Concept 会创作一段符合场景的短台词。
+已有 Linux NVIDIA GPU 环境仍可使用 `./everspark setup --plan`、`./everspark setup`、`./everspark start` 部署本机托管服务；访问本机 8780，或显式运行 `./everspark share` 获取临时链接。此模式与 Windows 的 `archon start` 不同；不要要求 Windows 主机运行 Linux GPU 安装命令。详见[命令手册](Commands.zh-CN.md)。

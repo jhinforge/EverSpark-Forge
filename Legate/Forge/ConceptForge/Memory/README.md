@@ -1,6 +1,8 @@
 # Memory
 
-The first migrated Memory layer is a local SQLite working-memory store.
+Concept Forge owns working-memory business behavior; Archon/Ledger provides
+the SQLite/document persistence implementation. In distributed mode the store
+remains on the control host.
 
 It currently owns:
 
