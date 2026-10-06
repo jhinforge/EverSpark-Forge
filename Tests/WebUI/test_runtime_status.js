@@ -8,7 +8,7 @@ function setup(services, logging = {ready: false}) {
   const elements = {runtimeGrid: {replaceChildren(...cards) {this.cards = cards;}}, healthDot: {}, healthTitle: {}, healthDetail: {}};
   const context = {elements, document: {querySelector: () => backend},
     api: async () => ({services, logging, ready: true}), runtimeCard: (title, online, copy) => ({title, online, copy}),
-    uiText(node, text) {node.textContent = text;}, computePanelVisible: () => true,
+    t(text) {return text;}, uiText(node, text) {node.textContent = text;}, computePanelVisible: () => true,
     showNotice(error) {context.notice=error;}};
   vm.createContext(context);
   vm.runInContext(source.slice(source.indexOf('async function loadRuntime()'), source.indexOf('function bindEvents()')), context);
@@ -68,4 +68,15 @@ test('unknown runtime state is distinct from Offline in the actual card DOM', ()
   assert.equal(dot.dataset.status,'unknown');
   assert.equal(badge.dataset.status,'unknown');
   assert.ok(!dot.className.includes('online') && !dot.className.includes('offline'));
+});
+
+test('one failed probe is unverified and shows the last successful check', async () => {
+  const {context, elements} = setup({archon_backend: {online: true},
+    image_forge: {online: false, status: 'checking', last_success: 1700000000, error: 'TimeoutError'}});
+  await context.loadRuntime();
+  const card = elements.runtimeGrid.cards[1];
+  assert.equal(card.online, null);
+  assert.match(card.copy, /pending; retrying/);
+  assert.match(card.copy, /Last successful check/);
+  assert.match(card.copy, /TimeoutError/);
 });

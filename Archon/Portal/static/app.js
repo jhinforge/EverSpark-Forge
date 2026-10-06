@@ -2875,7 +2875,7 @@ async function loadRuntime() {
       const online = pending ? null : service?.online === true;
       let detail = pending ? "Service health check pending; retrying." : online ? "Service health check passed."
         : service?.status === "unavailable" || !service ? "Service health cannot be verified." : "Service is unavailable.";
-      if (service?.last_success) detail += ` ${t("Last successful check")}: ${new Date(service.last_success * 1000).toLocaleTimeString()}`;
+      if (service?.last_success) detail = `${t(detail)} ${t("Last successful check")}: ${new Date(service.last_success * 1000).toLocaleTimeString()}`;
       if (service?.error) detail += ` (${service.error})`;
       return runtimeCard(title, online, detail);
     }));
