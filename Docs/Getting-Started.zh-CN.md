@@ -37,10 +37,13 @@ python --version
 
 ## 2. 配置账户与节点连接
 
-1. 在 Windows 主机安装并登录 Tailscale，确认已连接自己的虚拟局域网。
+1. 打开 [Tailscale Windows 官方下载页](https://tailscale.com/download/windows)，在 Windows 主机安装 Tailscale，然后登录并确认已连接自己的虚拟局域网。
 2. 在 **设置 → 账户与节点** 填写自己的 Vast API Key，点击 **验证并保存**。密钥保存在当前 Windows 用户的凭据管理器。
-3. 在同一页的 **自动连接节点** 填写 Tailscale auth key。选择单次或可重复使用模式，必须与密钥本身的 Reusable 设置一致；有效期长不等于可重复使用。
-4. 点击 **配置自动连接**，确认准备就绪。此密钥仅用于当前 Archon 会话；重新打开客户端后，租新 Pod 前应再次配置。已有节点有独立连接身份。
+3. 使用与 Windows 主机相同的 Tailscale 账户打开 [Auth Key 管理页](https://console.tailscale.com/admin/settings/keys)，点击 **Generate auth key**。如果要用同一个密钥租用多台 Pod，开启 **Reusable**；只连接一台新 Pod 时可以使用单次密钥。设置有效期后点击 **Generate key**，复制生成的完整密钥。
+4. 回到 EverSpark 同一页的 **自动连接节点**，填入刚生成的 **Auth Key**（通常以 `tskey-auth-` 开头），不是 Tailscale API Key。此密钥用于让 Pod 加入主机所在的 Tailscale 网络。选择单次或可重复使用模式，必须与密钥本身的 Reusable 设置一致；有效期长不等于可重复使用。
+5. 点击 **配置自动连接**，确认准备就绪。此密钥仅用于当前 Archon 会话；重新打开客户端后，租新 Pod 前应再次配置。已有节点有独立连接身份。
+
+密钥选项的详细说明见 [Tailscale 官方 Auth Key 教程](https://tailscale.com/docs/features/access-control/auth-keys)。
 
 Tailscale 网络策略和 Windows 防火墙需要允许节点连接主机显示的 Agent 端口（默认 TCP 8766），并允许主机访问节点媒体服务。只允许注册端口可能足以注册，却无法直接播放或下载媒体；节点媒体服务使用动态端口。
 

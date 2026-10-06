@@ -37,10 +37,13 @@ To create your own key, run `ssh-keygen -t ed25519 -C "everspark-cloud"` locally
 
 ## 2. Configure accounts and Node connectivity
 
-1. Install Tailscale on the Windows host, sign in and connect to your tailnet.
+1. Open the [official Tailscale Windows download page](https://tailscale.com/download/windows), install Tailscale on the Windows host, then sign in and connect to your tailnet.
 2. In **Settings → Accounts and Nodes**, enter your Vast API Key and click **Verify and save**. It is stored in this Windows user's Credential Manager.
-3. Under **Automatic Node connection**, enter a Tailscale auth key. Match single-use or reusable mode to the key's Reusable setting; a long expiry does not imply reuse.
-4. Click **Configure automatic connection** and confirm readiness. This key is held for the current Archon session only. Configure it again before renting new Pods after restarting the client. Existing Nodes have independent identities.
+3. Using the same Tailscale account as the Windows host, open the [Auth Key management page](https://console.tailscale.com/admin/settings/keys) and select **Generate auth key**. Enable **Reusable** if you want to rent multiple Pods with the same key; a one-off key is sufficient for one new Pod. Set an expiry, select **Generate key**, and copy the complete generated key.
+4. Return to **Automatic Node connection** in EverSpark and enter that **Auth Key** (normally beginning with `tskey-auth-`), rather than a Tailscale API Key. It lets Pods join the host's tailnet. Match single-use or reusable mode to the key's Reusable setting; a long expiry does not imply reuse.
+5. Click **Configure automatic connection** and confirm readiness. This key is held for the current Archon session only. Configure it again before renting new Pods after restarting the client. Existing Nodes have independent identities.
+
+For details on key options, see the [official Tailscale Auth Key guide](https://tailscale.com/docs/features/access-control/auth-keys).
 
 Tailnet policy and the Windows firewall must permit Nodes to reach the host's reported Agent port (default TCP 8766) and permit the host to access Node media services. Allowing only registration can leave playback and direct downloads inaccessible; media services use dynamic ports.
 
