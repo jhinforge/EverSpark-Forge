@@ -4,15 +4,17 @@ on:
   push:
     branches: ["refactor/distributed-architecture"]
     paths:
-      - "Archon/Client/Windows/**"
-      - "Archon/Gate/CLI/archon.py"
+      - "Archon/**"
+      - "Legate/**"
+      - "Aegis/**"
       - "everspark.cmd"
       - "Tests/Client/**"
       - ".github/workflows/windows-client.yml"
   pull_request:
     paths:
-      - "Archon/Client/Windows/**"
-      - "Archon/Gate/CLI/archon.py"
+      - "Archon/**"
+      - "Legate/**"
+      - "Aegis/**"
       - "everspark.cmd"
       - "Tests/Client/**"
       - ".github/workflows/windows-client.yml"

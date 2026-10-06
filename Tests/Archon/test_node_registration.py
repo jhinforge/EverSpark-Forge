@@ -93,7 +93,7 @@ class NodeRegistrationTests(unittest.TestCase):
         probe = threading.Thread(target=execute, args=('probe',))
         probe.start()
         wait_for(lambda: bool(self.manager.tasks.queues[response['node_id']]['tasks']))
-        check = self.manager.tasks.next_task({**auth(response), 'lane': 'probe'})
+        check = call(self.manager.url, '/node/probe/next', auth(response))
         self.assertEqual(check['action'], 'probe')
         self.manager.tasks.finish({**auth(response), 'task_id': check['id'],
             'result': {'status': 'completed', 'output': '{"ok":true}', 'exit_code': 0}})

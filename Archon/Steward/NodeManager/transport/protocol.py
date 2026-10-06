@@ -5,6 +5,7 @@ ROUTES = {
     "/node/register": lambda m, b: m.registration.register(b),
     "/node/heartbeat": lambda m, b: m.heartbeat.receive(b),
     "/node/next": lambda m, b: m.tasks.next_task(b),
+    "/node/probe/next": lambda m, b: m.tasks.next_task({**b, "lane": "probe"}),
     "/node/result": lambda m, b: m.tasks.finish(b),
 }
 

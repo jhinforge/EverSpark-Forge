@@ -52,7 +52,7 @@ class ProbeChannel:
                 continue
             dispatched = False
             try:
-                task = self.registration.transport.request("/node/next", {**authentication, "lane": "probe"})
+                task = self.registration.transport.request("/node/probe/next", authentication)
                 if not task:
                     continue
                 # This lane may never execute deployments, synthesis, or mutations.
