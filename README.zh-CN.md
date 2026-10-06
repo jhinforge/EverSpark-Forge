@@ -44,6 +44,10 @@ cd EverSpark-Forge
 
 模块 README 面向开发者；测试入口见 [Tests](Tests/README.md)。
 
+## 第一版归档
+
+第一版已归档，源码 ZIP 与校验文件可在[第一版源码归档发布页](https://github.com/jhinforge/EverSpark-Forge/releases/tag/v1-source-archive)下载。标签 `v1-source-archive` 保留提交 `2a63893dc1306de3206e6202f2a699294f64b1ba`。此包为源码归档，不是 Windows 便携客户端；当前开发与维护以第二版为主。
+
 ## 作者、费用与许可证
 
 作者：**Jhin**。官方仓库：[jhinforge/EverSpark-Forge](https://github.com/jhinforge/EverSpark-Forge)。作者不收取软件购买、激活或订阅费用；云 GPU、网络、存储及第三方 API 的费用由对应供应商收取。

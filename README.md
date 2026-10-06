@@ -44,6 +44,10 @@ Open the printed Portal URL. Configure Vast/Tailscale, rent a Pod and deploy the
 
 Module READMEs target developers. Test entry points are in [Tests](Tests/README.md).
 
+## First-version archive
+
+The first version is archived in the [first-version source release](https://github.com/jhinforge/EverSpark-Forge/releases/tag/v1-source-archive), with its source ZIP and checksum file. Tag `v1-source-archive` preserves commit `2a63893dc1306de3206e6202f2a699294f64b1ba`. This is a source archive, not a portable Windows client; current development and maintenance focus on the second version.
+
 ## Author, costs and license
 
 Author: **Jhin**. Official repository: [jhinforge/EverSpark-Forge](https://github.com/jhinforge/EverSpark-Forge). The author charges no software purchase, activation or subscription fees. Cloud GPUs, bandwidth, storage and third-party APIs may be billed by their providers.
