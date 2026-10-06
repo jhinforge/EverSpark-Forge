@@ -83,7 +83,7 @@ class VastInstances:
             raise VastError("Configure the Vast API Key first", 409)
         if isinstance(instance_id, bool) or not isinstance(instance_id, int) or instance_id < 1:
             raise VastError("Invalid instance ID", 400)
-        request = Request(f"https://console.vast.ai/api/v0/instances/{instance_id}",
+        request = Request(f"https://console.vast.ai/api/v0/instances/{instance_id}/",
                           headers={"Authorization": f"Bearer {key}",
                                    "Accept": "application/json"}, method="DELETE")
         try:

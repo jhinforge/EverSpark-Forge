@@ -85,7 +85,7 @@ class VastMachineTests(unittest.TestCase):
             machines.destroy(True)
         self.assertEqual(invalid.exception.status, 400)
         machines.destroy(23)
-        self.assertEqual(provider.calls[-1][0], "https://console.vast.ai/api/v0/instances/23")
+        self.assertEqual(provider.calls[-1][0], "https://console.vast.ai/api/v0/instances/23/")
 
         def unconfirmed(request, timeout):
             return io.BytesIO(b'{"success": false}')

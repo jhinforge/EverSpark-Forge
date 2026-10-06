@@ -88,6 +88,7 @@ class RemoteCreationWebUITests(unittest.TestCase):
             "checkpoints": ["model.safetensors"], "vaes": [], "loras": [],
             "defaults": {"workflow": "base", "checkpoint": "model.safetensors"}}
         handlers = {
+            "probe": lambda _: {"ok": True},
             "chat": self.concept_response,
             "models": lambda _: ["everspark-concept", "downloaded-llm:latest"],
             "plugins": lambda _: {"default": "comfyui", "plugins": [{"id": "comfyui", "name": "ComfyUI", "installed": True, "online": True}]},

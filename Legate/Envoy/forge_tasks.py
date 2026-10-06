@@ -12,6 +12,8 @@ from .settings import REPO
 def command(forge: str, action: str, message: str) -> tuple[list[str], int] | None:
     if not isinstance(forge, str) or forge not in {"concept", "image", "audio"}:
         return None
+    if action == "probe" and message in {"", "{}"}:
+        return ["python3", str(REPO / "Legate/Envoy/service_probe.py"), forge], 9
     if action == "update":
         return ["bash", str(REPO / "Legate/Envoy/update_source.sh")], 1800
     if action == "revision":

@@ -2871,9 +2871,13 @@ async function loadRuntime() {
       ["Concept Forge", "concept_forge"], ["Image Forge", "image_forge"], ["Audio Forge", "audio_forge"],
     ].map(([title, key]) => {
       const service = data.services?.[key];
-      const online = service?.online === true;
-      return runtimeCard(title, online, online ? "Service health check passed."
-        : service?.status === "unavailable" || !service ? "Service health cannot be verified." : "Service is unavailable.");
+      const pending = service?.status === "checking";
+      const online = pending ? null : service?.online === true;
+      let detail = pending ? "Service health check pending; retrying." : online ? "Service health check passed."
+        : service?.status === "unavailable" || !service ? "Service health cannot be verified." : "Service is unavailable.";
+      if (service?.last_success) detail += ` ${t("Last successful check")}: ${new Date(service.last_success * 1000).toLocaleTimeString()}`;
+      if (service?.error) detail += ` (${service.error})`;
+      return runtimeCard(title, online, detail);
     }));
     const concept = data.services?.concept_forge?.online === true;
     const worker = data.services?.image_forge?.online === true || data.services?.audio_forge?.online === true;

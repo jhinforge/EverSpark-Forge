@@ -16,6 +16,8 @@
     "EVERSPARK RUNTIME": "EVERSPARK 运行状态",
     "Forge services": "Forge 服务",
     "Archon Backend and Forge service availability.": "Archon 后端与各 Forge 服务的可用状态。",
+    "Service health check pending; retrying.": "健康检查暂未确认，正在重试。",
+    "Last successful check": "最近检查成功时间",
     "Service health check passed.": "服务健康检查通过。",
     "Service health cannot be verified.": "无法验证服务健康状态。",
     "Service is unavailable.": "服务不可用。",

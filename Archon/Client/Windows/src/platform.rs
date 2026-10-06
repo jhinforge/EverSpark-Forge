@@ -12,7 +12,8 @@ use windows_sys::Win32::{
     UI::{
         Shell::ShellExecuteW,
         WindowsAndMessaging::{
-            MessageBoxW, IDYES, MB_ABORTRETRYIGNORE, MB_ICONERROR, MB_OK, MB_YESNO,
+            MessageBoxW, IDYES, MB_ABORTRETRYIGNORE, MB_ICONERROR, MB_ICONINFORMATION, MB_OK,
+            MB_YESNO,
         },
     },
 };
@@ -154,6 +155,38 @@ impl Drop for Job {
     fn drop(&mut self) {
         unsafe {
             CloseHandle(self.0 as HANDLE);
+        }
+    }
+}
+
+/// Report actual WebView2 download completion and the final destination.
+pub fn download_finished(path: Option<&Path>, success: bool) {
+    if !success {
+        message(
+            "下载失败或已取消，请重试。\nDownload failed or was cancelled. Please retry.",
+            MB_OK,
+        );
+        return;
+    }
+    let Some(path) = path else {
+        message("下载完成。\nDownload completed.", MB_OK);
+        return;
+    };
+    let text = format!(
+        "下载完成 / Download completed:\n{}\n\n是否打开所在文件夹？ / Open containing folder?",
+        path.display()
+    );
+    let answer = unsafe {
+        MessageBoxW(
+            ptr::null_mut(),
+            wide(text).as_ptr(),
+            wide("EverSpark Forge").as_ptr(),
+            MB_YESNO | MB_ICONINFORMATION,
+        )
+    };
+    if answer == IDYES {
+        if let Some(parent) = path.parent() {
+            open(parent);
         }
     }
 }

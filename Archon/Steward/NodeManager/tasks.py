@@ -51,12 +51,18 @@ class TaskChannel:
     def next_task(self, body: dict) -> dict:
         with self.manager.lock:
             node = self._authenticated(body, pulling=True)
-            if not node["tasks"]:
+            lane = body.get("lane", "all")
+            if lane not in {"all", "execution", "probe"}:
+                raise NodeError("Invalid execution lane", 400)
+            def eligible(task):
+                return lane == "all" or (task["action"] == "probe") == (lane == "probe")
+            if not any(eligible(task) for task in node["tasks"]):
                 self.manager.lock.wait(12)
                 node = self._authenticated(body, pulling=True)
-            if not node["tasks"]:
+            task = next((task for task in node["tasks"] if eligible(task)), None)
+            if task is None:
                 return {}
-            task = node["tasks"].popleft()
+            node["tasks"].remove(task)
             node["delivered"][task["id"]] = task
             return task
 

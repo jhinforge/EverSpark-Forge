@@ -118,6 +118,8 @@ class WebUIServer(ThreadingHTTPServer):
         self.settings = settings
         self.logger = logger
         self.archive_lock = threading.Lock()
+        self.health_history = {}
+        self.health_lock = threading.Lock()
         self.forge_bindings = forge_bindings
         from Archon.Vault.storage_config import StorageConfiguration
         self.storage_configuration = StorageConfiguration(REPO_ROOT, self.apply_storage_configuration, guard=self.storage_configuration_guard)
@@ -490,25 +492,27 @@ class RequestHandler(BaseHTTPRequestHandler):
                     source = "archon_health"
                     status, body = request_json(f"{backend_url}/health", timeout)
                     online = 200 <= status < 300 and body.get("ok") is True
-                elif name == "image_forge" and not self._control_mode():
+                elif name == "image_forge" and not selected.get("image") and not self._control_mode():
                     source = "image_health"
                     status, body = request_json(f"{self.orchestrator_url}/image/health", timeout)
                     online = 200 <= status < 300 and body.get("ok") is True
-                elif name in {"concept_forge", "audio_forge"} and selected.get(name.split("_")[0]):
+                elif name in {"concept_forge", "image_forge", "audio_forge"} and selected.get(name.split("_")[0]):
                     role = name.split("_")[0]
-                    source = "node_models" if role == "concept" else "node_audio_health"
+                    source = "node_probe"
                     status, body = request_json(f"{self.server.settings.control_url}/nodes/task", timeout + 1, {
-                        "node_id": selected[role], "forge": role,
-                        "action": "models" if role == "concept" else "health",
+                        "node_id": selected[role], "forge": role, "action": "probe",
                         "message": "{}", "timeout": timeout,
                     })
                     value = json.loads(body["output"]) if 200 <= status < 300 and body.get("ok") is not False else None
-                    online = (isinstance(value, list) and all(isinstance(item, str) for item in value)
-                              if role == "concept" else isinstance(value, dict) and value.get("ok") is True)
+                    online = isinstance(value, dict) and value.get("ok") is True
                 else:
                     return {"online": False, "status": "unavailable", "source": source,
                             "reason": "health_unverified"}
-                return {"online": bool(online), "status": "online" if online else "offline", "source": source}
+                result = {"online": bool(online), "status": "online" if online else "offline", "source": source}
+                if source == "node_probe" and not online:
+                    result["error"] = (value.get("error", "ServiceProbeFailed") if isinstance(value, dict)
+                                       else "InvalidProbeResponse")
+                return result
             except Exception as exc:
                 return {"online": False, "status": "unavailable", "source": source,
                         "error": type(exc).__name__, "reason": "health_unverified"}
@@ -516,6 +520,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         names = ("archon_backend", "concept_forge", "image_forge", "audio_forge")
         with ThreadPoolExecutor(max_workers=4) as pool:
             services = dict(zip(names, pool.map(probe, names)))
+        # Do not label a single failed service probe as a confirmed outage.
+        if hasattr(self.server, "health_history"):
+            from Archon.Portal.service_health import record_health
+            with self.server.health_lock:
+                for name, result in services.items():
+                    if name != "archon_backend":
+                        identity = selected.get(name.split("_")[0], self.orchestrator_url)
+                        services[name] = record_health(self.server.health_history, (name, identity), result)
         if not self._control_mode():
             # Compatibility only; the Portal presents a single Archon Backend card.
             services["orchestrator"] = dict(services["archon_backend"])

@@ -80,6 +80,31 @@ class NodeRegistrationTests(unittest.TestCase):
         self.manager = NodeManager("127.0.0.1", port, state_path=self.directory/"nodes.json", heartbeat_interval=.1, lease_timeout=.7)
         self.manager.start()
 
+    def test_probe_lane_completes_while_execution_lane_is_occupied(self):
+        response = self.register()
+        self.heartbeat(response)
+        results = {}
+        def execute(action):
+            results[action] = self.manager.execute(response['node_id'], action, '{}', timeout=3, forge='image')
+        main = threading.Thread(target=execute, args=('submit',))
+        main.start()
+        wait_for(lambda: bool(self.manager.tasks.queues[response['node_id']]['tasks']))
+        running = self.manager.tasks.next_task({**auth(response), 'lane': 'execution'})
+        probe = threading.Thread(target=execute, args=('probe',))
+        probe.start()
+        wait_for(lambda: bool(self.manager.tasks.queues[response['node_id']]['tasks']))
+        check = self.manager.tasks.next_task({**auth(response), 'lane': 'probe'})
+        self.assertEqual(check['action'], 'probe')
+        self.manager.tasks.finish({**auth(response), 'task_id': check['id'],
+            'result': {'status': 'completed', 'output': '{"ok":true}', 'exit_code': 0}})
+        probe.join(1)
+        self.assertEqual(results['probe'], '{"ok":true}')
+        self.assertTrue(main.is_alive())
+        self.manager.tasks.finish({**auth(response), 'task_id': running['id'],
+            'result': {'status': 'completed', 'output': 'done', 'exit_code': 0}})
+        main.join(1)
+        self.assertEqual(results['submit'], 'done')
+
     def test_independent_identity_without_any_provider(self):
         response = self.register()
         record = self.manager.status(response["node_id"])

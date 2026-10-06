@@ -117,6 +117,29 @@ fn run() -> Result<(), String> {
                     }
                     false
                 })
+                .on_download(|webview, event| {
+                    use tauri::webview::DownloadEvent;
+                    match event {
+                        DownloadEvent::Requested { destination, .. } => {
+                            let text = serde_json::to_string(&format!(
+                                "正在下载至 / Downloading to: {}",
+                                destination.display()
+                            ))
+                            .unwrap();
+                            let _ = webview.eval(&format!(
+                                "if (typeof showNotice === 'function') showNotice({text});"
+                            ));
+                        }
+                        DownloadEvent::Finished { path, success, .. } => {
+                            let path = path.map(|value| value.to_path_buf());
+                            thread::spawn(move || {
+                                platform::download_finished(path.as_deref(), success)
+                            });
+                        }
+                        _ => {}
+                    }
+                    true
+                })
                 .on_new_window(|url, _| {
                     if ["http", "https"].contains(&url.scheme()) {
                         platform::open(url.as_str());

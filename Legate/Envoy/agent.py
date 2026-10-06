@@ -28,6 +28,9 @@ def run():
     registration = Registration(identity, Transport(url, os.environ.get("EVERSPARK_NODE_PROXY")), fingerprint(DATA_DIR, metadata))
     heartbeat = Heartbeat(registration, DATA_DIR)
     heartbeat.thread.start()
+    from .service_probe import ProbeChannel
+    probes = ProbeChannel(registration)
+    probes.thread.start()
     attempts = 0
     try:
         while True:
@@ -51,7 +54,7 @@ def run():
             if authentication is None:
                 continue
             try:
-                task = registration.transport.request("/node/next", authentication)
+                task = registration.transport.request("/node/next", {**authentication, "lane": "execution"})
                 if not task:
                     continue
                 try:
@@ -78,4 +81,5 @@ def run():
             except (OSError, ValueError, KeyError, RuntimeError):
                 time.sleep(3)
     finally:
+        probes.close()
         heartbeat.close()
