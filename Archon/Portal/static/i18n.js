@@ -1,6 +1,24 @@
 /* UI copy only. Brand names, model names, paths, JSON and user content stay intact. */
 (() => {
   const zh = {
+    "About": "关于",
+    "WORKSPACE / ABOUT": "工作区 / 关于",
+    "About EverSpark Forge.": "关于 EverSpark Forge。",
+    "Distributed AI OS": "分布式 AI OS",
+    "Free and open source \u00b7 Jhin": "免费开源 · Jhin",
+    "Author": "作者",
+    "Official repository": "官方仓库",
+    "Version": "版本",
+    "Build time (UTC)": "构建时间（UTC）",
+    "Git commit": "Git 提交",
+    "Distribution": "发行版本",
+    "Source checkout": "源码运行",
+    "standard": "standard（系统 WebView2）",
+    "full": "full（附带 WebView2）",
+    "EverSpark Forge is a completely free, open-source project. The author charges no purchase, activation, or subscription fees for the software.": "EverSpark Forge 是完全免费的开源项目。作者不收取软件购买、激活或订阅费用。",
+    "Refer to the official repository for official versions and updates.": "官方版本与更新以官方仓库发布的信息为准。",
+    "This page identifies the project and its source; it does not verify package authenticity. Compare download checksums with those published in the official repository.": "此页面用于标识项目与来源，不代表下载包已通过真实性验证。请将下载包校验值与官方仓库发布的校验值核对。",
+
     "Auto-detect model folders": "自动识别模型目录",
     "Model type for {path}": "{path} 的模型类型",
     "Select a model library or a category folder such as checkpoints, loras or vae. For custom folder names, choose the model type beside the selected path.": "选择模型库或 checkpoints、loras、vae 等分类目录。自定义目录名称可在已选路径旁指定模型类型。",

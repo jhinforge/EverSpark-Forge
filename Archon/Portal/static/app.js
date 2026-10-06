@@ -159,12 +159,25 @@ const elements = {
 };
 
 const viewCopy = {
+  about: ["WORKSPACE / ABOUT", "About EverSpark Forge."],
   assets: ["WORKSPACE / ASSET LIBRARY", "Characters and generated media."],
   compute: ["WORKSPACE / COMPUTE", "Machines and service readiness."],
   resources: ["WORKSPACE / RESOURCES", "Model downloads and remote libraries."],
   settings: ["WORKSPACE / SETTINGS", "Model services and connection settings."],
   forge: ["WORKSPACE / CREATION", "Turn ideas into images, audio, or both."],
 };
+
+async function loadAbout() {
+  try {
+    const info = await api("/api/about");
+    $("#aboutVersion").textContent = info.version || "—";
+    $("#aboutRevision").textContent = info.revision || "—";
+    $("#aboutBuildTime").textContent = info.built_at || "—";
+    uiText($("#aboutVariant"), info.variant || "Source checkout");
+  } catch (_) {
+    for (const id of ["aboutVersion", "aboutRevision", "aboutBuildTime", "aboutVariant"]) $("#" + id).textContent = "—";
+  }
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, { cache: "no-store", ...options });
@@ -1356,6 +1369,7 @@ function setView(name) {
   $$("[data-view-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.viewPanel === name));
   uiText($("#viewEyebrow"), viewCopy[name][0]);
   uiText($("#viewTitle"), viewCopy[name][1]);
+  if (name === "about") void loadAbout();
   if (name === "assets") setAssetTab(state.assetTab);
   if (name === "compute") setComputeTab(state.computeTab);
   if (name === "settings") setSettingsTab(state.settingsTab);
@@ -2899,6 +2913,7 @@ async function loadRuntime() {
 }
 
 function bindEvents() {
+  $("#aboutShortcut").addEventListener("click", () => setView("about"));
   elements.subjectPicker.addEventListener("change", updateSubjectPickerButton);
   elements.useSubjectButton.addEventListener("click", () => {
     void selectExistingSubject(elements.subjectPicker.value);

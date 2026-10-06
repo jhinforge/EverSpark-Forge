@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -103,6 +104,7 @@ def make_packages(executable: Path, output: Path, *, python_archive: Path,
         raise ValueError("Client executable must be a Windows PE file")
     version = json.loads((CLIENT / "tauri.conf.json").read_text())["version"]
     revision = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+    built_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     output.mkdir(parents=True, exist_ok=True)
     # Build in a fresh stage so no local credentials or accumulated Data enter it.
     with tempfile.TemporaryDirectory(prefix="everspark-package-") as temporary:
@@ -133,7 +135,7 @@ def make_packages(executable: Path, output: Path, *, python_archive: Path,
             if variant == "full":
                 prepare_webview(webview_archive, stage / "Runtime/WebView2")
             (stage / "release.json").write_text(json.dumps({"version": version, "revision": revision,
-                "variant": variant, "architecture": "x64", "python": MANIFEST["python"]["version"],
+                "variant": variant, "built_at": built_at, "architecture": "x64", "python": MANIFEST["python"]["version"],
                 "webview2": MANIFEST["webview2"]["version"] if variant == "full" else "system"}, indent=2), encoding="utf-8")
             name = output / f"EverSpark-Forge-{version}-windows-x64-{variant}.zip"
             temporary_zip = name.with_suffix(".zip.part")

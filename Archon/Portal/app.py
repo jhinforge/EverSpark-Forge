@@ -29,6 +29,7 @@ sys.path.insert(0, str(REPO_ROOT / "Aegis" / "Logging"))
 from everspark_logging import EverSparkLogger, get_logger  # noqa: E402
 from log_manifest import ManifestError, collect_log_status  # noqa: E402
 from Archon.Portal.execution_route import execution_request
+from Archon.Portal.about import build_info
 
 
 LOG_DIR = Path(
@@ -185,6 +186,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "/machines/vast/audio-deployment-job", parsed.query),
             "/api/forge-bindings": lambda: self._proxy_control_get("/forge-bindings"),
             "/api/health": self._health,
+            "/api/about": lambda: self._json(200, build_info(REPO_ROOT)),
             "/api/runtime/status": self._runtime_status,
             "/api/machines/vast/node-connection": lambda: self._proxy_control_get("/machines/vast/node-connection", parsed.query),
             "/api/machines/vast/credential": lambda: self._proxy_control_get(

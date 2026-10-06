@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <title>EverSpark Forge</title>
+    <link rel="icon" type="image/png" href="/static/everspark.png">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/i18n.js" defer></script>
     <script src="/static/node-card.js" defer></script>
@@ -46,6 +47,10 @@
             <span class="nav-icon">✧</span>
             Settings
           </button>
+          <button class="nav-item" data-view="about" aria-controls="aboutView" type="button">
+            <span class="nav-icon">ⓘ</span>
+            About
+          </button>
         </nav>
 
         <div class="sidebar-bottom">
@@ -56,7 +61,7 @@
               <span id="globalHealthDetail">Connecting to local services</span>
             </div>
           </div>
-          <p class="version-label">LOCAL-FIRST · V0.1</p>
+          <button class="version-label about-shortcut" id="aboutShortcut" type="button">Free and open source · Jhin</button>
           <a class="source-link" href="https://github.com/jhinforge/EverSpark-Forge" target="_blank" rel="noopener noreferrer">Source code</a>
         </div>
       </aside>
@@ -705,6 +710,25 @@
 
 
 
+        <section class="view" id="aboutView" data-view-panel="about" data-primary-view>
+          <section class="panel about-panel">
+            <div class="about-brand">
+              <img src="/static/everspark.png" width="96" height="96" alt="EverSpark Forge">
+              <div><h2>EverSpark Forge</h2><p>Distributed AI OS</p></div>
+            </div>
+            <p class="about-free">EverSpark Forge is a completely free, open-source project. The author charges no purchase, activation, or subscription fees for the software.</p>
+            <dl class="about-details">
+              <dt>Author</dt><dd>Jhin</dd>
+              <dt>Official repository</dt><dd><a href="https://github.com/jhinforge/EverSpark-Forge" target="_blank" rel="noopener noreferrer">github.com/jhinforge/EverSpark-Forge</a></dd>
+              <dt>Version</dt><dd id="aboutVersion">—</dd>
+              <dt>Build time (UTC)</dt><dd id="aboutBuildTime">—</dd>
+              <dt>Git commit</dt><dd id="aboutRevision">—</dd>
+              <dt>Distribution</dt><dd id="aboutVariant">—</dd>
+            </dl>
+            <p class="about-note">Refer to the official repository for official versions and updates.</p>
+            <p class="about-note">This page identifies the project and its source; it does not verify package authenticity. Compare download checksums with those published in the official repository.</p>
+          </section>
+        </section>
       </main>
     </div>
 

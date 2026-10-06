@@ -7,7 +7,7 @@ const copy = source.slice(source.indexOf('const viewCopy ='),source.indexOf('asy
 const navigation = source.slice(source.indexOf('function setAssetTab('),source.indexOf('function machineMessage('));
 function setup() {
   const classes = (initial=[]) => {const values=new Set(initial);return {toggle(key,on){on?values.add(key):values.delete(key);},contains(key){return values.has(key);}};};
-  const primary=['forge','assets','compute','resources','settings'];
+  const primary=['forge','assets','compute','resources','settings','about'];
   const legacy=[];
   const buttons=primary.map(view=>({dataset:{view},classList:classes()}));
   const panels=[...primary,...legacy].map(viewPanel=>({dataset:{viewPanel},classList:classes()}));
@@ -22,17 +22,17 @@ function setup() {
   const context={state:{assetTab:'characters',computeTab:'machines',settingsTab:'models'},$$:selector=>selector==='.nav-item'?buttons:selector==='[data-asset-tab]'?assetButtons:selector==='[data-asset-panel]'?assetPanels:selector==='[data-compute-tab]'?computeButtons:selector==='[data-compute-panel]'?computePanels:selector==='[data-settings-tab]'?settingsButtons:selector==='[data-settings-panel]'?settingsPanels:panels,$:selector=>nodes[selector],uiText(node,text){node.textContent=text;},Promise,
     nodeConnection:{refresh(){calls.push('nodeConnection');}}};
   for(const name of ['loadSubjects','loadHistory','loadRuntime','loadMachines','loadVastBalance','loadVastOffers','loadVastGpuNames','loadModelConnections','loadCloudConfiguration','loadDirectDownload']) context[name]=()=>calls.push(name);
-  vm.createContext(context);vm.runInContext(copy+navigation,context);
+  vm.createContext(context);vm.runInContext(copy+navigation,context);context.loadAbout=()=>calls.push('loadAbout');
   return {context,buttons,panels,nodes,calls,assetButtons,assetPanels,computeButtons,computePanels,settingsButtons,settingsPanels};
 }
-test('five primary sections display their own containers without starting unrelated loaders',()=>{
+test('six primary sections display their own containers without starting unrelated loaders',()=>{
   const {context,buttons,panels,nodes,calls}=setup();
-  for(const name of ['forge','assets','compute','resources','settings']) {
+  for(const name of ['forge','assets','compute','resources','settings','about']) {
     context.setView(name);
     assert.deepEqual(buttons.filter(b=>b.classList.contains('active')).map(b=>b.dataset.view),[name]);
     assert.deepEqual(panels.filter(p=>p.classList.contains('active')).map(p=>p.dataset.viewPanel),[name]);
   }
-  assert.deepEqual(calls,['loadSubjects','loadCloudConfiguration','nodeConnection','loadMachines','loadVastBalance','loadCloudConfiguration','loadDirectDownload','loadModelConnections']);
+  assert.deepEqual(calls,['loadSubjects','loadCloudConfiguration','nodeConnection','loadMachines','loadVastBalance','loadCloudConfiguration','loadDirectDownload','loadModelConnections','loadAbout']);
 });
 test('configuration shortcuts now open matching Settings tabs with original loaders',()=>{
   const cases={'machine-configuration':['connections',['nodeConnection','loadMachines']],'storage-configuration':['storage',['loadCloudConfiguration']],models:['models',['loadModelConnections']]};
@@ -45,15 +45,15 @@ test('configuration shortcuts now open matching Settings tabs with original load
     assert.deepEqual(calls,expected);
   }
 });
-test('HTML has only five page containers and all configuration shortcuts resolve through Settings',()=>{
+test('HTML has six page containers and all configuration shortcuts resolve through Settings',()=>{
   const html=fs.readFileSync('Archon/Portal/static/index.html','utf8');
   const nav=html.slice(html.indexOf('<nav class="nav"'),html.indexOf('</nav>'));
-  assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(m=>m[1]),['forge','assets','compute','resources','settings']);
-  assert.equal([...html.matchAll(/data-primary-view/g)].length,5);
+  assert.deepEqual([...nav.matchAll(/data-view="([^"]+)"/g)].map(m=>m[1]),['forge','assets','compute','resources','settings','about']);
+  assert.equal([...html.matchAll(/data-primary-view/g)].length,6);
   for(const name of ['machine-configuration','storage-configuration','models']) {
     assert.ok(!html.includes(`data-view-panel="${name}"`));
   }
-  assert.equal([...html.matchAll(/data-view-panel=/g)].length,5);
+  assert.equal([...html.matchAll(/data-view-panel=/g)].length,6);
   assert.equal([...html.matchAll(/id="subjectCount"/g)].length,1);
 });
 

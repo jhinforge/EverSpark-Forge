@@ -134,6 +134,17 @@ h1, h2, h3, h4 { line-height: var(--line-height-heading); }
 .nav-count { min-width: 22px; padding: 2px var(--spacing-sm); border-radius: 999px; color: var(--muted); font-size: var(--font-size-sm); text-align: center; background: rgba(255, 255, 255, .055); }
 
 .sidebar-bottom { margin-top: auto; }
+.about-panel { max-width: 900px; margin: 0 auto; }
+.about-brand { display: flex; align-items: center; gap: var(--spacing-lg); margin-bottom: var(--spacing-xl); }
+.about-brand img { flex-shrink: 0; }
+.about-brand p, .about-note { color: var(--muted); line-height: 1.7; }
+.about-free { padding: var(--spacing-lg); border: 1px solid var(--border-accent); border-radius: 12px; background: var(--primary-soft); line-height: 1.7; }
+.about-details { display: grid; grid-template-columns: minmax(100px, 160px) minmax(0, 1fr); gap: var(--spacing-md); margin: var(--spacing-xl) 0; }
+.about-details dt { color: var(--muted); }
+.about-details dd { margin: 0; overflow-wrap: anywhere; }
+.about-details a { color: var(--primary-text); }
+.about-note { margin-top: var(--spacing-md); }
+@media (max-width: 600px) { .about-details { grid-template-columns: 1fr; gap: var(--spacing-sm); } .about-details dd { margin-bottom: var(--spacing-md); } }
 .language-picker { display: flex; align-items: center; gap: var(--spacing-sm); color: var(--muted); font-size: var(--font-size-sm); }
 .language-picker select { max-width: 135px; padding: var(--spacing-sm) var(--spacing-sm); border: 1px solid var(--line-strong); border-radius: 8px; color: var(--text); background: var(--panel-solid); }
 .service-summary { display: grid; grid-template-columns: 10px 1fr; align-items: start; gap: var(--spacing-md); padding: var(--spacing-lg); border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 255, 255, .025); }
@@ -605,3 +616,6 @@ input[type="file"]::file-selector-button { margin-right: var(--spacing-md); padd
 #runtimeView .runtime-backend .runtime-card h3 { font-size: var(--font-size-xl); }
 #runtimeView .runtime-card-head { flex-wrap: wrap; gap: var(--spacing-sm); }
 #runtimeView .runtime-card-head h3 { margin-right: auto; }
+
+.about-shortcut { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.about-shortcut:hover { color: var(--text); }
