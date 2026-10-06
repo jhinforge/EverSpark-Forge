@@ -539,6 +539,8 @@ input[type="file"]::file-selector-button { margin-right: var(--spacing-md); padd
 
 .cloud-picker-controls { display: flex; gap: var(--spacing-md); align-items: end; flex-wrap: wrap; margin-top: var(--spacing-lg); }
 .cloud-picker-controls label { flex: 1; min-width: 180px; }
+.cloud-directory-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-md); margin: 0 0 var(--spacing-lg); }
+#cloudDirectoryPicker > h4 { margin: var(--spacing-lg) 0 var(--spacing-md); }
 .cloud-directory-list { display: flex; gap: var(--spacing-sm); flex-wrap: wrap; max-height: 240px; overflow: auto; padding: var(--spacing-md) 0; }
 .cloud-browser-path { overflow-wrap: anywhere; color: var(--muted); }
 .cloud-source-list > div { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); margin: var(--spacing-sm) 0; overflow-wrap: anywhere; }

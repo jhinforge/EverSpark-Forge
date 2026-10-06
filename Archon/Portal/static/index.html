@@ -652,14 +652,16 @@
                   <button class="ghost-button" id="cloudDirectoryUp" type="button">Parent directory</button>
                 </div>
                 <p id="cloudBrowserPath" class="cloud-browser-path"></p>
-                <div id="cloudDirectoryList" class="cloud-directory-list"></div>
-                <div class="backup-actions">
+                <div class="cloud-directory-actions">
                   <button class="secondary-button" id="addImageDirectory" type="button">Use for image models</button>
                   <button class="secondary-button" id="setConceptDirectory" type="button">Use for Concept models</button>
                 </div>
+                <div id="cloudDirectoryList" class="cloud-directory-list"></div>
                 <h4>Image model directories</h4><div id="cloudImageSources" class="cloud-source-list"></div>
                 <h4>Concept model directory</h4><p id="cloudConceptSource" class="cloud-browser-path"></p>
+                <button class="ghost-button" id="clearConceptDirectory" type="button">Remove</button>
                 <p class="section-copy">Select a model library or a category folder such as checkpoints, loras or vae. For custom folder names, choose the model type beside the selected path.</p>
+                <p class="section-copy">Select at least one model directory. Image and Concept directories are independent.</p>
                 <button class="primary-button" id="saveCloudConfiguration" type="button">Validate and enable</button>
               </div>
               <p id="cloudConfigurationMessage" role="status" aria-live="polite"></p>

@@ -609,7 +609,8 @@ function renderCloudSources() {
     row.append(name, type, remove); container.append(row);
   });
   $("#cloudConceptSource").textContent = selection.concept_source || "—";
-  $("#saveCloudConfiguration").disabled = !selection.image_sources?.length || !selection.concept_source;
+  $("#clearConceptDirectory").disabled = !selection.concept_source;
+  $("#saveCloudConfiguration").disabled = !selection.image_sources?.length && !selection.concept_source;
   $("#addImageDirectory").disabled = !state.cloudBrowserPath;
   $("#setConceptDirectory").disabled = !state.cloudBrowserPath;
 }
@@ -3017,6 +3018,10 @@ function bindEvents() {
     if (state.vastNextToken) void loadMachines(state.vastNextToken);
   });
   $("#refreshHistoryButton").addEventListener("click", loadHistory);
+  $("#clearConceptDirectory").addEventListener("click", () => {
+    state.cloudConfiguration.selection.concept_source = "";
+    renderCloudSources();
+  });
   elements.downloadOutputsButton.addEventListener("click", () => downloadOutputsArchive("image"));
   elements.downloadAudioOutputsButton.addEventListener("click", () => downloadOutputsArchive("audio"));
   elements.downloadDataButton.addEventListener("click", downloadDataArchive);

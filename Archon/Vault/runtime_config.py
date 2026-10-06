@@ -28,10 +28,10 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _environment_override(
-    config: dict[str, Any], variable: str, path: tuple[str, ...], cast=str
+    config: dict[str, Any], variable: str, path: tuple[str, ...], cast=str, *, allow_empty=False
 ) -> None:
     raw = os.environ.get(variable)
-    if raw is None or raw == "":
+    if raw is None or (raw == "" and not allow_empty):
         return
     target: dict[str, Any] = config
     for key in path[:-1]:
@@ -159,11 +159,13 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         config,
         "IMAGE_FORGE_RCLONE_REMOTE",
         ("storage", "rclone", "image_remote"),
+        allow_empty=True,
     )
     _environment_override(
         config,
         "CONCEPT_FORGE_RCLONE_REMOTE",
         ("storage", "rclone", "concept_remote"),
+        allow_empty=True,
     )
     _environment_override(
         config, "EVERSPARK_BACKUP_REMOTE", ("storage", "rclone", "backup_remote")

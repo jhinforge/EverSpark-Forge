@@ -1,6 +1,11 @@
 use std::{
-    ffi::OsStr, io, os::windows::ffi::OsStrExt, os::windows::process::CommandExt, path::Path,
-    process::Command, ptr,
+    ffi::{OsStr, OsString},
+    io,
+    os::windows::ffi::{OsStrExt, OsStringExt},
+    os::windows::process::CommandExt,
+    path::{Path, PathBuf},
+    process::Command,
+    ptr,
 };
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HANDLE},
@@ -10,6 +15,10 @@ use windows_sys::Win32::{
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     },
     UI::{
+        Controls::Dialogs::{
+            CommDlgExtendedError, GetSaveFileNameW, OFN_EXPLORER, OFN_NOCHANGEDIR,
+            OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OPENFILENAMEW,
+        },
         Shell::ShellExecuteW,
         WindowsAndMessaging::{
             MessageBoxW, IDYES, MB_ABORTRETRYIGNORE, MB_ICONERROR, MB_ICONINFORMATION, MB_OK,
@@ -187,6 +196,57 @@ pub fn download_finished(path: Option<&Path>, success: bool) {
     if answer == IDYES {
         if let Some(parent) = path.parent() {
             open(parent);
+        }
+    }
+}
+
+/// Choose the destination before WebView2 starts writing the download.
+pub fn save_download(
+    owner: windows_sys::Win32::Foundation::HWND,
+    suggested: &Path,
+) -> Result<Option<PathBuf>, String> {
+    let mut filename = vec![0u16; 32768];
+    let suggested_name = suggested.file_name().unwrap_or(OsStr::new("EverSpark.zip"));
+    let name = wide(suggested_name);
+    if name.len() > filename.len() {
+        return Err("下载文件名过长 / Download filename is too long".into());
+    }
+    filename[..name.len()].copy_from_slice(&name);
+    let filter = wide("ZIP archives (*.zip)\0*.zip\0All files (*.*)\0*.*\0");
+    let title = wide("选择下载保存位置 / Save download as");
+    let extension = wide(suggested.extension().unwrap_or(OsStr::new("zip")));
+    let mut dialog: OPENFILENAMEW = unsafe { std::mem::zeroed() };
+    dialog.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
+    dialog.hwndOwner = owner;
+    dialog.lpstrFile = filename.as_mut_ptr();
+    dialog.nMaxFile = filename.len() as u32;
+    dialog.lpstrFilter = filter.as_ptr();
+    dialog.nFilterIndex = if suggested
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|value| value.eq_ignore_ascii_case("zip"))
+    {
+        1
+    } else {
+        2
+    };
+    dialog.lpstrTitle = title.as_ptr();
+    dialog.lpstrDefExt = extension.as_ptr();
+    dialog.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
+    if unsafe { GetSaveFileNameW(&mut dialog) } != 0 {
+        let length = filename
+            .iter()
+            .position(|value| *value == 0)
+            .unwrap_or(filename.len());
+        Ok(Some(PathBuf::from(OsString::from_wide(
+            &filename[..length],
+        ))))
+    } else {
+        let error = unsafe { CommDlgExtendedError() };
+        if error == 0 {
+            Ok(None)
+        } else {
+            Err(format!("无法打开保存窗口 / Save dialog failed ({error})"))
         }
     }
 }

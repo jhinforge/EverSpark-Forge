@@ -121,6 +121,19 @@ fn run() -> Result<(), String> {
                     use tauri::webview::DownloadEvent;
                     match event {
                         DownloadEvent::Requested { destination, .. } => {
+                            let owner = webview
+                                .window()
+                                .hwnd()
+                                .map(|handle| handle.0 as _)
+                                .unwrap_or(std::ptr::null_mut());
+                            match platform::save_download(owner, destination) {
+                                Ok(Some(path)) => *destination = path,
+                                Ok(None) => return false,
+                                Err(error) => {
+                                    platform::startup_error(&error);
+                                    return false;
+                                }
+                            }
                             let text = serde_json::to_string(&format!(
                                 "正在下载至 / Downloading to: {}",
                                 destination.display()

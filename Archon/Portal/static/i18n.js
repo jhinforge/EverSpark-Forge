@@ -16,6 +16,7 @@
     "EVERSPARK RUNTIME": "EVERSPARK 运行状态",
     "Forge services": "Forge 服务",
     "Archon Backend and Forge service availability.": "Archon 后端与各 Forge 服务的可用状态。",
+    "Select at least one model directory. Image and Concept directories are independent.": "至少选择一个模型目录，图片与 Concept 目录可独立配置。",
     "Service health check pending; retrying.": "健康检查暂未确认，正在重试。",
     "Last successful check": "最近检查成功时间",
     "Service health check passed.": "服务健康检查通过。",

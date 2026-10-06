@@ -65,7 +65,7 @@ class StorageConfiguration:
                 parser = parse_rclone(text)
                 remotes = [{'name': s, 'type': parser.get(s, 'type')} for s in parser.sections() if source == self.draft or s != selected.get('managed_remote')]
                 revision = hashlib.sha256(text.encode()).hexdigest()
-            enabled = values['EVERSPARK_STORAGE_BACKEND'] == 'rclone' and bool(active and active.is_file()) and bool(values['IMAGE_FORGE_RCLONE_REMOTE'] and values['CONCEPT_FORGE_RCLONE_REMOTE'])
+            enabled = values['EVERSPARK_STORAGE_BACKEND'] == 'rclone' and bool(active and active.is_file()) and bool(values['IMAGE_FORGE_RCLONE_REMOTE'] or values['CONCEPT_FORGE_RCLONE_REMOTE'])
             # Existing CLI configuration remains usable without re-importing credentials.
             if not selected:
                 selected = {'image_sources': [values['IMAGE_FORGE_RCLONE_REMOTE']] if values['IMAGE_FORGE_RCLONE_REMOTE'] else [],
@@ -133,9 +133,9 @@ class StorageConfiguration:
             source = self.source(body.get('revision'))
             text = source.read_text(encoding='utf-8')
             parser = parse_rclone(text)
-            images = body.get('image_sources')
-            if not isinstance(images, list) or not 1 <= len(images) <= 8:
-                raise ValueError('Select between one and eight image model directories')
+            images = body.get('image_sources', [])
+            if not isinstance(images, list) or len(images) > 8:
+                raise ValueError('Select at most eight image model directories')
             images = list(dict.fromkeys(self.validate_path(p, parser) for p in images))
             source_types = body.get('image_source_types', {})
             if not isinstance(source_types, dict) or len(source_types) > 8:
@@ -143,9 +143,14 @@ class StorageConfiguration:
             if any(path not in images or not isinstance(kind, str) or kind not in IMAGE_TYPES
                    for path, kind in source_types.items()):
                 raise ValueError('Choose a valid model type for each selected image directory')
-            concept = self.validate_path(body.get('concept_source'), parser)
+            concept = body.get('concept_source', '')
+            if not isinstance(concept, str):
+                raise ValueError('Select a valid cloud directory')
+            concept = self.validate_path(concept, parser) if concept else ''
+            if not images and not concept:
+                raise ValueError('Select at least one model directory')
             binary = self.executable(str(body.get('binary', '')).strip())
-            for path in dict.fromkeys([*images, concept]):
+            for path in dict.fromkeys([*images, *([concept] if concept else [])]):
                 self.listing(source, path, binary)
             previous = self.status()['selection'].get('managed_remote')
             # Only remove our own previous section in the active file. Imported
@@ -155,7 +160,7 @@ class StorageConfiguration:
                     raise ValueError('Select a directory from an imported connection')
                 text = re.sub(r'(?ms)^\[' + re.escape(previous) + r'\][^\n]*\n.*?(?=^\[|\Z)', '', text)
                 parser.remove_section(previous)
-            image_remote = images[0]
+            image_remote = images[0] if images else ''
             managed = ''
             if len(images) > 1:
                 managed = MANAGED

@@ -96,6 +96,8 @@ class RemotePathMap:
         return remote
 
     def sources(self, configured: str) -> list[str]:
+        if not configured:
+            return []
         configured = safe_remote(configured)
         name, suffix = configured.split(":", 1)
         section = self._sections()
@@ -115,7 +117,10 @@ class RemotePathMap:
             configured = getattr(self.settings, "backup_remote", "")
         if configured:
             return self.writable(configured)
-        source = self.sources(self.settings.image_remote)[0]
+        sources = self.sources(self.settings.image_remote or self.settings.concept_remote)
+        if not sources:
+            raise StorageError("Set a writable backup directory")
+        source = sources[0]
         remote, path = source.split(":", 1)
         bucket = path.split("/", 1)[0]
         if not bucket:
@@ -131,6 +136,9 @@ class RemotePathMap:
 
     def image_roots(self, client) -> dict[str, list[str]]:
         roots: dict[str, list[str]] = {kind: [] for kind in IMAGE_KINDS}
+        self.unclassified_sources = []
+        if not self.settings.image_remote:
+            return roots
         sources = self.sources(self.settings.image_remote)
         mapping = self.read()
         source_types = mapping.get("image_source_types", {})
@@ -171,6 +179,8 @@ class RemotePathMap:
 
     def concept_roots(self, client) -> tuple[list[str], list[str]]:
         native, gguf = [], []
+        if not self.settings.concept_remote:
+            return native, gguf
         sources = [*self.sources(self.settings.concept_remote), *self.read().get("concept_manual", [])]
         for source in sources:
             if source in native:

@@ -103,10 +103,8 @@ class RcloneClient:
             raise StorageError("RCLONE_CONFIG is required when remote storage is enabled")
         if not self.settings.config_file.is_file():
             raise StorageError(f"rclone config not found: {self.settings.config_file}")
-        if not self.settings.image_remote:
-            raise StorageError("IMAGE_FORGE_RCLONE_REMOTE is required")
-        if not self.settings.concept_remote:
-            raise StorageError("CONCEPT_FORGE_RCLONE_REMOTE is required")
+        if not (self.settings.image_remote or self.settings.concept_remote or self.settings.backup_remote):
+            raise StorageError("Configure a model or backup cloud directory")
 
     def run(self, *arguments: str, timeout: int | None = None) -> str:
         command = [self.executable(), *arguments]
@@ -329,6 +327,10 @@ class R2StorageManager:
                 concept_models.append({"name": PurePosixPath(path).name, "id": f"{root}::gguf::{path}",
                                        "source": root, "format": "gguf", "installed": registered})
         concept_models.sort(key=lambda item: item["name"].casefold())
+        try:
+            backup_remote = self.paths.backup_root()
+        except StorageError:
+            backup_remote = ""  # Model scanning does not require a backup destination.
         return {
             "enabled": True,
             "backend": "rclone",
@@ -336,7 +338,7 @@ class R2StorageManager:
             "concept": {"models": concept_models},
             "paths": {"discovered": image_roots, "configured": self.paths.read(),
                       "unclassified_image_sources": self.paths.unclassified_sources,
-                      "backup_remote": self.paths.backup_root(), "concept_native": native_roots,
+                      "backup_remote": backup_remote, "concept_native": native_roots,
                       "concept_gguf": gguf_roots},
         }
 
@@ -347,6 +349,9 @@ class R2StorageManager:
             raise StorageError(f"Unsupported remote resource kind: {kind}")
         if not normalized_name:
             raise StorageError("Remote resource name is required")
+        remote = self.settings.concept_remote if normalized_kind == "concept_model" else self.settings.image_remote
+        if not remote:
+            raise StorageError("Configure the selected Forge's cloud model directory first")
         self.client.validate()
         with self._lock:
             if self._active_job:

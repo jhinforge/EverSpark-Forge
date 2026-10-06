@@ -95,3 +95,12 @@ test('custom image directories can select a model type, persist it and remove st
   assert.equal(context.state.cloudConfiguration.selection.image_sources.length,0);
   assert.equal(Object.keys(context.state.cloudConfiguration.selection.image_source_types).length,0);
 });
+
+test('either Forge directory alone enables saving, while an empty selection remains disabled', () => {
+  for (const selection of [{image_sources:['cloud:images'], concept_source:''},
+    {image_sources:[], concept_source:'cloud:concept'}, {image_sources:[], concept_source:''}]) {
+    const {context,nodes} = setup({});
+    context.renderCloudConfiguration({enabled:false, imported:true, remotes:[], selection});
+    assert.equal(nodes['#saveCloudConfiguration'].disabled, !selection.image_sources.length && !selection.concept_source);
+  }
+});

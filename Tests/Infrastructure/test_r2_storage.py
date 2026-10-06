@@ -132,6 +132,36 @@ class SlowListing(FakeRclone):
 
 
 class R2StorageTests(unittest.TestCase):
+    @patch("r2_manager.shutil.which", return_value="/usr/bin/rclone")
+    def test_scanning_one_forge_never_requests_the_unconfigured_forge(self, _which):
+        for role in ('image', 'concept'):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as directory:
+                conf = Path(directory) / 'rclone.conf'
+                conf.write_text('[r2-assets]\ntype = s3\n')
+                config = enabled_config(conf)
+                absent = 'concept' if role == 'image' else 'image'
+                config['storage']['rclone'][absent + '_remote'] = ''
+                runner = TreeRclone({
+                    'r2-assets:comfyui-assets/models_cold/checkpoints/model.safetensors': b'image',
+                    'r2-assets:ollama-forge/.ollama/models/model.gguf': b'concept',
+                })
+                recorded = unittest.mock.Mock(wraps=runner)
+                manager = R2StorageManager(config, run=recorded)
+                resources = manager.resources()
+                self.assertTrue(resources['enabled'])
+                if role == 'image':
+                    self.assertEqual(resources['concept']['models'], [])
+                    self.assertTrue(resources['image']['checkpoint'])
+                else:
+                    self.assertTrue(all(not values for values in resources['image'].values()))
+                    self.assertTrue(resources['concept']['models'])
+                listed = [call.args[0][2] for call in recorded.call_args_list if call.args[0][1] == 'lsf']
+                self.assertTrue(listed)
+                unwanted = 'ollama-forge' if role == 'image' else 'comfyui-assets'
+                self.assertTrue(all(unwanted not in path for path in listed))
+                with self.assertRaisesRegex(StorageError, 'selected Forge'):
+                    manager.start_pull('concept_model' if role == 'image' else 'checkpoint', 'unused')
+
     def test_explicit_binary_is_used_and_missing_binary_is_actionable(self):
         with tempfile.TemporaryDirectory() as directory:
             conf = Path(directory) / "rclone.conf"

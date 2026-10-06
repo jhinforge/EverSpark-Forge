@@ -32,6 +32,41 @@ class StorageConfigurationTests(unittest.TestCase):
                 'image_sources': images or ['r2-assets:bucket/cold', 'r2-assets:bucket/models'],
                 'concept_source': 'r2-assets:bucket/ollama/models'}
 
+    def test_single_forge_configuration_activates_without_the_other_directory(self):
+        for role in ('image', 'concept'):
+            with self.subTest(role=role):
+                self.service.import_file(CONFIG)
+                body = self.selection()
+                if role == 'image':
+                    body['concept_source'] = ''
+                else:
+                    body['image_sources'] = []
+                status = self.service.save(body)
+                self.assertTrue(status['enabled'])
+                values = parse_env(self.root / '.env')
+                self.assertEqual(bool(values['IMAGE_FORGE_RCLONE_REMOTE']), role == 'image')
+                self.assertEqual(bool(values['CONCEPT_FORGE_RCLONE_REMOTE']), role == 'concept')
+                self.assertTrue(self.service.status()['enabled'])
+
+    def test_cleared_forge_directory_stays_cleared_after_runtime_reload(self):
+        from Archon.Vault.runtime_config import load_config, DEFAULT_CONFIG_PATH
+        config = json.loads(DEFAULT_CONFIG_PATH.read_text())
+        config['storage']['rclone']['concept_remote'] = 'r2-assets:old/concept'
+        config['storage']['rclone']['image_remote'] = 'r2-assets:old/image'
+        path = self.root / 'runtime.json'
+        path.write_text(json.dumps(config))
+        with patch.dict(os.environ, {'CONCEPT_FORGE_RCLONE_REMOTE': '',
+                                    'IMAGE_FORGE_RCLONE_REMOTE': 'r2-assets:bucket/images'}):
+            reloaded = load_config(path)
+        self.assertEqual(reloaded['storage']['rclone']['concept_remote'], '')
+        self.assertEqual(reloaded['storage']['rclone']['image_remote'], 'r2-assets:bucket/images')
+
+    def test_empty_model_selection_cannot_activate_storage(self):
+        self.service.import_file(CONFIG)
+        with self.assertRaisesRegex(ValueError, 'at least one'):
+            self.service.save({'revision': self.service.status()['revision'], 'image_sources': [], 'concept_source': ''})
+        self.assertFalse((self.root / '.env').exists())
+
     def test_import_without_env_or_cloudflare_is_private_and_inactive(self):
         status = self.service.import_file(CONFIG)
         self.assertTrue(status['imported'])
