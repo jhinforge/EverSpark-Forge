@@ -4,6 +4,15 @@
 
 [简体中文](README.zh-CN.md) · [Getting started](Docs/Getting-Started.md) · [Usage](Docs/Usage.md)
 
+## Download Windows client v0.2.0
+
+| Package | Download | Requirements |
+| --- | --- | --- |
+| standard | [Download standard ZIP](https://github.com/jhinforge/EverSpark-Forge/releases/download/v0.2.0/EverSpark-Forge-0.2.0-windows-x64-standard.zip) | Windows x64 with WebView2 installed |
+| full | [Download full ZIP](https://github.com/jhinforge/EverSpark-Forge/releases/download/v0.2.0/EverSpark-Forge-0.2.0-windows-x64-full.zip) | Windows x64; fixed WebView2 included |
+
+Both include portable Python. Extract completely, then double-click `EverSpark.exe`. [Release notes and SHA-256 files](https://github.com/jhinforge/EverSpark-Forge/releases/tag/v0.2.0) · [Getting started](Docs/Getting-Started.md). GitHub's Source code downloads contain source, not the Windows client.
+
 ## Available capabilities
 
 - Natural-language discussion, reusable characters and revisions; image, speech and combined creation.
@@ -17,7 +26,7 @@ Cross-machine deployment does not imply automatic parallelism; tasks follow depe
 
 ## Start
 
-Fully extract a Windows ZIP and run `EverSpark.exe`. Standard uses installed WebView2; full includes a fixed Runtime. Models, Tailscale and rclone are not included. Check the [official release page](https://github.com/jhinforge/EverSpark-Forge/releases) for published versions. Development test packages appear in successful [Windows builds](https://github.com/jhinforge/EverSpark-Forge/actions/workflows/windows-client.yml). Actions artifacts expire and are not permanent release downloads.
+Fully extract a Windows ZIP and run `EverSpark.exe`. Standard uses installed WebView2; full includes a fixed Runtime. Models, Tailscale and rclone are not included. Download the client using the links above, or see the [v0.2.0 release](https://github.com/jhinforge/EverSpark-Forge/releases/tag/v0.2.0) for checksums and release notes. Development test packages appear in successful [Windows builds](https://github.com/jhinforge/EverSpark-Forge/actions/workflows/windows-client.yml). Actions artifacts expire and are not permanent release downloads.
 
 Source entry (Windows PowerShell, Python 3.11.9):
 

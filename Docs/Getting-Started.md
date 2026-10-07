@@ -8,11 +8,11 @@ EverSpark Forge is a distributed AI OS. The host handles control and orchestrati
 | --- | --- | --- |
 | Windows standard ZIP | Windows x64, installed WebView2 | Extract and double-click `EverSpark.exe` |
 | Windows full ZIP | Windows x64; fixed WebView2 included | Extract and double-click `EverSpark.exe` |
-| Windows source | Git and Python 3.11.9 | PowerShell: `.everspark.cmd archon start` |
+| Windows source | Git and Python 3.11.9 | PowerShell: `.\everspark.cmd archon start` |
 
 Both ZIPs include portable Python; neither requires a separate Python installation. Models, Tailscale, SSH and rclone are not bundled. Choose full when WebView2 is absent. The software is free; GPU rental, bandwidth and third-party model services may incur charges.
 
-Use download information published in the [official repository](https://github.com/jhinforge/EverSpark-Forge). The current development branch is `refactor/distributed-architecture`. Successful Windows portable client Actions runs provide both ZIPs and SHA-256 files. Actions artifacts are temporary test distribution, not permanent release URLs.
+Download v0.2.0: [standard ZIP](https://github.com/jhinforge/EverSpark-Forge/releases/download/v0.2.0/EverSpark-Forge-0.2.0-windows-x64-standard.zip) or [full ZIP](https://github.com/jhinforge/EverSpark-Forge/releases/download/v0.2.0/EverSpark-Forge-0.2.0-windows-x64-full.zip). [Release notes and SHA-256 files](https://github.com/jhinforge/EverSpark-Forge/releases/tag/v0.2.0). GitHub's Source code downloads contain source, not the portable Windows client. The current development branch is `refactor/distributed-architecture`. Successful Windows portable client Actions runs provide both ZIPs and SHA-256 files. Actions artifacts are temporary test distribution, not permanent release URLs.
 
 Extract the chosen ZIP completely into a writable directory such as `D:\EverSpark-Forge`, then run the EXE. Do not run inside the ZIP. For an Actions artifact, unpack the outer artifact first, then extract its standard or full ZIP. An open window means the host started; generation still requires ready Forges.
 

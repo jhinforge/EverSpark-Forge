@@ -4,6 +4,15 @@
 
 [English](README.md) · [首次使用](Docs/Getting-Started.zh-CN.md) · [日常使用](Docs/Usage.zh-CN.md)
 
+## 下载 Windows 客户端 v0.2.0
+
+| 版本 | 下载 | 运行条件 |
+| --- | --- | --- |
+| standard | [下载 standard ZIP](https://github.com/jhinforge/EverSpark-Forge/releases/download/v0.2.0/EverSpark-Forge-0.2.0-windows-x64-standard.zip) | Windows x64，系统已有 WebView2 |
+| full | [下载 full ZIP](https://github.com/jhinforge/EverSpark-Forge/releases/download/v0.2.0/EverSpark-Forge-0.2.0-windows-x64-full.zip) | Windows x64，附带固定版本 WebView2 |
+
+两个版本均包含便携 Python，完整解压后双击 `EverSpark.exe`。[发布说明与 SHA-256 校验文件](https://github.com/jhinforge/EverSpark-Forge/releases/tag/v0.2.0) · [首次使用教程](Docs/Getting-Started.zh-CN.md)。GitHub 的 Source code 下载是源码，不是 Windows 客户端。
+
 ## 当前能力
 
 - 自然语言讨论、可复用角色与修订、图片／音频／图片＋音频生成。
@@ -17,7 +26,7 @@
 
 ## 开始使用
 
-Windows ZIP 需要完整解压后运行 `EverSpark.exe`。standard 使用系统 WebView2，full 附带固定版本；两者不包含模型、Tailscale 或 rclone。从[官方发布页](https://github.com/jhinforge/EverSpark-Forge/releases)查看已发布版本；当前分支的测试包见 [Windows 构建](https://github.com/jhinforge/EverSpark-Forge/actions/workflows/windows-client.yml)。Actions 附件会过期，不作为永久下载地址。
+Windows ZIP 需要完整解压后运行 `EverSpark.exe`。standard 使用系统 WebView2，full 附带固定版本；两者不包含模型、Tailscale 或 rclone。从上方链接下载客户端，或前往 [v0.2.0 发布页](https://github.com/jhinforge/EverSpark-Forge/releases/tag/v0.2.0)查看校验文件与发布说明；当前分支的测试包见 [Windows 构建](https://github.com/jhinforge/EverSpark-Forge/actions/workflows/windows-client.yml)。Actions 附件会过期，不作为永久下载地址。
 
 源码启动（Windows PowerShell，Python 3.11.9）：
 

@@ -12,7 +12,7 @@ EverSpark Forge 是分布式 AI OS：主机运行控制与编排，Forge 在选�
 
 两个 ZIP 都包含便携 Python Runtime，不要求先安装 Python；不包含 GPU 模型、Tailscale、SSH 或 rclone。系统没有 WebView2 时选择 full。软件免费，GPU 租赁、网络和第三方模型服务可能另行收费。
 
-从[官方仓库](https://github.com/jhinforge/EverSpark-Forge)公布的发布入口获取客户端。当前开发分支为 `refactor/distributed-architecture`；GitHub Actions 的 Windows portable client 成功运行提供两个 ZIP 和 SHA-256 文件。Actions 构建附件是临时测试分发，不是永久发布地址。
+下载 v0.2.0：[standard ZIP](https://github.com/jhinforge/EverSpark-Forge/releases/download/v0.2.0/EverSpark-Forge-0.2.0-windows-x64-standard.zip) 或 [full ZIP](https://github.com/jhinforge/EverSpark-Forge/releases/download/v0.2.0/EverSpark-Forge-0.2.0-windows-x64-full.zip)。[发布说明与 SHA-256 校验文件](https://github.com/jhinforge/EverSpark-Forge/releases/tag/v0.2.0)。GitHub 的 Source code 下载是源码，不是 Windows 便携客户端。当前开发分支为 `refactor/distributed-architecture`；GitHub Actions 的 Windows portable client 成功运行提供两个 ZIP 和 SHA-256 文件。Actions 构建附件是临时测试分发，不是永久发布地址。
 
 完整解压对应版本 ZIP 到可写目录，例如 `D:\EverSpark-Forge`，再双击 EXE；不要在压缩包内部运行。如果下载的是 Actions 附件，先解压外层附件，再选择 standard 或 full ZIP 解压。页面打开只代表主机启动成功，尚未部署 Forge 时不能生成。
 
