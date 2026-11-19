@@ -12,6 +12,7 @@
     <script src="/static/node-connection.js" defer></script>
     <script src="/static/deployment-progress.js" defer></script>
     <script src="/static/forge-node-selection.js" defer></script>
+    <script src="/static/lora-plugin.js" defer></script>
     <script src="/static/app.js" defer></script>
   </head>
   <body>
@@ -42,6 +43,10 @@
           <button class="nav-item" data-view="resources" aria-controls="resourcesView" type="button">
             <span class="nav-icon">▣</span>
             Resources
+          </button>
+          <button class="nav-item" id="loraPluginNav" data-view="lora" aria-controls="loraPluginView" type="button" hidden>
+            <span class="nav-icon" aria-hidden="true">◈</span>
+            LoRA Catalog
           </button>
           <button class="nav-item" data-view="settings" aria-controls="settingsView" type="button">
             <span class="nav-icon">✧</span>
@@ -561,6 +566,7 @@
             <button class="secondary-button active" id="settingsModelsTab" data-settings-tab="models" role="tab" aria-selected="true" aria-controls="modelsView" type="button">Model services</button>
             <button class="secondary-button" id="settingsConnectionsTab" data-settings-tab="connections" role="tab" aria-selected="false" aria-controls="machineConfigurationView" tabindex="-1" type="button">Accounts and Nodes</button>
             <button class="secondary-button" id="settingsStorageTab" data-settings-tab="storage" role="tab" aria-selected="false" aria-controls="storageView" tabindex="-1" type="button">Cloud storage configuration</button>
+            <button class="secondary-button" id="settingsPluginsTab" data-settings-tab="plugins" role="tab" aria-selected="false" aria-controls="pluginsSettingsView" tabindex="-1" type="button">Plugins</button>
           </div>
           <div class="settings-tab-panel active" id="modelsView" data-settings-panel="models" role="tabpanel" aria-labelledby="settingsModelsTab">
           <div class="section-toolbar">
@@ -698,6 +704,18 @@
             </details>
           </div>
 </div>
+          <div class="settings-tab-panel" id="pluginsSettingsView" data-settings-panel="plugins" role="tabpanel" aria-labelledby="settingsPluginsTab">
+            <div class="ui-panel">
+              <div class="section-toolbar">
+                <div>
+                  <h3>LoRA Catalog</h3>
+                  <p class="section-copy">Browse local LoRA notes and model previews.</p>
+                </div>
+                <button class="primary-button" id="loraPluginInstall" type="button" disabled>Download and install</button>
+              </div>
+              <p class="section-copy" id="loraPluginStatus" role="status"></p>
+            </div>
+          </div>
         </section>
 
 
@@ -709,6 +727,61 @@
 
 
 
+
+        <section class="view" id="loraPluginView" data-view-panel="lora" data-primary-view>
+          <div class="section-toolbar">
+            <h2>LoRA Catalog</h2>
+            <div class="lora-plugin-actions">
+              <button class="ghost-button" id="loraPluginRefresh" type="button" hidden>Refresh catalog</button>
+              <button class="ghost-button" id="loraPluginConfigure" type="button" hidden>Settings</button>
+            </div>
+          </div>
+          <div id="loraPluginFeedback" class="section-copy" role="status"></div>
+          <div class="ui-panel" id="loraPluginConfiguration" hidden>
+            <form id="loraPluginDirectories" class="lora-plugin-form">
+              <h3>LoRA directories</h3>
+              <p class="section-copy">Choose where this plugin reads and writes its files.</p>
+              <div class="lora-plugin-field">
+                <label for="loraVaultRoot">Obsidian Vault (optional)</label>
+                <input id="loraVaultRoot" name="vault_root" spellcheck="false">
+                <button class="ghost-button" type="button" data-lora-pick="vault_root" hidden>Browse</button>
+                <button class="ghost-button" type="button" id="loraUseVault">Use Vault folders</button>
+              </div>
+              <div class="lora-plugin-field">
+                <label for="loraNotesDir">Markdown notes</label>
+                <input id="loraNotesDir" name="notes_dir" required spellcheck="false">
+                <button class="ghost-button" type="button" data-lora-pick="notes_dir" hidden>Browse</button>
+              </div>
+              <div class="lora-plugin-field">
+                <label for="loraPreviewDir">Original previews</label>
+                <input id="loraPreviewDir" name="previews_dir" required spellcheck="false">
+                <button class="ghost-button" type="button" data-lora-pick="previews_dir" hidden>Browse</button>
+              </div>
+              <div class="lora-plugin-field">
+                <label for="loraThumbnailsDir">Thumbnail cache</label>
+                <input id="loraThumbnailsDir" name="thumbnails_dir" required spellcheck="false">
+                <button class="ghost-button" type="button" data-lora-pick="thumbnails_dir" hidden>Browse</button>
+              </div>
+              <div class="lora-plugin-field">
+                <label for="loraTempDir">Temporary files</label>
+                <input id="loraTempDir" name="temp_dir" required spellcheck="false">
+                <button class="ghost-button" type="button" data-lora-pick="temp_dir" hidden>Browse</button>
+              </div>
+              <div class="lora-plugin-actions"><button class="primary-button" type="submit">Save directories</button></div>
+            </form>
+            <form class="lora-plugin-form" id="loraPluginCredential">
+              <h3>Civitai API Key</h3>
+              <p class="section-copy" id="loraPluginCredentialStatus" role="status"></p>
+              <div class="lora-plugin-field">
+                <label for="loraPluginKey">Civitai API Key</label>
+                <input type="password" id="loraPluginKey" autocomplete="new-password" maxlength="2048">
+                <button class="ghost-button" type="submit" id="loraPluginKeySave">Save key</button>
+                <button class="ghost-button" type="button" id="loraPluginKeyRemove" hidden>Remove key</button>
+              </div>
+            </form>
+          </div>
+          <div id="loraPluginCatalog" hidden></div>
+        </section>
 
         <section class="view" id="aboutView" data-view-panel="about" data-primary-view>
           <section class="panel about-panel">

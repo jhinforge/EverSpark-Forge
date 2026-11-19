@@ -5,6 +5,7 @@ from contextlib import contextmanager, nullcontext
 import json
 import mimetypes
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -30,6 +31,8 @@ from everspark_logging import EverSparkLogger, get_logger  # noqa: E402
 from log_manifest import ManifestError, collect_log_status  # noqa: E402
 from Archon.Portal.execution_route import execution_request
 from Archon.Portal.about import build_info
+from Archon.Portal.lora_plugin import LoRAPlugin
+from Archon.Vault.windows_credentials import CredentialError
 
 
 LOG_DIR = Path(
@@ -122,6 +125,7 @@ class WebUIServer(ThreadingHTTPServer):
         self.health_history = {}
         self.health_lock = threading.Lock()
         self.forge_bindings = forge_bindings
+        self.lora_plugin = LoRAPlugin(REPO_ROOT)
         from Archon.Vault.storage_config import StorageConfiguration
         self.storage_configuration = StorageConfiguration(REPO_ROOT, self.apply_storage_configuration, guard=self.storage_configuration_guard)
 
@@ -180,6 +184,9 @@ class RequestHandler(BaseHTTPRequestHandler):
     @execution_request
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/plugins/lora/"):
+            self._lora_plugin_request(parsed.path.removeprefix("/api/plugins/lora/"), parse_qs(parsed.query))
+            return
         routes = {
             "/api/audio/file": lambda: self._proxy_audio(parse_qs(parsed.query)),
             "/api/machines/vast/audio-deployment-job": lambda: self._proxy_control_get(
@@ -259,6 +266,9 @@ class RequestHandler(BaseHTTPRequestHandler):
     @execution_request
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if path.startswith("/api/plugins/lora/"):
+            self._lora_plugin_request(path.removeprefix("/api/plugins/lora/"))
+            return
         upstream_paths = {
             "/api/image/plugins/install": "/image/plugins/install",
             "/api/image/plugins/enable": "/image/plugins/enable",
@@ -392,6 +402,68 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(status, body)
         except (URLError, TimeoutError) as exc:
             self._upstream_unavailable(exc)
+
+    def _lora_plugin_request(self, action, query=None):
+        if self.client_address[0] not in {"127.0.0.1", "::1"}:
+            self._json(403, {"ok": False, "error": "Local origin required"})
+            return
+        if not self._local_control_request():
+            return
+        plugin = self.server.lora_plugin
+        try:
+            if query is None:
+                if self.headers.get_content_type() != "application/json":
+                    self._json(415, {"ok": False, "error": "JSON request required"})
+                    return
+                if not 0 < int(self.headers.get("Content-Length", "0")) <= 32768:
+                    raise ValueError("Request body size is invalid")
+                payload = self._read_json()
+                if action == "install":
+                    result = plugin.install()
+                elif action == "config":
+                    result = {"config": plugin.save_config(payload)}
+                elif action == "pick-directory":
+                    result = {"path": plugin.pick_directory()}
+                elif action in {"credential/save", "credential/remove"}:
+                    result = plugin.credentials(action.rsplit("/", 1)[-1], payload.get("key"))
+                else:
+                    raise FileNotFoundError(action)
+            elif action == "status":
+                result = plugin.status()
+            elif action == "config":
+                result = {"config": plugin.config(), "can_pick_directory": sys.platform == "win32"}
+            elif action == "credential":
+                result = plugin.credentials()
+            elif action == "catalog":
+                result = {"items": plugin.catalog()}
+            elif action.startswith("assets/") or action == "media":
+                if action == "media":
+                    body, mime = plugin.media(query.get("id", [""])[0], query.get("kind", [""])[0])
+                else:
+                    body, mime = plugin.asset(action.removeprefix("assets/"))
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            else:
+                raise FileNotFoundError(action)
+            self._json(200, {"ok": True, **result})
+        except (URLError, TimeoutError):
+            self._json(502, {"ok": False, "error": "Could not download the LoRA plugin. Check the connection and try again."})
+        except FileNotFoundError:
+            self._json(404, {"ok": False, "error": "LoRA plugin file not found"})
+        except CredentialError as exc:
+            self._json(503, {"ok": False, "error": str(exc)})
+        except (ValueError, UnicodeError) as exc:
+            self._json(400, {"ok": False, "error": str(exc)})
+        except subprocess.SubprocessError:
+            self._json(503, {"ok": False, "error": "Could not open the folder selector. Enter the path manually."})
+        except OSError:
+            self._json(500, {"ok": False, "error": "Could not access the LoRA plugin files"})
 
     def _storage_configuration(self, action):
         if not self._local_control_request():

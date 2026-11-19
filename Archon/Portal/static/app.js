@@ -163,6 +163,7 @@ const viewCopy = {
   assets: ["WORKSPACE / ASSET LIBRARY", "Characters and generated media."],
   compute: ["WORKSPACE / COMPUTE", "Machines and service readiness."],
   resources: ["WORKSPACE / RESOURCES", "Model downloads and remote libraries."],
+  lora: ["WORKSPACE / LORA CATALOG", "Browse your local LoRA catalog."],
   settings: ["WORKSPACE / SETTINGS", "Model services and connection settings."],
   forge: ["WORKSPACE / CREATION", "Turn ideas into images, audio, or both."],
 };
@@ -1334,7 +1335,7 @@ function computePanelVisible(name) {
 }
 
 function setSettingsTab(name) {
-  if (!["models", "connections", "storage"].includes(name)) return;
+  if (!["models", "connections", "storage", "plugins"].includes(name)) return;
   state.settingsTab = name;
   $$("[data-settings-tab]").forEach((button) => {
     const active = button.dataset.settingsTab === name;
@@ -1346,6 +1347,7 @@ function setSettingsTab(name) {
   if (name === "models") loadModelConnections();
   if (name === "connections") { nodeConnection.refresh(); loadMachines(); }
   if (name === "storage") void loadCloudConfiguration();
+  if (name === "plugins") void window.EverSparkLoraPlugin.status();
 }
 
 function setView(name) {
@@ -1370,6 +1372,7 @@ function setView(name) {
   uiText($("#viewEyebrow"), viewCopy[name][0]);
   uiText($("#viewTitle"), viewCopy[name][1]);
   if (name === "about") void loadAbout();
+  if (name === "lora") void window.EverSparkLoraPlugin.open();
   if (name === "assets") setAssetTab(state.assetTab);
   if (name === "compute") setComputeTab(state.computeTab);
   if (name === "settings") setSettingsTab(state.settingsTab);
@@ -2920,6 +2923,9 @@ function bindEvents() {
   });
   elements.languageSelect.addEventListener("change", () => {
     i18n.setLanguage(elements.languageSelect.value);
+    if (!$("#loraPluginCatalog").hidden && $("#loraPluginView").classList.contains("active")) {
+      void window.EverSparkLoraPlugin.open();
+    }
     $$('[data-date]').forEach((node) => { node.textContent = formatDate(node.dataset.date); });
     if (state.storageJob) renderStorageJob(state.storageJob);
     if (state.backupJob) renderBackupJob(state.backupJob);
@@ -3117,6 +3123,7 @@ function bindEvents() {
 async function initialize() {
   i18n.bindStatic();
   bindEvents();
+  window.EverSparkLoraPlugin.init(api, setView);
   setMode("discuss");
   renderSelectedSubject();
   await Promise.all([loadSubjects(), loadCurrentSubject(), loadConversation(), loadRuntime(), loadImagePlugins(), loadCloudConfiguration(), loadDirectDownload(), loadModelConnections()]);
