@@ -11,6 +11,8 @@
   let navigate;
   let installed = false;
   let assetLoad;
+  let assetNodes = [];
+  let checking = false;
   let opening = 0;
 
   const post = (path, body = {}) => request(base + path, {
@@ -21,16 +23,51 @@
     label(id, error.message);
   }
 
+  function renderStatus(data, message) {
+    installed = data.installed;
+    get("loraPluginNav").hidden = !installed;
+    get("loraPluginInstall").disabled = checking;
+    get("loraPluginUpdate").hidden = !installed;
+    get("loraPluginUpdate").disabled = checking;
+    label("loraPluginInstall", installed ? "Open" : "Download and install");
+    label("loraPluginStatus", message || (installed ? "Installed · {version}" : "Not installed"), {version: data.version});
+  }
+
   async function status() {
+    if (checking) return;
     try {
       const data = await request(base + "status");
-      installed = data.installed;
-      get("loraPluginNav").hidden = !installed;
-      get("loraPluginInstall").disabled = false;
-      label("loraPluginInstall", installed ? "Open" : "Download and install");
-      label("loraPluginStatus", installed ? "Installed · {version}" : "Not installed", {version: data.version});
+      if (!checking) renderStatus(data);
+    } catch (error) {
+      if (!checking) failure("loraPluginStatus", error);
+    }
+  }
+
+  async function checkForUpdate() {
+    if (checking) return;
+    checking = true;
+    const wasInstalled = installed;
+    get("loraPluginInstall").disabled = true;
+    get("loraPluginUpdate").disabled = true;
+    label("loraPluginStatus", "Checking LoRA Catalog version…");
+    try {
+      const data = await post("install");
+      if (data.changed) {
+        ++opening;
+        assetNodes.forEach((node) => node.remove());
+        assetNodes = [];
+        assetLoad = null;
+      }
+      const message = !data.changed ? "LoRA Catalog is up to date · {version}"
+        : wasInstalled ? "LoRA Catalog updated · {version}" : undefined;
+      renderStatus(data, message);
+      if (data.changed && get("loraPluginView").classList.contains("active")) await open();
     } catch (error) {
       failure("loraPluginStatus", error);
+    } finally {
+      checking = false;
+      get("loraPluginInstall").disabled = false;
+      get("loraPluginUpdate").disabled = false;
     }
   }
 
@@ -54,14 +91,18 @@
       style.href = base + "assets/panel.css";
       const script = document.createElement("script");
       script.src = base + "assets/panel.js";
-      assetLoad = Promise.all([style, script].map((element) => new Promise((resolve, reject) => {
+      assetNodes = [style, script];
+      assetLoad = Promise.all(assetNodes.map((element) => new Promise((resolve, reject) => {
         element.onload = resolve;
         element.onerror = () => reject(new Error("Could not load the LoRA catalog."));
         document.head.append(element);
       }))).catch((error) => {
         style.remove();
         script.remove();
-        assetLoad = null;
+        if (assetNodes.includes(script)) {
+          assetNodes = [];
+          assetLoad = null;
+        }
         throw error;
       });
     }
@@ -109,18 +150,8 @@
   function init(api, setView) {
     request = api;
     navigate = setView;
-    get("loraPluginInstall").onclick = async () => {
-      if (installed) { navigate("lora"); return; }
-      get("loraPluginInstall").disabled = true;
-      label("loraPluginStatus", "Downloading and installing LoRA Catalog…");
-      try {
-        await post("install");
-        await status();
-      } catch (error) {
-        get("loraPluginInstall").disabled = false;
-        failure("loraPluginStatus", error);
-      }
-    };
+    get("loraPluginInstall").onclick = () => installed ? navigate("lora") : checkForUpdate();
+    get("loraPluginUpdate").onclick = checkForUpdate;
     get("loraPluginConfigure").onclick = () => open(get("loraPluginConfiguration").hidden);
     get("loraPluginRefresh").onclick = () => open();
     form().onsubmit = async (event) => {

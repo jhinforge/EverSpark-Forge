@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
-import importlib.util
+import importlib
 import json
 import os
 import subprocess
@@ -12,62 +11,59 @@ import tempfile
 import threading
 import types
 from pathlib import Path
-from urllib.request import urlopen
 
+from Archon.Portal.lora_update import REQUIRED_FILES, VERSION_FILE, download_update, read_version
 from Archon.Vault.windows_credentials import WindowsCredentialStore
 
 
-REPOSITORY = "https://raw.githubusercontent.com/jhinforge/EverSpark-Forge-Plugins"
-REVISION = "4be14c96c59a472522291d94ae346808089bc87b"
-FILES = {
-    "catalog.py": "7641fd6ee8275dc6253644125975cb6513cb496d2db59e5e1c8a5ebfbf2888c5",
-    "panel.css": "a070a8fa903662efa78c0cd7b62bdcba9ca69c9c4cb4bbee8beb1917ae00759a",
-    "panel.js": "a48704fb30e0557b28f0e70e691fcdef5a3b97b31f1535f3210d5e8d84a7e2ad",
-    "thumbnail_names.py": "8c7e9af06d5e253dc5b92056cd65e42329271435a9ac1468194aaa37e2c75ad1",
-}
 DIRECTORIES = ("notes_dir", "previews_dir", "thumbnails_dir", "temp_dir")
 ASSETS = {"panel.js": "text/javascript; charset=utf-8", "panel.css": "text/css; charset=utf-8"}
 CREDENTIAL_TARGET = "EverSpark Forge/Civitai API Key"
-MAX_PLUGIN_FILE = 256 * 1024
 
 
 class LoRAPlugin:
     def __init__(self, root: Path):
-        self.install_dir = root / "Data" / "Plugins" / "lora" / REVISION
+        self.plugin_dir = root / "Data" / "Plugins" / "lora"
+        self.install_dir = self.plugin_dir / "current"
         self.config_file = root / "Data" / "Configuration" / "LoRA" / "lora-config.json"
         self._lock = threading.RLock()
         self._module = None
+        self._namespace = None
 
-    @staticmethod
-    def _verify(name, content):
-        if len(content) > MAX_PLUGIN_FILE or hashlib.sha256(content).hexdigest() != FILES[name]:
-            raise ValueError("LoRA plugin file verification failed")
-        return content
+    def _active_dir(self):
+        def usable(path):
+            return all((path / name).is_file() for name in REQUIRED_FILES if name != VERSION_FILE)
+
+        if usable(self.install_dir):
+            return self.install_dir
+        if self.plugin_dir.is_dir():
+            # Existing installs used a 40-character revision directory.
+            prior = [path for path in self.plugin_dir.iterdir() if path.is_dir()
+                     and len(path.name) == 40 and usable(path)]
+            if prior:
+                return max(prior, key=lambda path: path.stat().st_mtime)
+        return None
 
     def status(self):
         with self._lock:
-            installed = True
+            directory = self._active_dir()
+            if directory is None:
+                return {"installed": False, "version": None}
             try:
-                for name in FILES:
-                    with (self.install_dir / name).open("rb") as stream:
-                        self._verify(name, stream.read(MAX_PLUGIN_FILE + 1))
+                version = read_version((directory / VERSION_FILE).read_bytes())
             except (OSError, ValueError):
-                installed = False
-        return {"installed": installed, "version": REVISION[:7]}
+                version = "legacy"
+            return {"installed": True, "version": version}
 
     def install(self):
         with self._lock:
-            if self.status()["installed"]:
-                return self.status()
-            self.install_dir.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.TemporaryDirectory(dir=self.install_dir.parent) as staging:
+            local = self.status()
+            self.plugin_dir.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(dir=self.plugin_dir) as staging:
                 candidate = Path(staging) / "panel"
                 candidate.mkdir()
-                for name in FILES:
-                    url = f"{REPOSITORY}/{REVISION}/everspark_lora_panel/{name}"
-                    with urlopen(url, timeout=20) as response:
-                        content = self._verify(name, response.read(MAX_PLUGIN_FILE + 1))
-                    (candidate / name).write_bytes(content)
+                if not download_update(local["version"], candidate):
+                    return {**local, "changed": False}
                 previous = Path(staging) / "previous"
                 if self.install_dir.exists():
                     self.install_dir.rename(previous)
@@ -77,42 +73,43 @@ class LoRAPlugin:
                     if previous.exists():
                         previous.rename(self.install_dir)
                     raise
-            self._module = None
-            return self.status()
+            self._unload_catalog()
+            importlib.invalidate_caches()
+            return {**self.status(), "changed": True}
 
     def asset(self, name):
-        if name not in ASSETS or not self.status()["installed"]:
-            raise FileNotFoundError(name)
-        return self._verify(name, (self.install_dir / name).read_bytes()), ASSETS[name]
+        with self._lock:
+            directory = self._active_dir()
+            if directory is None or name not in ASSETS:
+                raise FileNotFoundError(name)
+            return (directory / name).read_bytes(), ASSETS[name]
+
+    def _unload_catalog(self):
+        if self._namespace is not None:
+            for name in list(sys.modules):
+                if name == self._namespace or name.startswith(self._namespace + "."):
+                    sys.modules.pop(name, None)
+        self._namespace = None
+        self._module = None
 
     def _catalog_module(self):
         with self._lock:
             if self._module is not None:
                 return self._module
-            if not self.status()["installed"]:
+            directory = self._active_dir()
+            if directory is None:
                 raise FileNotFoundError("Install LoRA Catalog first")
             namespace = f"_everspark_lora_{id(self):x}"
             package = types.ModuleType(namespace)
-            package.__path__ = []
+            package.__path__ = [str(directory)]
             sys.modules[namespace] = package
-            loaded = []
+            self._namespace = namespace
             try:
-                for name in ("thumbnail_names.py", "catalog.py"):
-                    path = self.install_dir / name
-                    source = self._verify(name, path.read_bytes())
-                    qualified = f"{namespace}.{path.stem}"
-                    spec = importlib.util.spec_from_file_location(qualified, path)
-                    module = importlib.util.module_from_spec(spec)
-                    sys.modules[qualified] = module
-                    loaded.append(qualified)
-                    exec(compile(source, str(path), "exec"), module.__dict__)
+                self._module = importlib.import_module(f"{namespace}.catalog")
             except Exception:
-                for qualified in loaded:
-                    sys.modules.pop(qualified, None)
-                sys.modules.pop(namespace, None)
+                self._unload_catalog()
                 raise
-            self._module = module
-            return module
+            return self._module
 
     def config(self):
         try:

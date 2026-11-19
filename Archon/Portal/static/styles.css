@@ -621,7 +621,7 @@ input[type="file"]::file-selector-button { margin-right: var(--spacing-md); padd
 .about-shortcut:hover { color: var(--text); }
 
 /* LoRA plugin setup follows Portal's existing settings controls. */
-#loraPluginNav[hidden], #loraPluginView [hidden] { display: none !important; }
+#loraPluginNav[hidden], #loraPluginView [hidden], #pluginsSettingsView [hidden] { display: none !important; }
 .lora-plugin-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
 .lora-plugin-form { display: grid; gap: var(--spacing-md); }
 .lora-plugin-form + .lora-plugin-form { border-top: 1px solid var(--line); margin-top: var(--spacing-xl); padding-top: var(--spacing-xl); }
