@@ -18,12 +18,12 @@ from Archon.Vault.windows_credentials import WindowsCredentialStore
 
 
 REPOSITORY = "https://raw.githubusercontent.com/jhinforge/EverSpark-Forge-Plugins"
-REVISION = "3b87523233778e360216632eb1a9bc76ee518b87"
+REVISION = "4be14c96c59a472522291d94ae346808089bc87b"
 FILES = {
-    "catalog.py": "59b2789749560fd12462e8c0c1d8351ffb2e4143998c0b70f94e2ba6ee514bc9",
+    "catalog.py": "7641fd6ee8275dc6253644125975cb6513cb496d2db59e5e1c8a5ebfbf2888c5",
     "panel.css": "a070a8fa903662efa78c0cd7b62bdcba9ca69c9c4cb4bbee8beb1917ae00759a",
-    "panel.js": "8070b37be0fea8752ca9e9e4ed0d11ffec25cd18701f9b418b707d274af1cb00",
-    "thumbnail_names.py": "91bc8b5bd5503fcb9c5dfb1466919c6df54041aeed139592f11986e45050a059",
+    "panel.js": "a48704fb30e0557b28f0e70e691fcdef5a3b97b31f1535f3210d5e8d84a7e2ad",
+    "thumbnail_names.py": "8c7e9af06d5e253dc5b92056cd65e42329271435a9ac1468194aaa37e2c75ad1",
 }
 DIRECTORIES = ("notes_dir", "previews_dir", "thumbnails_dir", "temp_dir")
 ASSETS = {"panel.js": "text/javascript; charset=utf-8", "panel.css": "text/css; charset=utf-8"}
