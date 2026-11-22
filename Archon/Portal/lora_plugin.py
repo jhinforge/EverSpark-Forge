@@ -163,6 +163,27 @@ class LoRAPlugin:
     def catalog(self):
         return list(self._catalog_module().rows(self._catalog_config()))
 
+    def import_available(self):
+        with self._lock:
+            directory = self._active_dir()
+            return bool(directory and (directory / "importer.py").is_file())
+
+    def import_lora(self, action, payload):
+        with self._lock:
+            if not self.import_available():
+                raise FileNotFoundError("LoRA import plugin is unavailable")
+            package = self._catalog_module().__package__
+            importer = importlib.import_module(f"{package}.importer")
+            if action == "commit":
+                return importer.commit(self._catalog_config(), payload)
+            if action == "schema":
+                return {"categories": importer.CATEGORIES}
+            url = payload.get("url")
+            if not isinstance(url, str) or len(url) > 2000:
+                raise ValueError("Enter a Civitai model URL")
+            key = WindowsCredentialStore(CREDENTIAL_TARGET).get() if sys.platform == "win32" else None
+            return importer.fetch_fields(url, key or "")
+
     def media(self, note_id, kind):
         result = self._catalog_module().media(self._catalog_config(), note_id, kind)
         if result is None:

@@ -415,10 +415,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if self.headers.get_content_type() != "application/json":
                     self._json(415, {"ok": False, "error": "JSON request required"})
                     return
-                if not 0 < int(self.headers.get("Content-Length", "0")) <= 32768:
-                    raise ValueError("Request body size is invalid")
-                payload = self._read_json()
-                if action == "install":
+                limit = 34 * 1024 * 1024 if action == "import/commit" else 32768
+                payload = self._read_json(limit)
+                if action in {"import/civitai", "import/commit"}:
+                    result = plugin.import_lora(action.split("/")[-1], payload)
+                elif action == "install":
                     result = plugin.install()
                 elif action == "config":
                     result = {"config": plugin.save_config(payload)}
@@ -435,7 +436,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif action == "credential":
                 result = plugin.credentials()
             elif action == "catalog":
-                result = {"items": plugin.catalog()}
+                result = {"items": plugin.catalog(), "can_import": plugin.import_available()}
+            elif action == "import/schema":
+                result = plugin.import_lora("schema", {})
             elif action.startswith("assets/") or action == "media":
                 if action == "media":
                     body, mime = plugin.media(query.get("id", [""])[0], query.get("kind", [""])[0])
@@ -461,7 +464,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeError) as exc:
             self._json(400, {"ok": False, "error": str(exc)})
         except subprocess.SubprocessError:
-            self._json(503, {"ok": False, "error": "Could not open the folder selector. Enter the path manually."})
+            message = "Could not run the LoRA import" if action.startswith("import/") else "Could not open the folder selector. Enter the path manually."
+            self._json(503, {"ok": False, "error": message})
         except OSError:
             self._json(500, {"ok": False, "error": "Could not access the LoRA plugin files"})
 
@@ -909,11 +913,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _read_json(self) -> dict[str, Any]:
+    def _read_json(self, limit=1_000_000) -> dict[str, Any]:
         if getattr(self, "_execution_payload", None) is not None:
             return self._execution_payload
         length = int(self.headers.get("Content-Length", "0"))
-        if length < 1 or length > 1_000_000:
+        if length < 1 or length > limit:
             raise ValueError("Request body size is invalid")
         payload = json.loads(self.rfile.read(length).decode("utf-8"))
         if not isinstance(payload, dict):
