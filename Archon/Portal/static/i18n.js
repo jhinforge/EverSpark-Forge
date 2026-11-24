@@ -20,6 +20,7 @@
     "Refresh catalog": "刷新目录",
     "Back to catalog": "返回目录",
     "LoRA directories": "LoRA 目录",
+    "Checkpoints directories": "Checkpoints 目录",
     "Choose where this plugin reads and writes its files.": "选择插件读取和写入文件的位置。",
     "Obsidian Vault (optional)": "Obsidian 库（可选）",
     "Use Vault folders": "填入 Vault 目录",

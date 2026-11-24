@@ -17,6 +17,7 @@ from Archon.Vault.windows_credentials import WindowsCredentialStore
 
 
 DIRECTORIES = ("notes_dir", "previews_dir", "thumbnails_dir", "temp_dir")
+CHECKPOINT_DIRS = tuple("checkpoint_" + key for key in DIRECTORIES)
 ASSETS = {"panel.js": "text/javascript; charset=utf-8", "panel.css": "text/css; charset=utf-8"}
 CREDENTIAL_TARGET = "EverSpark Forge/Civitai API Key"
 
@@ -127,20 +128,28 @@ class LoRAPlugin:
         return path.resolve()
 
     def save_config(self, payload):
-        paths = {key: self._path(payload.get(key)) for key in DIRECTORIES}
-        if len(set(paths.values())) != len(DIRECTORIES):
+        paths = {}
+        for keys in (DIRECTORIES, CHECKPOINT_DIRS):
+            if any(payload.get(key) for key in keys):
+                paths.update({key: self._path(payload.get(key)) for key in keys})
+        if not paths:
+            raise ValueError("Configure all four directories for at least one library")
+        if len(set(paths.values())) != len(paths):
             raise ValueError("Use a different directory for each purpose")
-        source = (paths["temp_dir"] / "previews").resolve()
-        assets = paths["previews_dir"]
-        if source.is_relative_to(assets) or assets.is_relative_to(source):
-            raise ValueError("Temporary previews and archived previews cannot overlap")
+        for prefix in ("", "checkpoint_"):
+            if prefix + "temp_dir" not in paths:
+                continue
+            source = (paths[prefix + "temp_dir"] / "previews").resolve()
+            assets = paths[prefix + "previews_dir"]
+            if source.is_relative_to(assets) or assets.is_relative_to(source):
+                raise ValueError("Temporary previews and archived previews cannot overlap")
         vault = payload.get("vault_root", "")
         if vault:
             paths["vault_root"] = self._path(vault)
             if not paths["vault_root"].is_dir():
                 raise ValueError("The Obsidian Vault directory does not exist")
-        for key in DIRECTORIES:
-            paths[key].mkdir(parents=True, exist_ok=True)
+        for directory in paths.values():
+            directory.mkdir(parents=True, exist_ok=True)
         config = {key: str(path) for key, path in paths.items()}
         with self._lock:
             self.config_file.parent.mkdir(parents=True, exist_ok=True)
@@ -154,14 +163,52 @@ class LoRAPlugin:
                 temp.unlink(missing_ok=True)
         return config
 
-    def _catalog_config(self):
-        config = self.config()
-        if not all(config.get(key) for key in DIRECTORIES):
-            raise ValueError("Configure the LoRA directories first")
-        return {key: Path(value).resolve() for key, value in config.items() if key in (*DIRECTORIES, "vault_root")}
+    @staticmethod
+    def _directory_keys(library):
+        if library == "lora":
+            return DIRECTORIES
+        if library == "checkpoints":
+            return CHECKPOINT_DIRS
+        raise ValueError("Unknown model library")
 
-    def catalog(self):
-        return list(self._catalog_module().rows(self._catalog_config()))
+    def _catalog_config(self, library="lora"):
+        config = self.config()
+        keys = self._directory_keys(library)
+        if not all(config.get(key) for key in keys):
+            raise ValueError(f"Configure the {library} directories first")
+        paths = {name: Path(config[key]).resolve() for name, key in zip(DIRECTORIES, keys)}
+        if config.get("vault_root"):
+            paths["vault_root"] = Path(config["vault_root"]).resolve()
+        return {**paths, "library": library}
+
+    def catalog(self, library="lora"):
+        keys = self._directory_keys(library)
+        config = self.config()
+        if not all(config.get(key) for key in keys):
+            return []
+        if library == "checkpoints" and not self.library_features()["checkpoints"]:
+            raise FileNotFoundError("Checkpoints library is unavailable")
+        return list(self._catalog_module().rows(self._catalog_config(library)))
+
+    def library_features(self):
+        with self._lock:
+            directory = self._active_dir()
+            supported = bool(directory and (directory / "thumbnail_rebuild.py").is_file())
+            config = self.config()
+            return {
+                "checkpoints": supported,
+                "can_rebuild": supported,
+                "lora_configured": all(config.get(key) for key in DIRECTORIES),
+                "checkpoints_configured": all(config.get(key) for key in CHECKPOINT_DIRS),
+            }
+
+    def rebuild_thumbnails(self, library):
+        with self._lock:
+            if not self.library_features()["can_rebuild"]:
+                raise FileNotFoundError("Thumbnail rebuild is unavailable")
+            package = self._catalog_module().__package__
+            module = importlib.import_module(f"{package}.thumbnail_rebuild")
+            return module.rebuild(self._catalog_config(library))
 
     def import_available(self):
         with self._lock:
@@ -200,8 +247,10 @@ class LoRAPlugin:
                 return deletion.commit(config, payload.get("id"), payload.get("token"))
             return deletion.preview(config, payload.get("id"))
 
-    def media(self, note_id, kind):
-        result = self._catalog_module().media(self._catalog_config(), note_id, kind)
+    def media(self, note_id, kind, library="lora"):
+        if library == "checkpoints" and not self.library_features()["checkpoints"]:
+            raise FileNotFoundError("Checkpoints library is unavailable")
+        result = self._catalog_module().media(self._catalog_config(library), note_id, kind)
         if result is None:
             raise FileNotFoundError("LoRA image not found")
         path, mime = result

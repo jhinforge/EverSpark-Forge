@@ -421,6 +421,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                     result = plugin.import_lora(action.split("/")[-1], payload)
                 elif action in {"delete/preview", "delete/commit"}:
                     result = plugin.delete_lora(payload, confirm=action == "delete/commit")
+                elif action == "thumbnails/rebuild":
+                    result = plugin.rebuild_thumbnails(payload.get("library", "lora"))
                 elif action == "install":
                     result = plugin.install()
                 elif action == "config":
@@ -438,15 +440,19 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif action == "credential":
                 result = plugin.credentials()
             elif action == "catalog":
+                library = query.get("library", ["lora"])[0]
                 result = {
-                    "items": plugin.catalog(), "can_import": plugin.import_available(),
-                    "can_delete": plugin.deletion_available(),
+                    "items": plugin.catalog(library),
+                    "can_import": library == "lora" and plugin.import_available(),
+                    "can_delete": library == "lora" and plugin.deletion_available(),
+                    **plugin.library_features(),
                 }
             elif action == "import/schema":
                 result = plugin.import_lora("schema", {})
             elif action.startswith("assets/") or action == "media":
                 if action == "media":
-                    body, mime = plugin.media(query.get("id", [""])[0], query.get("kind", [""])[0])
+                    body, mime = plugin.media(query.get("id", [""])[0], query.get("kind", [""])[0],
+                                              query.get("library", ["lora"])[0])
                 else:
                     body, mime = plugin.asset(action.removeprefix("assets/"))
                 self.send_response(200)

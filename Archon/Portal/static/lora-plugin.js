@@ -7,6 +7,7 @@
   const i18n = window.EverSparkI18n;
   const label = (id, key, args) => i18n.bind(get(id), key, args);
   const required = ["notes_dir", "previews_dir", "thumbnails_dir", "temp_dir"];
+  const checkpoint = required.map((key) => "checkpoint_" + key);
   let request;
   let navigate;
   let installed = false;
@@ -120,9 +121,9 @@
     try {
       const {config, can_pick_directory: canPick} = await request(base + "config");
       if (turn !== opening) return;
-      for (const key of [...required, "vault_root"]) field(key).value = config[key] || "";
+      for (const key of [...required, ...checkpoint, "vault_root"]) field(key).value = config[key] || "";
       document.querySelectorAll("[data-lora-pick]").forEach((button) => { button.hidden = !canPick; });
-      const complete = required.every((key) => config[key]);
+      const complete = [required, checkpoint].some((keys) => keys.every((key) => config[key]));
       configuration.hidden = complete && !forceConfiguration;
       if (!configuration.hidden) {
         label("loraPluginFeedback", "");
