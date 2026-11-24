@@ -184,6 +184,22 @@ class LoRAPlugin:
             key = WindowsCredentialStore(CREDENTIAL_TARGET).get() if sys.platform == "win32" else None
             return importer.fetch_fields(url, key or "")
 
+    def deletion_available(self):
+        with self._lock:
+            directory = self._active_dir()
+            return bool(directory and (directory / "delete_entry.py").is_file())
+
+    def delete_lora(self, payload, *, confirm=False):
+        with self._lock:
+            if not self.deletion_available():
+                raise FileNotFoundError("LoRA deletion is unavailable")
+            package = self._catalog_module().__package__
+            deletion = importlib.import_module(f"{package}.delete_entry")
+            config = self._catalog_config()
+            if confirm:
+                return deletion.commit(config, payload.get("id"), payload.get("token"))
+            return deletion.preview(config, payload.get("id"))
+
     def media(self, note_id, kind):
         result = self._catalog_module().media(self._catalog_config(), note_id, kind)
         if result is None:

@@ -419,6 +419,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 payload = self._read_json(limit)
                 if action in {"import/civitai", "import/commit"}:
                     result = plugin.import_lora(action.split("/")[-1], payload)
+                elif action in {"delete/preview", "delete/commit"}:
+                    result = plugin.delete_lora(payload, confirm=action == "delete/commit")
                 elif action == "install":
                     result = plugin.install()
                 elif action == "config":
@@ -436,7 +438,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif action == "credential":
                 result = plugin.credentials()
             elif action == "catalog":
-                result = {"items": plugin.catalog(), "can_import": plugin.import_available()}
+                result = {
+                    "items": plugin.catalog(), "can_import": plugin.import_available(),
+                    "can_delete": plugin.deletion_available(),
+                }
             elif action == "import/schema":
                 result = plugin.import_lora("schema", {})
             elif action.startswith("assets/") or action == "media":
