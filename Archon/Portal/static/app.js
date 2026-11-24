@@ -163,7 +163,7 @@ const viewCopy = {
   assets: ["WORKSPACE / ASSET LIBRARY", "Characters and generated media."],
   compute: ["WORKSPACE / COMPUTE", "Machines and service readiness."],
   resources: ["WORKSPACE / RESOURCES", "Model downloads and remote libraries."],
-  lora: ["WORKSPACE / LORA CATALOG", "Browse your local LoRA catalog."],
+  lora: ["WORKSPACE / IMAGE MODEL MANAGER", "Browse your local LoRA and Checkpoints collections."],
   settings: ["WORKSPACE / SETTINGS", "Model services and connection settings."],
   forge: ["WORKSPACE / CREATION", "Turn ideas into images, audio, or both."],
 };

@@ -467,9 +467,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 raise FileNotFoundError(action)
             self._json(200, {"ok": True, **result})
         except (URLError, TimeoutError):
-            self._json(502, {"ok": False, "error": "Could not download the LoRA plugin. Check the connection and try again."})
+            self._json(502, {"ok": False, "error": "Could not download the Image Model Manager plugin. Check the connection and try again."})
         except FileNotFoundError:
-            self._json(404, {"ok": False, "error": "LoRA plugin file not found"})
+            self._json(404, {"ok": False, "error": "Image Model Manager plugin file not found"})
         except CredentialError as exc:
             self._json(503, {"ok": False, "error": str(exc)})
         except (ValueError, UnicodeError) as exc:
@@ -478,7 +478,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             message = "Could not run the LoRA import" if action.startswith("import/") else "Could not open the folder selector. Enter the path manually."
             self._json(503, {"ok": False, "error": message})
         except OSError:
-            self._json(500, {"ok": False, "error": "Could not access the LoRA plugin files"})
+            self._json(500, {"ok": False, "error": "Could not access the Image Model Manager plugin files"})
 
     def _storage_configuration(self, action):
         if not self._local_control_request():

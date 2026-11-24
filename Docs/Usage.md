@@ -32,8 +32,8 @@ Optional network tests use the official Ookla CLI. First-use confirmation is ava
 
 **About** displays Jhin, the free-software statement, official repository, version, build time and commit. Source checkouts may lack build time. The page is not cryptographic authentication of a package.
 
-## LoRA Catalog plugin
+## Image Model Manager plugin
 
-Open **Settings → Plugins → LoRA Catalog** to download and install the catalog. The **LoRA Catalog** item then appears below Resources. On first open, choose folders for Markdown notes, original previews, thumbnails and temporary files. For an existing Obsidian library, enter its Vault folder, select **Use Vault folders**, and check the suggested paths before saving.
+Open **Settings → Plugins → Image Model Manager** to download and install the catalog. The **Image Model Manager** item then appears below Resources. On first open, choose folders for Markdown notes, original previews, thumbnails and temporary files. LoRA and Checkpoints each have their own folder settings. For an existing Obsidian library, enter its Vault folder, select **Use Vault folders**, and check the suggested paths before saving.
 
 The catalog provides search, filters, pagination and model previews. Its Settings button lets you change folders or save or remove a Civitai API Key in Windows Credential Manager. The key is optional for local browsing.

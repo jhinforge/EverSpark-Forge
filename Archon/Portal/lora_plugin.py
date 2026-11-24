@@ -1,4 +1,4 @@
-"""Local installation and configuration for the downloadable LoRA catalog."""
+"""Local installation and configuration for the downloadable Image Model Manager."""
 
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ class LoRAPlugin:
                 return self._module
             directory = self._active_dir()
             if directory is None:
-                raise FileNotFoundError("Install LoRA Catalog first")
+                raise FileNotFoundError("Install Image Model Manager first")
             namespace = f"_everspark_lora_{id(self):x}"
             package = types.ModuleType(namespace)
             package.__path__ = [str(directory)]
@@ -280,7 +280,7 @@ class LoRAPlugin:
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = 'EverSpark Forge - LoRA Catalog'
+$dialog.Description = 'EverSpark Forge - Image Model Manager'
 $owner = New-Object System.Windows.Forms.Form
 $owner.TopMost = $true
 $owner.Opacity = 0

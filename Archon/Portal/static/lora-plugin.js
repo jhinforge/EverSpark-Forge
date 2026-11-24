@@ -50,7 +50,7 @@
     const wasInstalled = installed;
     get("loraPluginInstall").disabled = true;
     get("loraPluginUpdate").disabled = true;
-    label("loraPluginStatus", "Checking LoRA Catalog version…");
+    label("loraPluginStatus", "Checking Image Model Manager version…");
     try {
       const data = await post("install");
       if (data.changed) {
@@ -59,8 +59,8 @@
         assetNodes = [];
         assetLoad = null;
       }
-      const message = !data.changed ? "LoRA Catalog is up to date · {version}"
-        : wasInstalled ? "LoRA Catalog updated · {version}" : undefined;
+      const message = !data.changed ? "Image Model Manager is up to date · {version}"
+        : wasInstalled ? "Image Model Manager updated · {version}" : undefined;
       renderStatus(data, message);
       if (data.changed && get("loraPluginView").classList.contains("active")) await open();
     } catch (error) {
@@ -95,7 +95,7 @@
       assetNodes = [style, script];
       assetLoad = Promise.all(assetNodes.map((element) => new Promise((resolve, reject) => {
         element.onload = resolve;
-        element.onerror = () => reject(new Error("Could not load the LoRA catalog."));
+        element.onerror = () => reject(new Error("Could not load the model catalog."));
         document.head.append(element);
       }))).catch((error) => {
         style.remove();
@@ -117,7 +117,7 @@
     get("loraPluginRefresh").hidden = true;
     configuration.hidden = true;
     catalog().hidden = true;
-    label("loraPluginFeedback", "Loading LoRA catalog…");
+    label("loraPluginFeedback", "Loading model catalog…");
     try {
       const {config, can_pick_directory: canPick} = await request(base + "config");
       if (turn !== opening) return;

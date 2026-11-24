@@ -1,4 +1,4 @@
-"""Download the LoRA panel only when its published version differs."""
+"""Download Image Model Manager only when its published version differs."""
 
 import io
 import re
@@ -20,7 +20,7 @@ MAX_VERSION_SIZE = 128
 def read_version(data):
     version = data.decode("utf-8-sig").strip()
     if not re.fullmatch(r"[0-9][A-Za-z0-9._+-]{0,63}", version):
-        raise ValueError("The LoRA plugin version is invalid")
+        raise ValueError("The Image Model Manager plugin version is invalid")
     return version
 
 
@@ -28,7 +28,7 @@ def fetch(url, limit):
     with urlopen(url, timeout=20) as response:
         data = response.read(limit + 1)
     if len(data) > limit:
-        raise ValueError("The LoRA plugin download is too large")
+        raise ValueError("The Image Model Manager plugin download is too large")
     return data
 
 
@@ -42,10 +42,10 @@ def extract_panel(data, destination, version):
                     continue
                 relative = parts[2:]
                 if any(not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", part) for part in relative):
-                    raise ValueError("The LoRA plugin contains an invalid file path")
+                    raise ValueError("The Image Model Manager plugin contains an invalid file path")
                 total_size += member.file_size
                 if total_size > MAX_PACKAGE_SIZE:
-                    raise ValueError("The LoRA plugin package is too large")
+                    raise ValueError("The Image Model Manager plugin package is too large")
                 path = destination.joinpath(*relative)
                 path.parent.mkdir(parents=True, exist_ok=True)
                 content = archive.read(member)
@@ -54,12 +54,12 @@ def extract_panel(data, destination, version):
                 with path.open("xb") as stream:
                     stream.write(content)
     except (FileExistsError, SyntaxError, RuntimeError, zipfile.BadZipFile) as exc:
-        raise ValueError("The LoRA plugin package is invalid") from exc
+        raise ValueError("The Image Model Manager plugin package is invalid") from exc
 
     if not all((destination / name).is_file() for name in REQUIRED_FILES):
-        raise ValueError("The LoRA plugin package is incomplete")
+        raise ValueError("The Image Model Manager plugin package is incomplete")
     if read_version((destination / VERSION_FILE).read_bytes()) != version:
-        raise ValueError("The LoRA plugin version changed during download. Try again.")
+        raise ValueError("The Image Model Manager plugin version changed during download. Try again.")
 
 
 def download_update(local_version, destination):
